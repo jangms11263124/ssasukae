@@ -10,9 +10,9 @@ docs/convention/
 │   ├── commit-message.md          # 커밋 메시지 컨벤션
 │   ├── pr-rule.md                 # PR 규칙
 │   └── code-review-guide.md       # 코드 리뷰 가이드
-├── frontend/                      # 프론트엔드 스택 종속 규칙
+├── frontend/                      # 프론트엔드 스택 종속 규칙 (Next.js + TypeScript)
 │   ├── lint-rule.md               # Lint & Format 규칙
-│   ├── folder-structure.md        # 폴더 구조
+│   ├── folder-structure.md        # 폴더 구조 (FSD)
 │   └── component-convention.md    # 컴포넌트 컨벤션
 └── backend/                       # 백엔드 스택 종속 규칙
     ├── lint-rule.md                # Lint & Format 규칙
@@ -23,7 +23,7 @@ docs/convention/
 ## 분리 원칙
 
 - **common/**: FE·BE 관계없이 적용되는 협업 프로세스 규칙 (언어/프레임워크를 바꿔도 그대로 쓸 수 있는 것)
-- **frontend/**: 프론트엔드 스택에 종속적인 규칙 (JS/TS, ESLint 등)
+- **frontend/**: 프론트엔드 스택에 종속적인 규칙 (Next.js, TypeScript, ESLint 등)
 - **backend/**: 백엔드 스택에 종속적인 규칙 (Java/Spring, Spotless 등)
 
 > common 문서는 FE/BE 리드가 함께 합의해서 수정합니다.
@@ -54,22 +54,28 @@ docs/convention/
 - [코드 리뷰 가이드](./common/code-review-guide.md)
   - [Lint는 리뷰 전에 자동으로 걸러낸다](./common/code-review-guide.md#lint는-리뷰-전에-자동으로-걸러낸다)
 
-### 프론트엔드 (Frontend)
-- [Lint & Format 규칙 (ESLint/Prettier/Stylelint)](./frontend/lint-rule.md)
+### 프론트엔드 (Frontend, Next.js + TypeScript)
+- [Lint & Format 규칙 (ESLint/Prettier)](./frontend/lint-rule.md)
   - [ESLint](./frontend/lint-rule.md#eslint)
   - [Prettier](./frontend/lint-rule.md#prettier)
-  - [Stylelint (CSS/SCSS)](./frontend/lint-rule.md#stylelint-cssscss)
   - [EditorConfig](./frontend/lint-rule.md#editorconfig)
   - [원칙](./frontend/lint-rule.md#원칙)
   - [Git Hook 자동화 (husky + lint-staged + commitlint)](./frontend/lint-rule.md#git-hook-자동화-husky--lint-staged--commitlint)
-- [폴더 구조](./frontend/folder-structure.md)
-  - [예시 (React + TypeScript)](./frontend/folder-structure.md#예시-react--typescript)
+  - [CI 연동](./frontend/lint-rule.md#ci-연동)
+- [폴더 구조 (FSD)](./frontend/folder-structure.md)
+  - [레이어 구조](./frontend/folder-structure.md#레이어-구조)
+  - [레이어별 역할](./frontend/folder-structure.md#레이어별-역할)
+  - [Next.js App Router와의 관계](./frontend/folder-structure.md#nextjs-app-router와의-관계)
+  - [Import 규칙 (참조 방향)](./frontend/folder-structure.md#import-규칙-참조-방향)
   - [네이밍 규칙](./frontend/folder-structure.md#네이밍-규칙)
   - [원칙](./frontend/folder-structure.md#원칙)
 - [컴포넌트 컨벤션](./frontend/component-convention.md)
+  - [Server Component vs Client Component](./frontend/component-convention.md#server-component-vs-client-component)
   - [컴포넌트 작성 원칙](./frontend/component-convention.md#컴포넌트-작성-원칙)
   - [Props 네이밍](./frontend/component-convention.md#props-네이밍)
+  - [Export 규칙](./frontend/component-convention.md#export-규칙)
   - [파일 구성](./frontend/component-convention.md#파일-구성)
+  - [스타일링 (Tailwind CSS)](./frontend/component-convention.md#스타일링-tailwind-css)
   - [예시](./frontend/component-convention.md#예시)
   - [주석](./frontend/component-convention.md#주석)
 
