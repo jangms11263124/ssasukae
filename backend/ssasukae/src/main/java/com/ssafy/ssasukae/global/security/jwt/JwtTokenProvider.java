@@ -47,7 +47,7 @@ public class JwtTokenProvider {
                 .compact();
     }
 
-    public String createAccessToken(Long userId, String email, String role) {
+    public String createAccessToken(Long userId, String email, String role, String sid) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + jwtProperties.getAccessTokenExpiration());
 
@@ -56,19 +56,21 @@ public class JwtTokenProvider {
                 .subject(String.valueOf(userId))
                 .claim("email", email)
                 .claim("role", role)
+                .claim("sid", sid)
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(getSigningKey())
                 .compact();
     }
 
-    public String createRefreshToken(Long userId) {
+    public String createRefreshToken(Long userId, String sid) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + jwtProperties.getRefreshTokenExpiration());
 
         return Jwts.builder()
                 .id(UUID.randomUUID().toString())
                 .subject(String.valueOf(userId))
+                .claim("sid", sid)
                 .issuedAt(now)
                 .expiration(expiration)
                 .signWith(getSigningKey())
@@ -98,6 +100,10 @@ public class JwtTokenProvider {
 
     public String getJti(String token) {
         return parseClaims(token).getId();
+    }
+
+    public String getSid(String token) {
+        return parseClaims(token).get("sid", String.class);
     }
 
     public Date getExpiration(String token) {

@@ -26,6 +26,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final TokenBlacklistService tokenBlacklistService;
+    private final ActiveSessionService activeSessionService;
 
     @Override
     protected void doFilterInternal(
@@ -36,7 +37,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = resolveToken(request);
 
-        if (token != null && jwtTokenProvider.validateToken(token) && !tokenBlacklistService.isBlacklisted(jwtTokenProvider.getJti(token))) {
+        if (token != null
+                && jwtTokenProvider.validateToken(token)
+                && !tokenBlacklistService.isBlacklisted(jwtTokenProvider.getJti(token))
+                && activeSessionService.isActiveSession(jwtTokenProvider.getUserId(token), jwtTokenProvider.getSid(token))) {
             AuthenticatedUser authenticatedUser = new AuthenticatedUser(
                     jwtTokenProvider.getUserId(token),
                     jwtTokenProvider.getEmail(token),

@@ -2,6 +2,8 @@ package com.ssafy.ssasukae.global.security.oauth;
 
 import com.ssafy.ssasukae.domain.auth.dto.OAuthLoginResult;
 import com.ssafy.ssasukae.global.security.cookie.RefreshTokenCookieProvider;
+import com.ssafy.ssasukae.global.security.jwt.ActiveSessionService;
+import com.ssafy.ssasukae.global.security.jwt.JwtProperties;
 import com.ssafy.ssasukae.global.security.jwt.JwtTokenProvider;
 import com.ssafy.ssasukae.global.security.oauth.principal.CustomOAuth2User;
 
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -24,6 +27,8 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
 
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenCookieProvider refreshTokenCookieProvider;
+    private final ActiveSessionService activeSessionService;
+    private final JwtProperties jwtProperties;
     private final OAuth2Properties oAuth2Properties;
 
     @Override
@@ -56,14 +61,18 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             return;
         }
 
+        String sid = UUID.randomUUID().toString();
+
         String accessToken = jwtTokenProvider.createAccessToken(
                 oAuth2User.getUserId(),
                 oAuth2User.getEmail(),
-                oAuth2User.getRole()
+                oAuth2User.getRole(),
+                sid
         );
 
-        String refreshToken = jwtTokenProvider.createRefreshToken(oAuth2User.getUserId());
+        String refreshToken = jwtTokenProvider.createRefreshToken(oAuth2User.getUserId(), sid);
 
+        activeSessionService.setActiveSession(oAuth2User.getUserId(), sid, jwtProperties.getRefreshTokenExpiration());
         refreshTokenCookieProvider.addRefreshTokenCookie(response, refreshToken);
 
         String redirectUrl = UriComponentsBuilder
