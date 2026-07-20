@@ -2,13 +2,10 @@ package com.ssafy.ssasukae;
 
 import org.junit.jupiter.api.Test;
 
-import org.springframework.boot.test.context.SpringBootTest;
+import com.ssafy.ssasukae.support.IntegrationTestSupport;
 
-@SpringBootTest
-class SsasukaeApplicationTests {
+class SsasukaeApplicationTests extends IntegrationTestSupport {
 
-    @Test
-    void contextLoads() {
-    }
-
+  @Test
+  void contextLoads() {}
 }
