@@ -9,6 +9,8 @@ import com.ssafy.ssasukae.domain.user.dto.UserResponse;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.service.UserService;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
+import com.ssafy.ssasukae.global.security.jwt.ActiveSessionService;
+import com.ssafy.ssasukae.global.security.jwt.JwtProperties;
 import com.ssafy.ssasukae.global.security.jwt.JwtTokenProvider;
 import com.ssafy.ssasukae.global.security.jwt.TokenBlacklistService;
 import com.ssafy.ssasukae.global.security.oauth.userinfo.OAuth2UserInfo;
@@ -19,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -26,6 +30,8 @@ public class AuthService {
     private final UserService userService;
     private final JwtTokenProvider jwtTokenProvider;
     private final TokenBlacklistService tokenBlacklistService;
+    private final ActiveSessionService activeSessionService;
+    private final JwtProperties jwtProperties;
 
     public OAuthLoginResult processOAuthLogin(OAuthProvider provider, OAuth2UserInfo userInfo) {
         return userService.findByProviderAndProviderId(provider, userInfo.getProviderId())
@@ -55,8 +61,11 @@ public class AuthService {
                 profileImageUrl
         );
 
-        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole().name());
-        String refreshToken = jwtTokenProvider.createRefreshToken(user.getId());
+        String sid = UUID.randomUUID().toString();
+        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole().name(), sid);
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getId(), sid);
+
+        activeSessionService.setActiveSession(user.getId(), sid, jwtProperties.getRefreshTokenExpiration());
 
         return AuthTokenResponse.builder()
                 .accessToken(accessToken)
@@ -76,12 +85,21 @@ public class AuthService {
             throw new IllegalArgumentException("이미 사용되었거나 만료된 refresh token 입니다.");
         }
 
-        User user = userService.findById(jwtTokenProvider.getUserId(refreshToken));
+        Long userId = jwtTokenProvider.getUserId(refreshToken);
+        String sid = jwtTokenProvider.getSid(refreshToken);
+
+        if (!activeSessionService.isActiveSession(userId, sid)) {
+            throw new IllegalArgumentException("다른 기기에서 로그인되어 세션이 만료되었습니다.");
+        }
+
+        User user = userService.findById(userId);
 
         tokenBlacklistService.blacklist(jti, jwtTokenProvider.getExpiration(refreshToken));
 
-        String newAccessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole().name());
-        String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getId());
+        String newAccessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getEmail(), user.getRole().name(), sid);
+        String newRefreshToken = jwtTokenProvider.createRefreshToken(user.getId(), sid);
+
+        activeSessionService.setActiveSession(userId, sid, jwtProperties.getRefreshTokenExpiration());
 
         return TokenReissueResponse.builder()
                 .accessToken(newAccessToken)
@@ -90,8 +108,18 @@ public class AuthService {
     }
 
     public void logout(String accessToken, String refreshToken) {
+        clearActiveSessionIfValid(accessToken);
+        clearActiveSessionIfValid(refreshToken);
         blacklistIfValid(accessToken);
         blacklistIfValid(refreshToken);
+    }
+
+    private void clearActiveSessionIfValid(String token) {
+        if (!StringUtils.hasText(token) || !jwtTokenProvider.validateToken(token)) {
+            return;
+        }
+
+        activeSessionService.clearActiveSession(jwtTokenProvider.getUserId(token));
     }
 
     private void blacklistIfValid(String token) {
