@@ -52,6 +52,8 @@ tasks.named('test') {
 tasks.register('unitTest', Test) {
     description = 'Runs all tests except @SpringBootTest context-loading tests (no DB/Redis required).'
     group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform()
     exclude '**/SsasukaeApplicationTests.class'
 }
