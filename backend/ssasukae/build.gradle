@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'com.diffplug.spotless' version '8.1.0'
     id 'org.springframework.boot' version '4.1.0'
     id 'io.spring.dependency-management' version '1.1.7'
 }
@@ -37,12 +38,37 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
     testImplementation 'org.springframework.boot:spring-boot-starter-validation-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-mysql'
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+spotless {
+    java {
+        target 'src/*/java/**/*.java'
+        targetExclude(
+                'src/main/java/com/ssafy/ssasukae/SsasukaeApplication.java',
+                'src/main/java/com/ssafy/ssasukae/config/**/*.java',
+                'src/main/java/com/ssafy/ssasukae/domain/auth/**/*.java',
+                'src/main/java/com/ssafy/ssasukae/domain/user/**/*.java',
+                'src/main/java/com/ssafy/ssasukae/global/exception/**/*.java',
+                'src/main/java/com/ssafy/ssasukae/global/security/cookie/**/*.java',
+                'src/main/java/com/ssafy/ssasukae/global/security/jwt/**/*.java',
+                'src/main/java/com/ssafy/ssasukae/global/security/oauth/**/*.java'
+        )
+        googleJavaFormat('1.22.0')
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+        importOrder('java', 'javax', 'jakarta', 'org', 'com', '')
+    }
 }
 
 tasks.named('test') {
@@ -56,4 +82,5 @@ tasks.register('unitTest', Test) {
     classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform()
     exclude '**/SsasukaeApplicationTests.class'
+    exclude '**/*IntegrationTest.class'
 }
