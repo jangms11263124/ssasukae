@@ -1,0 +1,35 @@
+stages:
+  - test
+
+backend-unit-test:
+  stage: test
+  image: eclipse-temurin:17-jdk
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - backend/ssasukae/**/*
+    - if: '$CI_COMMIT_BRANCH == "development" || $CI_COMMIT_BRANCH == "master"'
+      changes:
+        - backend/ssasukae/**/*
+  variables:
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  cache:
+    key:
+      files:
+        - backend/ssasukae/gradle/wrapper/gradle-wrapper.properties
+    paths:
+      - .gradle/wrapper
+      - .gradle/caches
+  before_script:
+    - cd backend/ssasukae
+    - chmod +x ./gradlew
+  script:
+    - ./gradlew unitTest --console=plain
+  artifacts:
+    when: always
+    expire_in: 7 days
+    reports:
+      junit:
+        - backend/ssasukae/build/test-results/unitTest/TEST-*.xml
+    paths:
+      - backend/ssasukae/build/reports/tests
