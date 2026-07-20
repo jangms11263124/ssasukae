@@ -48,3 +48,10 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+tasks.register('unitTest', Test) {
+    description = 'Runs all tests except @SpringBootTest context-loading tests (no DB/Redis required).'
+    group = 'verification'
+    useJUnitPlatform()
+    exclude '**/SsasukaeApplicationTests.class'
+}
