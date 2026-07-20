@@ -1,0 +1,15 @@
+spring:
+  config:
+    import: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+GOOGLE_CLIENT_ID: test-client-id
+GOOGLE_CLIENT_SECRET: test-client-secret
+JWT_SECRET: test-jwt-secret-key-must-be-at-least-32-bytes
+
+DB_URL: jdbc:mysql://localhost:3306/ssasukae_test
+DB_USERNAME: test
+DB_PASSWORD: test
