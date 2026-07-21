@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 
+import com.ssafy.ssasukae.domain.card.service.CardAssignmentService;
+
 import com.ssafy.ssasukae.domain.performance.dto.UpdatePerformanceSettingsRequest;
 import com.ssafy.ssasukae.domain.performance.entity.Performance;
 import com.ssafy.ssasukae.domain.performance.entity.PerformanceSettings;
@@ -49,6 +51,7 @@ class PerformanceSettingsServiceTest {
 
   @Mock private RoomRepository roomRepository;
   @Mock private RoomParticipantRepository roomParticipantRepository;
+  @Mock private CardAssignmentService cardAssignmentService;
   @Mock private SongRepository songRepository;
   @Mock private PerformanceRepository performanceRepository;
   @Mock private PerformanceSettingsRepository performanceSettingsRepository;
@@ -62,6 +65,7 @@ class PerformanceSettingsServiceTest {
             new PerformanceService(
                     roomRepository,
                     roomParticipantRepository,
+                    cardAssignmentService,
                     songRepository,
                     performanceRepository,
                     performanceSettingsRepository,
@@ -144,7 +148,7 @@ class PerformanceSettingsServiceTest {
   void rejectsNonPerformer() {
     Fixture fixture = fixture();
     stubRoomAndPerformance(fixture);
-    stubRequester(fixture.host());
+    stubRequester(fixture, fixture.host());
 
     assertThatThrownBy(
             () ->
@@ -195,8 +199,8 @@ class PerformanceSettingsServiceTest {
 
   private void stubUpdate(Fixture fixture, RoomParticipant requester) {
     stubRoomAndPerformance(fixture);
-    stubRequester(requester);
-    stubSettings(fixture.settings());
+    stubRequester(fixture, requester);
+    stubSettings(fixture);
   }
 
   private void stubRoomAndPerformance(Fixture fixture) {
@@ -205,14 +209,14 @@ class PerformanceSettingsServiceTest {
             .thenReturn(Optional.of(fixture.performance()));
   }
 
-  private void stubRequester(RoomParticipant requester) {
+  private void stubRequester(Fixture fixture, RoomParticipant requester) {
     when(roomParticipantRepository.findByRoom_IdAndUser_Id(1L, requester.getUser().getId()))
             .thenReturn(Optional.of(requester));
   }
 
-  private void stubSettings(PerformanceSettings settings) {
+  private void stubSettings(Fixture fixture) {
     when(performanceSettingsRepository.findByPerformance_Id(400L))
-            .thenReturn(Optional.of(settings));
+            .thenReturn(Optional.of(fixture.settings()));
   }
 
   private Fixture fixture() {
