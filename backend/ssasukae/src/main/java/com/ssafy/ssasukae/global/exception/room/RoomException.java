@@ -55,6 +55,16 @@ public class RoomException extends RuntimeException {
     return new RoomException(HttpStatus.GONE, "ROOM_CLOSED", "이미 종료된 방입니다.");
   }
 
+  public static RoomException notActiveParticipant() {
+    return new RoomException(
+        HttpStatus.CONFLICT, "PARTICIPANT_NOT_ACTIVE", "현재 방에 참여 중인 상태가 아닙니다.");
+  }
+
+  public static RoomException hostMustBeOnline() {
+    return new RoomException(
+        HttpStatus.CONFLICT, "HOST_MUST_BE_ONLINE", "온라인 상태의 참가자만 방장이 될 수 있습니다.");
+  }
+
   public HttpStatus getStatus() {
     return status;
   }

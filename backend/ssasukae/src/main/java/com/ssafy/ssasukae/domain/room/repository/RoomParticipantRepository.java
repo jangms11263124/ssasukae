@@ -18,6 +18,10 @@ public interface RoomParticipantRepository extends JpaRepository<RoomParticipant
   @EntityGraph(attributePaths = "user")
   List<RoomParticipant> findAllByRoom_IdOrderByJoinedAtAsc(Long roomId);
 
+  Optional<RoomParticipant>
+      findFirstByRoom_IdAndConnectionStatusOrderByJoinedAtAscIdAsc(
+          Long roomId, ConnectionStatus connectionStatus);
+
   long countByRoom_IdAndConnectionStatusIn(
       Long roomId, Collection<ConnectionStatus> statuses);
 

@@ -14,14 +14,16 @@ import com.ssafy.ssasukae.domain.room.dto.RoomSnapshotResponse;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.event.ParticipantJoinedDomainEvent;
-import com.ssafy.ssasukae.global.exception.room.RoomException;
+import com.ssafy.ssasukae.domain.room.event.ParticipantLeftDomainEvent;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
+import com.ssafy.ssasukae.domain.room.type.ParticipantLeaveReason;
 import com.ssafy.ssasukae.domain.room.type.ParticipantRole;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
+import com.ssafy.ssasukae.global.exception.room.RoomException;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 
 import org.springframework.context.ApplicationEventPublisher;
@@ -166,6 +168,69 @@ public class RoomService {
         mediaConnectionToken);
   }
 
+  @Transactional
+  public void leaveRoom(Long roomId, Long userId) {
+    Room room = roomRepository.findByIdForUpdate(roomId).orElseThrow(RoomException::notFound);
+    if (room.getStatus() == RoomStatus.FINISHED) {
+      throw RoomException.closed();
+    }
+
+    RoomParticipant leavingParticipant =
+        roomParticipantRepository
+            .findByRoom_IdAndUser_Id(roomId, userId)
+            .filter(RoomParticipant::isActive)
+            .orElseThrow(RoomException::accessDenied);
+
+    LocalDateTime now = LocalDateTime.now(clock);
+    boolean hostLeaving = leavingParticipant.getRole() == ParticipantRole.HOST;
+
+    leavingParticipant.leave(now);
+    if (hostLeaving) {
+      leavingParticipant.demoteToParticipant();
+    }
+
+    long participantLeftVersion = room.increaseVersion(now);
+    Long newHostParticipantId =
+        roomParticipantRepository
+            .findByRoom_IdAndRole(roomId, ParticipantRole.HOST)
+            .filter(RoomParticipant::isActive)
+            .map(RoomParticipant::getId)
+            .orElse(null);
+    Long hostChangedVersion = null;
+
+    if (hostLeaving) {
+      RoomParticipant newHost =
+          roomParticipantRepository
+              .findFirstByRoom_IdAndConnectionStatusOrderByJoinedAtAscIdAsc(
+                  roomId, ConnectionStatus.ONLINE)
+              .orElse(null);
+
+      if (newHost != null) {
+        newHost.promoteToHost();
+        newHostParticipantId = newHost.getId();
+        hostChangedVersion = room.increaseVersion(now);
+      } else {
+        closeRoomAndLeaveRemainingParticipants(room, now);
+        newHostParticipantId = null;
+      }
+    }
+
+    int participantCount =
+        Math.toIntExact(
+            roomParticipantRepository.countByRoom_IdAndConnectionStatusIn(
+                roomId, ACTIVE_STATUSES));
+
+    applicationEventPublisher.publishEvent(
+        new ParticipantLeftDomainEvent(
+            roomId,
+            participantLeftVersion,
+            leavingParticipant.getId(),
+            participantCount,
+            newHostParticipantId,
+            ParticipantLeaveReason.LEFT,
+            hostChangedVersion));
+  }
+
   @Transactional(readOnly = true)
   public RoomSnapshotResponse getRoomSnapshot(Long roomId, Long userId) {
     Room room = roomRepository.findById(roomId).orElseThrow(RoomException::notFound);
@@ -202,6 +267,17 @@ public class RoomService {
         hostParticipantId,
         participants,
         null);
+  }
+
+  private void closeRoomAndLeaveRemainingParticipants(Room room, LocalDateTime now) {
+    roomParticipantRepository.findAllByRoom_IdOrderByJoinedAtAsc(room.getId()).stream()
+        .filter(RoomParticipant::isActive)
+        .forEach(participant -> {
+          participant.leave(now);
+          participant.demoteToParticipant();
+        });
+    room.finish(now);
+    mediaSessionGateway.closeSession(room.getOpenViduSessionId());
   }
 
   private User findUser(Long userId) {

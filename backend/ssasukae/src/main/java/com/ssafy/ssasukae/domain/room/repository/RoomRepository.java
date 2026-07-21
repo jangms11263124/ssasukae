@@ -15,6 +15,10 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
   boolean existsByInviteCode(String inviteCode);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select r from Room r where r.id = :roomId")
+  Optional<Room> findByIdForUpdate(@Param("roomId") Long roomId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select r from Room r where r.inviteCode = :inviteCode")
   Optional<Room> findByInviteCodeForUpdate(@Param("inviteCode") String inviteCode);
 }
