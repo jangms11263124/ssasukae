@@ -1,11 +1,10 @@
-package com.ssafy.ssasukae.domain.performance.domain;
+package com.ssafy.ssasukae.domain.performance.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDateTime;
 
-import com.ssafy.ssasukae.domain.performance.entity.Performance;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
 import com.ssafy.ssasukae.global.exception.performance.PerformanceException;
 
