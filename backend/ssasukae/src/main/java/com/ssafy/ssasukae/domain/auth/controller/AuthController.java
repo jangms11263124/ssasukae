@@ -51,9 +51,15 @@ public class AuthController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "refresh token이 없습니다.");
         }
 
-        TokenReissueResponse tokenResponse = authService.reissueToken(refreshToken);
-        refreshTokenCookieProvider.addRefreshTokenCookie(response, tokenResponse.getRefreshToken());
-        return ResponseEntity.ok(tokenResponse);
+        try {
+            TokenReissueResponse tokenResponse = authService.reissueToken(refreshToken);
+            refreshTokenCookieProvider.addRefreshTokenCookie(response, tokenResponse.getRefreshToken());
+            return ResponseEntity.ok(tokenResponse);
+        } catch (RuntimeException e) {
+            // 다른 기기 로그인 등으로 세션이 무효화된 refresh는 쿠키를 제거해 반복 실패를 막는다.
+            refreshTokenCookieProvider.deleteRefreshTokenCookie(response);
+            throw e;
+        }
     }
 
     @PostMapping("/logout")
