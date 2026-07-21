@@ -24,4 +24,15 @@ public class RoomRealtimeEventPublisher {
     RealtimeEvent<T> event = eventFactory.create(type, roomId, version, data);
     messagingTemplate.convertAndSend("/topic/rooms/" + roomId, event);
   }
+
+  public <T> void publishUserEvent(
+      Long userId,
+      String destination,
+      Long roomId,
+      long version,
+      RealtimeEventType type,
+      T data) {
+    RealtimeEvent<T> event = eventFactory.create(type, roomId, version, data);
+    messagingTemplate.convertAndSendToUser(userId.toString(), destination, event);
+  }
 }

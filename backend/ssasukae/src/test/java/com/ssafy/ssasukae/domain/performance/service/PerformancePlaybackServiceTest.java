@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 
+import com.ssafy.ssasukae.domain.card.service.CardAssignmentService;
+
 import com.ssafy.ssasukae.domain.performance.entity.Performance;
 import com.ssafy.ssasukae.domain.performance.event.PerformanceTransitionDomainEvent;
 import com.ssafy.ssasukae.domain.performance.event.PerformanceTransitionKind;
@@ -51,6 +53,7 @@ class PerformancePlaybackServiceTest {
 
   @Mock private RoomRepository roomRepository;
   @Mock private RoomParticipantRepository roomParticipantRepository;
+  @Mock private CardAssignmentService cardAssignmentService;
   @Mock private SongRepository songRepository;
   @Mock private PerformanceRepository performanceRepository;
   @Mock private PerformanceSettingsRepository performanceSettingsRepository;
@@ -64,6 +67,7 @@ class PerformancePlaybackServiceTest {
         new PerformanceService(
             roomRepository,
             roomParticipantRepository,
+            cardAssignmentService,
             songRepository,
             performanceRepository,
             performanceSettingsRepository,

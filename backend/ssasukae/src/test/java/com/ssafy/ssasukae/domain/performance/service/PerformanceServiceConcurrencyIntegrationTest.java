@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import com.ssafy.ssasukae.domain.card.repository.CardAssignmentRepository;
 import com.ssafy.ssasukae.domain.performance.dto.StartPerformanceRequest;
 import com.ssafy.ssasukae.domain.performance.repository.PerformanceRepository;
 import com.ssafy.ssasukae.domain.performance.repository.PerformanceSettingsRepository;
@@ -38,6 +39,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 class PerformanceServiceConcurrencyIntegrationTest extends IntegrationTestSupport {
 
   @Autowired private PerformanceService performanceService;
+  @Autowired private CardAssignmentRepository cardAssignmentRepository;
   @Autowired private PerformanceRepository performanceRepository;
   @Autowired private PerformanceSettingsRepository performanceSettingsRepository;
   @Autowired private RoomRepository roomRepository;
@@ -54,6 +56,7 @@ class PerformanceServiceConcurrencyIntegrationTest extends IntegrationTestSuppor
 
   @BeforeEach
   void setUp() {
+    cardAssignmentRepository.deleteAllInBatch();
     performanceSettingsRepository.deleteAllInBatch();
     performanceRepository.deleteAllInBatch();
     roomParticipantRepository.deleteAllInBatch();
@@ -120,6 +123,7 @@ class PerformanceServiceConcurrencyIntegrationTest extends IntegrationTestSuppor
     assertThat(successCount).isEqualTo(1);
     assertThat(performanceRepository.count()).isEqualTo(1);
     assertThat(performanceSettingsRepository.count()).isEqualTo(1);
+    assertThat(cardAssignmentRepository.count()).isEqualTo(1);
     assertThat(roomRepository.findById(roomId).orElseThrow().getStatus())
         .isEqualTo(RoomStatus.PLAYING);
   }
