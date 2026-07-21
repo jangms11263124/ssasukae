@@ -33,6 +33,11 @@ public class RoomWebSocketSessionRegistry {
     return new Registration(roomId, userId, true, firstSession);
   }
 
+  public synchronized Set<String> findSessionIds(Long roomId, Long userId) {
+    Set<String> sessionIds = sessionIdsByParticipant.get(new ParticipantKey(roomId, userId));
+    return sessionIds == null ? Set.of() : Set.copyOf(sessionIds);
+  }
+
   public synchronized Unregistration unregister(String sessionId) {
     ParticipantKey key = participantBySessionId.remove(sessionId);
     if (key == null) {

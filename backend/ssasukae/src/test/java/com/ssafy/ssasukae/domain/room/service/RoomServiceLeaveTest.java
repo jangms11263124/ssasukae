@@ -19,6 +19,7 @@ import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.event.ParticipantLeftDomainEvent;
 import com.ssafy.ssasukae.global.exception.room.RoomException;
+import com.ssafy.ssasukae.domain.room.repository.RoomBanRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
@@ -52,6 +53,7 @@ class RoomServiceLeaveTest {
 
   @Mock private RoomRepository roomRepository;
   @Mock private RoomParticipantRepository roomParticipantRepository;
+  @Mock private RoomBanRepository roomBanRepository;
   @Mock private UserRepository userRepository;
   @Mock private RoomNamePolicy roomNamePolicy;
   @Mock private InviteCodeGenerator inviteCodeGenerator;
@@ -67,6 +69,7 @@ class RoomServiceLeaveTest {
         new RoomService(
             roomRepository,
             roomParticipantRepository,
+            roomBanRepository,
             userRepository,
             roomNamePolicy,
             inviteCodeGenerator,

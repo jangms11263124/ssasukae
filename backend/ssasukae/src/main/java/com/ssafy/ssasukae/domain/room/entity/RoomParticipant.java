@@ -139,6 +139,19 @@ public class RoomParticipant {
     lastSeenAt = now;
   }
 
+  public void kick(LocalDateTime now) {
+    if (!isActive()) {
+      throw RoomException.notActiveParticipant();
+    }
+    connectionStatus = ConnectionStatus.KICKED;
+    role = ParticipantRole.PARTICIPANT;
+    micEnabled = false;
+    cameraEnabled = false;
+    disconnectedAt = null;
+    leftAt = now;
+    lastSeenAt = now;
+  }
+
   public void promoteToHost() {
     if (connectionStatus != ConnectionStatus.ONLINE) {
       throw RoomException.hostMustBeOnline();
