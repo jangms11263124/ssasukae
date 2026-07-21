@@ -1,6 +1,6 @@
 'use client';
 
-import { startGoogleOAuth } from '@/entities/user';
+import { startGoogleOAuth, startKakaoOAuth } from '@/entities/user';
 import { LOGIN_COPY } from '@/shared/config/brand';
 import { cn } from '@/shared/lib/cn';
 
@@ -16,8 +16,10 @@ export function SocialLoginPanel({ className }: SocialLoginPanelProps) {
       startGoogleOAuth();
       return;
     }
-
-    window.alert('카카오 로그인은 준비 중입니다.');
+    if (provider === 'kakao') {
+      startKakaoOAuth();
+      return;
+    }
   };
 
   return (
@@ -33,13 +35,8 @@ export function SocialLoginPanel({ className }: SocialLoginPanelProps) {
 
       <div className="flex flex-col gap-3 lg:gap-3.5">
         <SocialLoginButton provider="google" onClick={() => handleSocialLogin('google')} />
-        <SocialLoginButton
-          provider="kakao"
-          onClick={() => handleSocialLogin('kakao')}
-          disabled
-        />
+        <SocialLoginButton provider="kakao" onClick={() => handleSocialLogin('kakao')} />
       </div>
-      <p className="text-xs text-zinc-500">카카오 로그인은 곧 지원될 예정입니다.</p>
     </div>
   );
 }

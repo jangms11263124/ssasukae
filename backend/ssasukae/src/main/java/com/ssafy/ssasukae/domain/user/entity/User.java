@@ -35,7 +35,7 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String email;
 
     @Column(nullable = false)
@@ -44,14 +44,14 @@ public class User {
     private String profileImageUrl;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "ENUM('GOOGLE','KAKAO')")
     private OAuthProvider provider;
 
     @Column(nullable = false)
     private String providerId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private Role role;
 
     @CreatedDate
