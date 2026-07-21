@@ -32,6 +32,30 @@ public class PerformanceMessageController {
     performanceService.startPerformance(roomId, resolveUserId(principal), request);
   }
 
+  @MessageMapping("/rooms/{roomId}/performances/{performanceId}/playback/start")
+  public void startPlayback(
+      @DestinationVariable Long roomId,
+      @DestinationVariable Long performanceId,
+      Principal principal) {
+    performanceService.startPlayback(roomId, performanceId, resolveUserId(principal));
+  }
+
+  @MessageMapping("/rooms/{roomId}/performances/{performanceId}/playback/finish")
+  public void finishPlayback(
+      @DestinationVariable Long roomId,
+      @DestinationVariable Long performanceId,
+      Principal principal) {
+    performanceService.finishPlayback(roomId, performanceId, resolveUserId(principal));
+  }
+
+  @MessageMapping("/rooms/{roomId}/performances/{performanceId}/cancel")
+  public void cancelPerformance(
+      @DestinationVariable Long roomId,
+      @DestinationVariable Long performanceId,
+      Principal principal) {
+    performanceService.cancelPerformance(roomId, performanceId, resolveUserId(principal));
+  }
+
   private Long resolveUserId(Principal principal) {
     if (principal instanceof Authentication authentication
         && authentication.getPrincipal() instanceof AuthenticatedUser user) {
