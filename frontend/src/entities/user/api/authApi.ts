@@ -1,5 +1,5 @@
 import { apiClient } from '@/shared/api/client';
-import { OAUTH_GOOGLE_URL } from '@/shared/config/env';
+import { OAUTH_GOOGLE_URL, OAUTH_KAKAO_URL } from '@/shared/config/env';
 
 import type {
   AuthTokenResponse,
@@ -34,4 +34,8 @@ export function logout() {
 
 export function startGoogleOAuth() {
   window.location.assign(OAUTH_GOOGLE_URL);
+}
+
+export function startKakaoOAuth() {
+  window.location.assign(OAUTH_KAKAO_URL);
 }
