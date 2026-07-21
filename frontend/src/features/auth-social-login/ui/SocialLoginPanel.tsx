@@ -1,8 +1,8 @@
 'use client';
 
+import { startGoogleOAuth } from '@/entities/user';
 import { LOGIN_COPY } from '@/shared/config/brand';
 import { cn } from '@/shared/lib/cn';
-import { startGoogleOAuth } from '@/entities/user';
 
 import { SocialLoginButton } from './SocialLoginButton';
 
