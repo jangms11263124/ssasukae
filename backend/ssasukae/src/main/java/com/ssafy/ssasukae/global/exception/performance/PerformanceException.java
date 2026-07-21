@@ -94,6 +94,61 @@ public class PerformanceException extends RuntimeException {
         "공연 상태를 변경할 수 있는 방 상태가 아닙니다.");
   }
 
+  public static PerformanceException settingsPermissionRequired() {
+    return new PerformanceException(
+        HttpStatus.FORBIDDEN,
+        "PERFORMANCE_SETTINGS_PERMISSION_REQUIRED",
+        "현재 공연자만 공연 설정을 변경할 수 있습니다.");
+  }
+
+  public static PerformanceException settingsChangeNotAllowed(
+      PerformanceStatus currentStatus) {
+    return new PerformanceException(
+        HttpStatus.CONFLICT,
+        "PERFORMANCE_SETTINGS_CHANGE_NOT_ALLOWED",
+        "현재 공연 상태에서는 설정을 변경할 수 없습니다: " + currentStatus);
+  }
+
+  public static PerformanceException settingsNotFound() {
+    return new PerformanceException(
+        HttpStatus.NOT_FOUND,
+        "PERFORMANCE_SETTINGS_NOT_FOUND",
+        "공연 설정을 찾을 수 없습니다.");
+  }
+
+  public static PerformanceException settingsConflict(
+      long expectedVersion, long actualVersion) {
+    return new PerformanceException(
+        HttpStatus.CONFLICT,
+        "PERFORMANCE_SETTINGS_CONFLICT",
+        "공연 설정이 이미 변경되었습니다. expectedVersion="
+            + expectedVersion
+            + ", actualVersion="
+            + actualVersion);
+  }
+
+  public static PerformanceException settingsConcurrentUpdate() {
+    return new PerformanceException(
+        HttpStatus.CONFLICT,
+        "PERFORMANCE_SETTINGS_CONFLICT",
+        "공연 설정이 동시에 변경되었습니다. 최신 설정을 다시 조회해 주세요.");
+  }
+
+  public static PerformanceException emptySettingsUpdate() {
+    return new PerformanceException(
+        HttpStatus.BAD_REQUEST,
+        "EMPTY_PERFORMANCE_SETTINGS_UPDATE",
+        "변경할 공연 설정을 하나 이상 입력해야 합니다.");
+  }
+
+  public static PerformanceException invalidSettingsValue(
+      String field, int min, int max) {
+    return new PerformanceException(
+        HttpStatus.BAD_REQUEST,
+        "INVALID_PERFORMANCE_SETTINGS_VALUE",
+        field + " 값은 " + min + " 이상 " + max + " 이하여야 합니다.");
+  }
+
   public HttpStatus getStatus() {
     return status;
   }

@@ -3,6 +3,7 @@ package com.ssafy.ssasukae.domain.performance.controller;
 import java.security.Principal;
 
 import com.ssafy.ssasukae.domain.performance.dto.StartPerformanceRequest;
+import com.ssafy.ssasukae.domain.performance.dto.UpdatePerformanceSettingsRequest;
 import com.ssafy.ssasukae.domain.performance.service.PerformanceService;
 import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
 
@@ -54,6 +55,16 @@ public class PerformanceMessageController {
       @DestinationVariable Long performanceId,
       Principal principal) {
     performanceService.cancelPerformance(roomId, performanceId, resolveUserId(principal));
+  }
+
+  @MessageMapping("/rooms/{roomId}/performances/{performanceId}/settings")
+  public void updatePerformanceSettings(
+      @DestinationVariable Long roomId,
+      @DestinationVariable Long performanceId,
+      @Valid @Payload UpdatePerformanceSettingsRequest request,
+      Principal principal) {
+    performanceService.updatePerformanceSettings(
+        roomId, performanceId, resolveUserId(principal), request);
   }
 
   private Long resolveUserId(Principal principal) {
