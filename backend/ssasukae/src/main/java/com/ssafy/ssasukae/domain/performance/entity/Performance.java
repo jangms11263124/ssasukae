@@ -6,6 +6,7 @@ import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.song.entity.Song;
+import com.ssafy.ssasukae.global.exception.performance.PerformanceException;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -58,6 +59,15 @@ public class Performance {
   @Column(nullable = false)
   private long version;
 
+  @Column(name = "playback_started_at")
+  private LocalDateTime playbackStartedAt;
+
+  @Column(name = "playback_finished_at")
+  private LocalDateTime playbackFinishedAt;
+
+  @Column(name = "cancelled_at")
+  private LocalDateTime cancelledAt;
+
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
 
@@ -92,6 +102,53 @@ public class Performance {
     return new Performance(room, performer, song, roundNo, now);
   }
 
+  public boolean startPlayback(LocalDateTime now) {
+    if (status == PerformanceStatus.PLAYING) {
+      return false;
+    }
+    if (status != PerformanceStatus.PREPARING) {
+      throw PerformanceException.invalidState(status, PerformanceStatus.PLAYING);
+    }
+
+    status = PerformanceStatus.PLAYING;
+    playbackStartedAt = now;
+    touch(now);
+    return true;
+  }
+
+  public boolean finishPlayback(LocalDateTime now) {
+    if (status == PerformanceStatus.ANALYZING) {
+      return false;
+    }
+    if (status != PerformanceStatus.PLAYING) {
+      throw PerformanceException.invalidState(status, PerformanceStatus.ANALYZING);
+    }
+
+    status = PerformanceStatus.ANALYZING;
+    playbackFinishedAt = now;
+    touch(now);
+    return true;
+  }
+
+  public boolean cancel(LocalDateTime now) {
+    if (status == PerformanceStatus.CANCELLED) {
+      return false;
+    }
+    if (status != PerformanceStatus.PREPARING && status != PerformanceStatus.PLAYING) {
+      throw PerformanceException.invalidState(status, PerformanceStatus.CANCELLED);
+    }
+
+    status = PerformanceStatus.CANCELLED;
+    cancelledAt = now;
+    touch(now);
+    return true;
+  }
+
+  private void touch(LocalDateTime now) {
+    version++;
+    updatedAt = now;
+  }
+
   public Long getId() {
     return id;
   }
@@ -118,6 +175,18 @@ public class Performance {
 
   public long getVersion() {
     return version;
+  }
+
+  public LocalDateTime getPlaybackStartedAt() {
+    return playbackStartedAt;
+  }
+
+  public LocalDateTime getPlaybackFinishedAt() {
+    return playbackFinishedAt;
+  }
+
+  public LocalDateTime getCancelledAt() {
+    return cancelledAt;
   }
 
   public LocalDateTime getCreatedAt() {

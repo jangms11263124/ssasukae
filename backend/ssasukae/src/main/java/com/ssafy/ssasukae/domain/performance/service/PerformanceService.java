@@ -4,11 +4,14 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 
+import com.ssafy.ssasukae.domain.performance.dto.PerformanceTransitionResult;
 import com.ssafy.ssasukae.domain.performance.dto.StartPerformanceRequest;
 import com.ssafy.ssasukae.domain.performance.dto.StartPerformanceResult;
 import com.ssafy.ssasukae.domain.performance.entity.Performance;
 import com.ssafy.ssasukae.domain.performance.entity.PerformanceSettings;
 import com.ssafy.ssasukae.domain.performance.event.PerformanceStartedDomainEvent;
+import com.ssafy.ssasukae.domain.performance.event.PerformanceTransitionDomainEvent;
+import com.ssafy.ssasukae.domain.performance.event.PerformanceTransitionKind;
 import com.ssafy.ssasukae.domain.performance.repository.PerformanceRepository;
 import com.ssafy.ssasukae.domain.performance.repository.PerformanceSettingsRepository;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
@@ -112,6 +115,166 @@ public class PerformanceService {
         performance.getStatus());
   }
 
+  @Transactional
+  public PerformanceTransitionResult startPlayback(
+      Long roomId, Long performanceId, Long requesterUserId) {
+    Room room = lockRoom(roomId);
+    validateRoomPlaying(room);
+
+    Performance performance = findPerformance(roomId, performanceId);
+    RoomParticipant requester = findOnlineRequester(roomId, requesterUserId);
+    validatePlaybackRequester(performance, requester);
+
+    PerformanceStatus previousStatus = performance.getStatus();
+    LocalDateTime now = LocalDateTime.now(clock);
+    boolean changed = performance.startPlayback(now);
+    if (!changed) {
+      return transitionResult(performance, performance.getPlaybackStartedAt(), false);
+    }
+
+    publishTransition(
+        room,
+        performance,
+        requester,
+        previousStatus,
+        now,
+        PerformanceTransitionKind.PLAYBACK_STARTED,
+        false);
+    return transitionResult(performance, now, true);
+  }
+
+  @Transactional
+  public PerformanceTransitionResult finishPlayback(
+      Long roomId, Long performanceId, Long requesterUserId) {
+    Room room = lockRoom(roomId);
+    validateRoomPlaying(room);
+
+    Performance performance = findPerformance(roomId, performanceId);
+    RoomParticipant requester = findOnlineRequester(roomId, requesterUserId);
+    validatePlaybackRequester(performance, requester);
+
+    PerformanceStatus previousStatus = performance.getStatus();
+    LocalDateTime now = LocalDateTime.now(clock);
+    boolean changed = performance.finishPlayback(now);
+    if (!changed) {
+      return transitionResult(performance, performance.getPlaybackFinishedAt(), false);
+    }
+
+    publishTransition(
+        room,
+        performance,
+        requester,
+        previousStatus,
+        now,
+        PerformanceTransitionKind.PLAYBACK_FINISHED,
+        false);
+    return transitionResult(performance, now, true);
+  }
+
+  @Transactional
+  public PerformanceTransitionResult cancelPerformance(
+      Long roomId, Long performanceId, Long requesterUserId) {
+    Room room = lockRoom(roomId);
+    if (room.getStatus() == RoomStatus.FINISHED) {
+      throw RoomException.closed();
+    }
+
+    Performance performance = findPerformance(roomId, performanceId);
+    RoomParticipant requester = findOnlineRequester(roomId, requesterUserId);
+    validateCancelRequester(performance, requester);
+
+    PerformanceStatus previousStatus = performance.getStatus();
+    LocalDateTime now = LocalDateTime.now(clock);
+    boolean changed = performance.cancel(now);
+    if (!changed) {
+      return transitionResult(performance, performance.getCancelledAt(), false);
+    }
+
+    publishTransition(
+        room,
+        performance,
+        requester,
+        previousStatus,
+        now,
+        PerformanceTransitionKind.PERFORMANCE_CANCELLED,
+        true);
+    return transitionResult(performance, now, true);
+  }
+
+  private Room lockRoom(Long roomId) {
+    return roomRepository.findByIdForUpdate(roomId).orElseThrow(RoomException::notFound);
+  }
+
+  private Performance findPerformance(Long roomId, Long performanceId) {
+    return performanceRepository
+        .findByIdAndRoom_Id(performanceId, roomId)
+        .orElseThrow(PerformanceException::notFound);
+  }
+
+  private RoomParticipant findOnlineRequester(Long roomId, Long requesterUserId) {
+    RoomParticipant requester = findRequester(roomId, requesterUserId);
+    if (requester.getConnectionStatus() != ConnectionStatus.ONLINE) {
+      throw PerformanceException.requesterNotOnline();
+    }
+    return requester;
+  }
+
+  private void validatePlaybackRequester(
+      Performance performance, RoomParticipant requester) {
+    if (!performance.getPerformer().getId().equals(requester.getId())) {
+      throw PerformanceException.playbackPermissionRequired();
+    }
+  }
+
+  private void validateCancelRequester(
+      Performance performance, RoomParticipant requester) {
+    boolean isHost = requester.getRole() == ParticipantRole.HOST;
+    boolean isPerformer = performance.getPerformer().getId().equals(requester.getId());
+    if (!isHost && !isPerformer) {
+      throw PerformanceException.cancelPermissionRequired();
+    }
+  }
+
+  private void publishTransition(
+      Room room,
+      Performance performance,
+      RoomParticipant requester,
+      PerformanceStatus previousStatus,
+      LocalDateTime changedAt,
+      PerformanceTransitionKind kind,
+      boolean returnRoomToPreparing) {
+    long stateChangedRoomVersion =
+        returnRoomToPreparing
+            ? room.cancelPerformance(changedAt)
+            : room.recordPerformanceProgress(changedAt);
+    long specificRoomVersion = room.increaseVersion(changedAt);
+
+    applicationEventPublisher.publishEvent(
+        new PerformanceTransitionDomainEvent(
+            room.getId(),
+            stateChangedRoomVersion,
+            specificRoomVersion,
+            performance.getId(),
+            performance.getPerformer().getId(),
+            requester.getId(),
+            previousStatus,
+            performance.getStatus(),
+            performance.getVersion(),
+            room.getStatus(),
+            changedAt,
+            kind));
+  }
+
+  private PerformanceTransitionResult transitionResult(
+      Performance performance, LocalDateTime changedAt, boolean changed) {
+    return new PerformanceTransitionResult(
+        performance.getId(),
+        performance.getStatus(),
+        performance.getVersion(),
+        changedAt,
+        changed);
+  }
+
   private void validateNoActivePerformance(Long roomId) {
     if (performanceRepository.existsByRoom_IdAndStatusIn(roomId, ACTIVE_STATUSES)) {
       throw PerformanceException.alreadyActive();
@@ -124,6 +287,15 @@ public class PerformanceService {
     }
     if (room.getStatus() != RoomStatus.PREPARING) {
       throw RoomException.notReadyForPerformance();
+    }
+  }
+
+  private void validateRoomPlaying(Room room) {
+    if (room.getStatus() == RoomStatus.FINISHED) {
+      throw RoomException.closed();
+    }
+    if (room.getStatus() != RoomStatus.PLAYING) {
+      throw PerformanceException.roomNotPlaying();
     }
   }
 
