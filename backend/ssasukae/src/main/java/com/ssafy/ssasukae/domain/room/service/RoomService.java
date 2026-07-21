@@ -11,12 +11,14 @@ import com.ssafy.ssasukae.domain.room.dto.JoinRoomRequest;
 import com.ssafy.ssasukae.domain.room.dto.JoinRoomResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomParticipantResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomSnapshotResponse;
+import com.ssafy.ssasukae.domain.room.dto.UpdateMediaStateRequest;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomBan;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.event.ParticipantConnectionChangedDomainEvent;
 import com.ssafy.ssasukae.domain.room.event.ParticipantJoinedDomainEvent;
 import com.ssafy.ssasukae.domain.room.event.ParticipantKickedDomainEvent;
+import com.ssafy.ssasukae.domain.room.event.ParticipantMediaStateChangedDomainEvent;
 import com.ssafy.ssasukae.domain.room.event.ParticipantLeftDomainEvent;
 import com.ssafy.ssasukae.domain.room.repository.RoomBanRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
@@ -287,6 +289,36 @@ public class RoomService {
             target.getUser().getNickname(),
             requester.getUser().getId(),
             participantCount));
+  }
+
+  @Transactional
+  public void updateMediaState(Long roomId, Long userId, UpdateMediaStateRequest request) {
+    Room room = roomRepository.findByIdForUpdate(roomId).orElseThrow(RoomException::notFound);
+    if (room.getStatus() == RoomStatus.FINISHED) {
+      throw RoomException.closed();
+    }
+
+    RoomParticipant participant =
+        roomParticipantRepository
+            .findByRoom_IdAndUser_Id(roomId, userId)
+            .filter(RoomParticipant::isActive)
+            .orElseThrow(RoomException::accessDenied);
+
+    boolean changed =
+        participant.updateMediaState(request.micEnabled(), request.cameraEnabled());
+    if (!changed) {
+      return;
+    }
+
+    LocalDateTime now = LocalDateTime.now(clock);
+    long version = room.increaseVersion(now);
+    applicationEventPublisher.publishEvent(
+        new ParticipantMediaStateChangedDomainEvent(
+            roomId,
+            version,
+            participant.getId(),
+            participant.isMicEnabled(),
+            participant.isCameraEnabled()));
   }
 
   @Transactional
