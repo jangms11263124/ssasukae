@@ -18,6 +18,7 @@ import java.util.Optional;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.event.ParticipantLeftDomainEvent;
+import com.ssafy.ssasukae.global.exception.room.RoomException;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
@@ -29,7 +30,6 @@ import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
-import com.ssafy.ssasukae.global.exception.room.RoomException;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -110,8 +110,8 @@ class RoomServiceLeaveTest {
   }
 
   @Test
-  @DisplayName("방장이 퇴장하면 입장 시각이 가장 빠르고, 같으면 participantId가 작은 온라인 참가자에게 위임한다")
-  void leaveRoom_transfersHostByJoinedAtThenParticipantId() {
+  @DisplayName("방장이 퇴장하면 userId가 가장 작은 온라인 참가자에게 방장을 자동 위임한다")
+  void leaveRoom_transfersHostToSmallestUserIdParticipant() {
     Room room = room(10L);
     RoomParticipant leavingHost = host(room, user(1L, "기존방장"), 101L, JOINED_AT);
     RoomParticipant newHost = participant(room, user(2L, "새방장"), 102L, JOINED_AT.plusMinutes(1));
@@ -122,7 +122,7 @@ class RoomServiceLeaveTest {
     when(roomParticipantRepository.findByRoom_IdAndRole(10L, ParticipantRole.HOST))
         .thenReturn(Optional.empty());
     when(roomParticipantRepository
-            .findFirstByRoom_IdAndConnectionStatusOrderByJoinedAtAscIdAsc(
+            .findFirstByRoom_IdAndConnectionStatusOrderByUser_IdAsc(
                 10L, ConnectionStatus.ONLINE))
         .thenReturn(Optional.of(newHost));
     when(roomParticipantRepository.countByRoom_IdAndConnectionStatusIn(10L, ACTIVE_STATUSES))
@@ -153,7 +153,7 @@ class RoomServiceLeaveTest {
     when(roomParticipantRepository.findByRoom_IdAndRole(10L, ParticipantRole.HOST))
         .thenReturn(Optional.empty());
     when(roomParticipantRepository
-            .findFirstByRoom_IdAndConnectionStatusOrderByJoinedAtAscIdAsc(
+            .findFirstByRoom_IdAndConnectionStatusOrderByUser_IdAsc(
                 10L, ConnectionStatus.ONLINE))
         .thenReturn(Optional.empty());
     when(roomParticipantRepository.findAllByRoom_IdOrderByJoinedAtAsc(10L))

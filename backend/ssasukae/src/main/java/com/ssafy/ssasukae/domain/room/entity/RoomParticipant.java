@@ -2,11 +2,11 @@ package com.ssafy.ssasukae.domain.room.entity;
 
 import java.time.LocalDateTime;
 
-
+import com.ssafy.ssasukae.global.exception.room.RoomException;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 import com.ssafy.ssasukae.domain.room.type.ParticipantRole;
 import com.ssafy.ssasukae.domain.user.entity.User;
-import com.ssafy.ssasukae.global.exception.room.RoomException;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -120,6 +120,16 @@ public class RoomParticipant {
     connectionStatus = ConnectionStatus.ONLINE;
     disconnectedAt = null;
     leftAt = null;
+    lastSeenAt = now;
+  }
+
+  public void disconnect(LocalDateTime now) {
+    if (connectionStatus != ConnectionStatus.ONLINE) {
+      return;
+    }
+    connectionStatus = ConnectionStatus.DISCONNECTED;
+    ready = false;
+    disconnectedAt = now;
     lastSeenAt = now;
   }
 
