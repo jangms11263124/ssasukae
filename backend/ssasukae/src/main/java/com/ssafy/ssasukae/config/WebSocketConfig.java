@@ -1,4 +1,6 @@
-package com.ssafy.ssasukae.domain.realtime.config;
+package com.ssafy.ssasukae.config;
+
+import com.ssafy.ssasukae.global.security.websocket.StompJwtAuthenticationInterceptor;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
