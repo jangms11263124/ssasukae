@@ -2,19 +2,29 @@ package com.ssafy.ssasukae.domain.realtime.event;
 
 import java.time.Clock;
 import java.time.Instant;
-
-import lombok.RequiredArgsConstructor;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.stereotype.Component;
 
 @Component
-@RequiredArgsConstructor
 public class RealtimeEventFactory {
 
   private final Clock clock;
-  private final RealtimeEventIdGenerator eventIdGenerator;
+  private final AtomicLong sequence;
 
-  public <T> RealtimeEvent<T> create(RealtimeEventType type, T data) {
-    return new RealtimeEvent<>(eventIdGenerator.nextId(), type, Instant.now(clock), data);
+  public RealtimeEventFactory(Clock clock) {
+    this.clock = clock;
+    this.sequence = new AtomicLong(clock.millis());
+  }
+
+  public <T> RealtimeEvent<T> create(
+          RealtimeEventType type, Long roomId, Long version, T data) {
+    return new RealtimeEvent<>(
+            sequence.incrementAndGet(),
+            type,
+            roomId,
+            version,
+            Instant.now(clock),
+            data);
   }
 }
