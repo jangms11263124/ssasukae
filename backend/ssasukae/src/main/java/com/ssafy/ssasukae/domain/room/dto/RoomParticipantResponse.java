@@ -9,7 +9,6 @@ public record RoomParticipantResponse(
     String nickname,
     ParticipantRole role,
     ConnectionStatus connectionStatus,
-    boolean ready,
     boolean micEnabled,
     boolean cameraEnabled) {
 
@@ -19,7 +18,6 @@ public record RoomParticipantResponse(
         participant.getUser().getNickname(),
         participant.getRole(),
         participant.getConnectionStatus(),
-        participant.isReady(),
         participant.isMicEnabled(),
         participant.isCameraEnabled());
   }
