@@ -12,10 +12,13 @@ import com.ssafy.ssasukae.domain.room.dto.JoinRoomResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomParticipantResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomSnapshotResponse;
 import com.ssafy.ssasukae.domain.room.entity.Room;
+import com.ssafy.ssasukae.domain.room.entity.RoomBan;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.event.ParticipantConnectionChangedDomainEvent;
 import com.ssafy.ssasukae.domain.room.event.ParticipantJoinedDomainEvent;
+import com.ssafy.ssasukae.domain.room.event.ParticipantKickedDomainEvent;
 import com.ssafy.ssasukae.domain.room.event.ParticipantLeftDomainEvent;
+import com.ssafy.ssasukae.domain.room.repository.RoomBanRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
@@ -40,6 +43,7 @@ public class RoomService {
 
   private final RoomRepository roomRepository;
   private final RoomParticipantRepository roomParticipantRepository;
+  private final RoomBanRepository roomBanRepository;
   private final UserRepository userRepository;
   private final RoomNamePolicy roomNamePolicy;
   private final InviteCodeGenerator inviteCodeGenerator;
@@ -50,6 +54,7 @@ public class RoomService {
   public RoomService(
       RoomRepository roomRepository,
       RoomParticipantRepository roomParticipantRepository,
+      RoomBanRepository roomBanRepository,
       UserRepository userRepository,
       RoomNamePolicy roomNamePolicy,
       InviteCodeGenerator inviteCodeGenerator,
@@ -58,6 +63,7 @@ public class RoomService {
       Clock clock) {
     this.roomRepository = roomRepository;
     this.roomParticipantRepository = roomParticipantRepository;
+    this.roomBanRepository = roomBanRepository;
     this.userRepository = userRepository;
     this.roomNamePolicy = roomNamePolicy;
     this.inviteCodeGenerator = inviteCodeGenerator;
@@ -108,10 +114,13 @@ public class RoomService {
     RoomParticipant existing =
         roomParticipantRepository.findByRoom_IdAndUser_Id(room.getId(), userId).orElse(null);
 
+    if (roomBanRepository.existsByRoom_IdAndUser_Id(room.getId(), userId)
+        || (existing != null && existing.getConnectionStatus() == ConnectionStatus.KICKED)) {
+      throw RoomException.reentryBanned();
+    }
+
     if (existing == null) {
       validateNoActiveRoom(userId);
-    } else if (existing.getConnectionStatus() == ConnectionStatus.KICKED) {
-      throw RoomException.reentryBanned();
     }
 
     long activeCount =
@@ -226,6 +235,58 @@ public class RoomService {
             newHostParticipantId,
             ParticipantLeaveReason.LEFT,
             hostChangedVersion));
+  }
+
+  @Transactional
+  public void kickParticipant(Long roomId, Long targetParticipantId, Long requesterUserId) {
+    Room room = roomRepository.findByIdForUpdate(roomId).orElseThrow(RoomException::notFound);
+    if (room.getStatus() == RoomStatus.FINISHED) {
+      throw RoomException.closed();
+    }
+
+    RoomParticipant requester =
+        roomParticipantRepository
+            .findByRoom_IdAndUser_Id(roomId, requesterUserId)
+            .filter(RoomParticipant::isActive)
+            .orElseThrow(RoomException::accessDenied);
+    if (requester.getRole() != ParticipantRole.HOST) {
+      throw RoomException.hostPermissionRequired();
+    }
+    if (requester.getConnectionStatus() != ConnectionStatus.ONLINE) {
+      throw RoomException.requesterNotOnline();
+    }
+
+    RoomParticipant target =
+        roomParticipantRepository
+            .findByIdAndRoom_Id(targetParticipantId, roomId)
+            .orElseThrow(RoomException::participantNotFound);
+    if (requester.getId().equals(target.getId())) {
+      throw RoomException.cannotKickSelf();
+    }
+    if (!target.isActive()) {
+      throw RoomException.participantNotActive();
+    }
+
+    LocalDateTime now = LocalDateTime.now(clock);
+    target.kick(now);
+    roomBanRepository.save(
+        RoomBan.create(room, target.getUser(), requester.getUser(), now));
+
+    long version = room.increaseVersion(now);
+    int participantCount =
+        Math.toIntExact(
+            roomParticipantRepository.countByRoom_IdAndConnectionStatusIn(
+                roomId, ACTIVE_STATUSES));
+
+    applicationEventPublisher.publishEvent(
+        new ParticipantKickedDomainEvent(
+            roomId,
+            version,
+            target.getId(),
+            target.getUser().getId(),
+            target.getUser().getNickname(),
+            requester.getUser().getId(),
+            participantCount));
   }
 
   @Transactional

@@ -7,12 +7,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.event.ParticipantConnectionChangedDomainEvent;
+import com.ssafy.ssasukae.domain.room.repository.RoomBanRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
@@ -42,6 +42,7 @@ class RoomServiceConnectionTest {
 
   @Mock private RoomRepository roomRepository;
   @Mock private RoomParticipantRepository roomParticipantRepository;
+  @Mock private RoomBanRepository roomBanRepository;
   @Mock private UserRepository userRepository;
   @Mock private RoomNamePolicy roomNamePolicy;
   @Mock private InviteCodeGenerator inviteCodeGenerator;
@@ -57,6 +58,7 @@ class RoomServiceConnectionTest {
         new RoomService(
             roomRepository,
             roomParticipantRepository,
+            roomBanRepository,
             userRepository,
             roomNamePolicy,
             inviteCodeGenerator,

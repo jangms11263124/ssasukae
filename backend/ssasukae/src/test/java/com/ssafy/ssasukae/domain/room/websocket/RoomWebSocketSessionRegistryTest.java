@@ -32,6 +32,17 @@ class RoomWebSocketSessionRegistryTest {
   }
 
   @Test
+  void findsOnlySessionsForRequestedRoomParticipant() {
+    registry.register("session-1", 10L, 1L);
+    registry.register("session-2", 10L, 1L);
+    registry.register("session-3", 10L, 2L);
+
+    assertThat(registry.findSessionIds(10L, 1L))
+        .containsExactlyInAnyOrder("session-1", "session-2");
+    assertThat(registry.findSessionIds(10L, 99L)).isEmpty();
+  }
+
+  @Test
   void oneSessionCannotSubscribeToDifferentRooms() {
     registry.register("session-1", 10L, 1L);
 
