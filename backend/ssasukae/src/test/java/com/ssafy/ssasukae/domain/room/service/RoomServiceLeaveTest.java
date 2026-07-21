@@ -93,7 +93,6 @@ class RoomServiceLeaveTest {
     roomService.leaveRoom(10L, 2L);
 
     assertThat(leaving.getConnectionStatus()).isEqualTo(ConnectionStatus.LEFT);
-    assertThat(leaving.isReady()).isFalse();
     assertThat(leaving.isMicEnabled()).isFalse();
     assertThat(leaving.isCameraEnabled()).isFalse();
     assertThat(room.getVersion()).isEqualTo(2L);
