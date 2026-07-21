@@ -2,11 +2,12 @@ package com.ssafy.ssasukae.domain.room.entity;
 
 import java.time.LocalDateTime;
 
-import com.ssafy.ssasukae.global.exception.room.RoomException;
+
 import com.ssafy.ssasukae.domain.room.type.RoomMode;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 import com.ssafy.ssasukae.domain.user.entity.User;
 
+import com.ssafy.ssasukae.global.exception.room.RoomException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -127,5 +128,11 @@ public class Room {
     version++;
     lastActivityAt = now;
     return version;
+  }
+
+  public void finish(LocalDateTime now) {
+    status = RoomStatus.FINISHED;
+    finishedAt = now;
+    lastActivityAt = now;
   }
 }
