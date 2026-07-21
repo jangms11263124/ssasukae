@@ -45,6 +45,7 @@ backend-deploy:
     - if: '$CI_COMMIT_BRANCH == "development"'
       changes:
         - backend/ssasukae/**/*
+        - .gitlab-ci.yml
   script:
     - cd backend/ssasukae
     - docker build -t ssasukae-backend .
