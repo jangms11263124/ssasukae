@@ -152,6 +152,18 @@ public class RoomParticipant {
     lastSeenAt = now;
   }
 
+  public boolean updateMediaState(boolean micEnabled, boolean cameraEnabled) {
+    if (connectionStatus != ConnectionStatus.ONLINE) {
+      throw RoomException.participantMustBeOnline();
+    }
+    if (this.micEnabled == micEnabled && this.cameraEnabled == cameraEnabled) {
+      return false;
+    }
+    this.micEnabled = micEnabled;
+    this.cameraEnabled = cameraEnabled;
+    return true;
+  }
+
   public void promoteToHost() {
     if (connectionStatus != ConnectionStatus.ONLINE) {
       throw RoomException.hostMustBeOnline();

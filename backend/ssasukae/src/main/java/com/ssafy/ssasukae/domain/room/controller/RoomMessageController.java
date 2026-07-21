@@ -2,11 +2,15 @@ package com.ssafy.ssasukae.domain.room.controller;
 
 import java.security.Principal;
 
+import com.ssafy.ssasukae.domain.room.dto.UpdateMediaStateRequest;
 import com.ssafy.ssasukae.domain.room.service.RoomService;
 import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
 
+import jakarta.validation.Valid;
+
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -18,6 +22,14 @@ public class RoomMessageController {
 
   public RoomMessageController(RoomService roomService) {
     this.roomService = roomService;
+  }
+
+  @MessageMapping("/rooms/{roomId}/media-state")
+  public void updateMediaState(
+      @DestinationVariable Long roomId,
+      @Valid @Payload UpdateMediaStateRequest request,
+      Principal principal) {
+    roomService.updateMediaState(roomId, resolveUserId(principal), request);
   }
 
   @MessageMapping("/rooms/{roomId}/participants/{participantId}/kick")
