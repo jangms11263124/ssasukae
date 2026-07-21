@@ -130,6 +130,17 @@ public class Room {
     return version;
   }
 
+  public long startPerformance(LocalDateTime now) {
+    if (status == RoomStatus.FINISHED) {
+      throw RoomException.closed();
+    }
+    if (status != RoomStatus.PREPARING) {
+      throw RoomException.notReadyForPerformance();
+    }
+    status = RoomStatus.PLAYING;
+    return increaseVersion(now);
+  }
+
   public void finish(LocalDateTime now) {
     status = RoomStatus.FINISHED;
     finishedAt = now;
