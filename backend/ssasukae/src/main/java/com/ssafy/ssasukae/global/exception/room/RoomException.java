@@ -37,6 +37,41 @@ public class RoomException extends RuntimeException {
     return new RoomException(HttpStatus.FORBIDDEN, "ROOM_ACCESS_DENIED", "방 접근 권한이 없습니다.");
   }
 
+  public static RoomException hostPermissionRequired() {
+    return new RoomException(
+        HttpStatus.FORBIDDEN,
+        "HOST_PERMISSION_REQUIRED",
+        "방장만 참가자를 강퇴할 수 있습니다.");
+  }
+
+  public static RoomException requesterNotOnline() {
+    return new RoomException(
+        HttpStatus.CONFLICT,
+        "REQUESTER_NOT_ONLINE",
+        "온라인 상태의 방장만 참가자를 강퇴할 수 있습니다.");
+  }
+
+  public static RoomException participantNotFound() {
+    return new RoomException(
+        HttpStatus.NOT_FOUND,
+        "PARTICIPANT_NOT_FOUND",
+        "해당 방에서 참가자를 찾을 수 없습니다.");
+  }
+
+  public static RoomException cannotKickSelf() {
+    return new RoomException(
+        HttpStatus.BAD_REQUEST,
+        "CANNOT_KICK_SELF",
+        "방장은 자신을 강퇴할 수 없습니다.");
+  }
+
+  public static RoomException participantNotActive() {
+    return new RoomException(
+        HttpStatus.CONFLICT,
+        "PARTICIPANT_NOT_ACTIVE",
+        "이미 퇴장했거나 강퇴된 참가자입니다.");
+  }
+
   public static RoomException reentryBanned() {
     return new RoomException(
         HttpStatus.FORBIDDEN, "ROOM_REENTRY_BANNED", "강제 퇴장된 방에는 재입장할 수 없습니다.");
