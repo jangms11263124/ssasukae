@@ -4,16 +4,21 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 
+import com.ssafy.ssasukae.domain.performance.dto.PerformanceSettingsResponse;
 import com.ssafy.ssasukae.domain.performance.dto.PerformanceTransitionResult;
 import com.ssafy.ssasukae.domain.performance.dto.StartPerformanceRequest;
 import com.ssafy.ssasukae.domain.performance.dto.StartPerformanceResult;
+import com.ssafy.ssasukae.domain.performance.dto.UpdatePerformanceSettingsRequest;
+import com.ssafy.ssasukae.domain.performance.dto.UpdatePerformanceSettingsResult;
 import com.ssafy.ssasukae.domain.performance.entity.Performance;
 import com.ssafy.ssasukae.domain.performance.entity.PerformanceSettings;
+import com.ssafy.ssasukae.domain.performance.event.PerformanceSettingsChangedDomainEvent;
 import com.ssafy.ssasukae.domain.performance.event.PerformanceStartedDomainEvent;
 import com.ssafy.ssasukae.domain.performance.event.PerformanceTransitionDomainEvent;
 import com.ssafy.ssasukae.domain.performance.event.PerformanceTransitionKind;
 import com.ssafy.ssasukae.domain.performance.repository.PerformanceRepository;
 import com.ssafy.ssasukae.domain.performance.repository.PerformanceSettingsRepository;
+import com.ssafy.ssasukae.domain.performance.type.PerformanceSettingsChangeSource;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
@@ -28,6 +33,7 @@ import com.ssafy.ssasukae.global.exception.performance.PerformanceException;
 import com.ssafy.ssasukae.global.exception.room.RoomException;
 
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -201,6 +207,70 @@ public class PerformanceService {
     return transitionResult(performance, now, true);
   }
 
+  @Transactional(readOnly = true)
+  public PerformanceSettingsResponse getPerformanceSettings(
+      Long roomId, Long performanceId, Long requesterUserId) {
+    Performance performance = findPerformance(roomId, performanceId);
+    findRequester(roomId, requesterUserId);
+    return PerformanceSettingsResponse.from(findSettings(performance.getId()));
+  }
+
+  @Transactional
+  public UpdatePerformanceSettingsResult updatePerformanceSettings(
+      Long roomId,
+      Long performanceId,
+      Long requesterUserId,
+      UpdatePerformanceSettingsRequest request) {
+    Room room = lockRoom(roomId);
+    validateRoomPlaying(room);
+
+    Performance performance = findPerformance(roomId, performanceId);
+    validateSettingsChangeable(performance);
+
+    RoomParticipant requester = findOnlineRequester(roomId, requesterUserId);
+    validateSettingsRequester(performance, requester);
+
+    PerformanceSettings settings = findSettings(performanceId);
+    settings.validateExpectedVersion(request.expectedVersion());
+
+    boolean changed =
+        settings.updateUserSettings(
+            request.keyOffset(),
+            request.tempoPercent(),
+            request.mrVolumePercent(),
+            request.micVolumePercent(),
+            request.echoLevel(),
+            request.reverbLevel());
+    if (!changed) {
+      return UpdatePerformanceSettingsResult.from(settings, false);
+    }
+
+    try {
+      performanceSettingsRepository.saveAndFlush(settings);
+    } catch (ObjectOptimisticLockingFailureException exception) {
+      throw PerformanceException.settingsConcurrentUpdate();
+    }
+
+    LocalDateTime now = LocalDateTime.now(clock);
+    long roomVersion = room.increaseVersion(now);
+    applicationEventPublisher.publishEvent(
+        new PerformanceSettingsChangedDomainEvent(
+            roomId,
+            roomVersion,
+            performanceId,
+            requester.getId(),
+            PerformanceSettingsChangeSource.USER,
+            settings.getVersion(),
+            settings.getKeyOffset(),
+            settings.getTempoPercent(),
+            settings.getMrVolumePercent(),
+            settings.getMicVolumePercent(),
+            settings.getEchoLevel(),
+            settings.getReverbLevel()));
+
+    return UpdatePerformanceSettingsResult.from(settings, true);
+  }
+
   private Room lockRoom(Long roomId) {
     return roomRepository.findByIdForUpdate(roomId).orElseThrow(RoomException::notFound);
   }
@@ -209,6 +279,26 @@ public class PerformanceService {
     return performanceRepository
         .findByIdAndRoom_Id(performanceId, roomId)
         .orElseThrow(PerformanceException::notFound);
+  }
+
+  private PerformanceSettings findSettings(Long performanceId) {
+    return performanceSettingsRepository
+        .findByPerformance_Id(performanceId)
+        .orElseThrow(PerformanceException::settingsNotFound);
+  }
+
+  private void validateSettingsChangeable(Performance performance) {
+    if (performance.getStatus() != PerformanceStatus.PREPARING
+        && performance.getStatus() != PerformanceStatus.PLAYING) {
+      throw PerformanceException.settingsChangeNotAllowed(performance.getStatus());
+    }
+  }
+
+  private void validateSettingsRequester(
+      Performance performance, RoomParticipant requester) {
+    if (!performance.getPerformer().getId().equals(requester.getId())) {
+      throw PerformanceException.settingsPermissionRequired();
+    }
   }
 
   private RoomParticipant findOnlineRequester(Long roomId, Long requesterUserId) {

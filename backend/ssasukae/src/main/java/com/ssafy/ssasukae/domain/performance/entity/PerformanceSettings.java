@@ -1,5 +1,9 @@
 package com.ssafy.ssasukae.domain.performance.entity;
 
+import java.util.Objects;
+
+import com.ssafy.ssasukae.global.exception.performance.PerformanceException;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -20,6 +24,15 @@ import jakarta.persistence.Version;
             name = "uk_performance_settings_performance",
             columnNames = "performance_id"))
 public class PerformanceSettings {
+
+  public static final int MIN_KEY_OFFSET = -6;
+  public static final int MAX_KEY_OFFSET = 6;
+  public static final int MIN_TEMPO_PERCENT = 50;
+  public static final int MAX_TEMPO_PERCENT = 150;
+  public static final int MIN_VOLUME_PERCENT = 0;
+  public static final int MAX_VOLUME_PERCENT = 100;
+  public static final int MIN_EFFECT_LEVEL = 0;
+  public static final int MAX_EFFECT_LEVEL = 100;
 
   private static final int DEFAULT_KEY_OFFSET = 0;
   private static final int DEFAULT_TEMPO_PERCENT = 100;
@@ -71,6 +84,84 @@ public class PerformanceSettings {
 
   public static PerformanceSettings defaults(Performance performance) {
     return new PerformanceSettings(performance);
+  }
+
+  public void validateExpectedVersion(long expectedVersion) {
+    if (version != expectedVersion) {
+      throw PerformanceException.settingsConflict(expectedVersion, version);
+    }
+  }
+
+  public boolean updateUserSettings(
+      Integer keyOffset,
+      Integer tempoPercent,
+      Integer mrVolumePercent,
+      Integer micVolumePercent,
+      Integer echoLevel,
+      Integer reverbLevel) {
+    validateRequestedValues(
+        keyOffset,
+        tempoPercent,
+        mrVolumePercent,
+        micVolumePercent,
+        echoLevel,
+        reverbLevel);
+
+    boolean changed = false;
+    if (keyOffset != null && this.keyOffset != keyOffset) {
+      this.keyOffset = keyOffset;
+      changed = true;
+    }
+    if (tempoPercent != null && this.tempoPercent != tempoPercent) {
+      this.tempoPercent = tempoPercent;
+      changed = true;
+    }
+    if (mrVolumePercent != null && this.mrVolumePercent != mrVolumePercent) {
+      this.mrVolumePercent = mrVolumePercent;
+      changed = true;
+    }
+    if (micVolumePercent != null && this.micVolumePercent != micVolumePercent) {
+      this.micVolumePercent = micVolumePercent;
+      changed = true;
+    }
+    if (echoLevel != null && this.echoLevel != echoLevel) {
+      this.echoLevel = echoLevel;
+      changed = true;
+    }
+    if (reverbLevel != null && this.reverbLevel != reverbLevel) {
+      this.reverbLevel = reverbLevel;
+      changed = true;
+    }
+    return changed;
+  }
+
+  private void validateRequestedValues(
+      Integer keyOffset,
+      Integer tempoPercent,
+      Integer mrVolumePercent,
+      Integer micVolumePercent,
+      Integer echoLevel,
+      Integer reverbLevel) {
+    if (Objects.isNull(keyOffset)
+        && Objects.isNull(tempoPercent)
+        && Objects.isNull(mrVolumePercent)
+        && Objects.isNull(micVolumePercent)
+        && Objects.isNull(echoLevel)
+        && Objects.isNull(reverbLevel)) {
+      throw PerformanceException.emptySettingsUpdate();
+    }
+    validateRange("keyOffset", keyOffset, MIN_KEY_OFFSET, MAX_KEY_OFFSET);
+    validateRange("tempoPercent", tempoPercent, MIN_TEMPO_PERCENT, MAX_TEMPO_PERCENT);
+    validateRange("mrVolumePercent", mrVolumePercent, MIN_VOLUME_PERCENT, MAX_VOLUME_PERCENT);
+    validateRange("micVolumePercent", micVolumePercent, MIN_VOLUME_PERCENT, MAX_VOLUME_PERCENT);
+    validateRange("echoLevel", echoLevel, MIN_EFFECT_LEVEL, MAX_EFFECT_LEVEL);
+    validateRange("reverbLevel", reverbLevel, MIN_EFFECT_LEVEL, MAX_EFFECT_LEVEL);
+  }
+
+  private void validateRange(String field, Integer value, int min, int max) {
+    if (value != null && (value < min || value > max)) {
+      throw PerformanceException.invalidSettingsValue(field, min, max);
+    }
   }
 
   public Long getId() {
