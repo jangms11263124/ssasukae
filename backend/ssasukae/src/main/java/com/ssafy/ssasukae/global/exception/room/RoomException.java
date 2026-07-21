@@ -72,6 +72,13 @@ public class RoomException extends RuntimeException {
         "이미 퇴장했거나 강퇴된 참가자입니다.");
   }
 
+  public static RoomException participantMustBeOnline() {
+    return new RoomException(
+        HttpStatus.CONFLICT,
+        "PARTICIPANT_NOT_ONLINE",
+        "온라인 상태의 참가자만 미디어 상태를 변경할 수 있습니다.");
+  }
+
   public static RoomException reentryBanned() {
     return new RoomException(
         HttpStatus.FORBIDDEN, "ROOM_REENTRY_BANNED", "강제 퇴장된 방에는 재입장할 수 없습니다.");
