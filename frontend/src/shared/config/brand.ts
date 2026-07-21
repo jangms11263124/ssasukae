@@ -1,7 +1,6 @@
 export const BRAND_NAME = '싸스케';
-export const LOGO_PLACEHOLDER = '대충 로고';
-export const BRAND_SUBTITLE = 'SSAFY Star K';
 export const BRAND_TAGLINE = '실시간 화상 노래방';
+export const BRAND_LOGO_SRC = '/images/ssafy-star-k.png';
 
 export const HERO_COPY = {
   headlineBefore: '노래해봐,',

@@ -1,8 +1,8 @@
 'use client';
 
 import { useAuth } from '@/entities/user';
-import { BRAND_NAME, BRAND_SUBTITLE } from '@/shared/config/brand';
 import { cn } from '@/shared/lib/cn';
+import { BrandLogo } from '@/shared/ui/brand/BrandLogo';
 
 interface MainHomeProps {
   className?: string;
@@ -29,10 +29,7 @@ export function MainHome({ className }: MainHomeProps) {
 
       <div className="relative z-10 mx-auto flex min-h-dvh max-w-5xl flex-col px-5 py-8 sm:px-8">
         <header className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xl font-extrabold tracking-tight sm:text-2xl">{BRAND_NAME}</p>
-            <p className="mt-1 text-xs text-zinc-400 sm:text-sm">{BRAND_SUBTITLE}</p>
-          </div>
+          <BrandLogo className="h-10 w-auto sm:h-12" />
 
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
