@@ -27,4 +27,9 @@ public class MockOpenViduGateway implements MediaSessionGateway {
         + "-"
         + UUID.randomUUID();
   }
+
+  @Override
+  public void closeSession(String sessionId) {
+    // 로컬 Mock에서는 실제 미디어 세션 자원이 없으므로 종료할 작업이 없습니다.
+  }
 }

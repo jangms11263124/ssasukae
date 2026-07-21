@@ -15,6 +15,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,6 +50,13 @@ public class RoomController {
       @Valid @RequestBody JoinRoomRequest request,
       @AuthenticationPrincipal AuthenticatedUser user) {
     return ResponseEntity.ok(roomService.joinRoom(user.userId(), request));
+  }
+
+  @DeleteMapping("/{roomId}/participants/me")
+  public ResponseEntity<Void> leaveRoom(
+      @PathVariable Long roomId, @AuthenticationPrincipal AuthenticatedUser user) {
+    roomService.leaveRoom(roomId, user.userId());
+    return ResponseEntity.noContent().build();
   }
 
   @GetMapping("/{roomId}")
