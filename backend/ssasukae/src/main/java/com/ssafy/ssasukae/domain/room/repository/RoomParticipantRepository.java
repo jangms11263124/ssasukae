@@ -19,7 +19,7 @@ public interface RoomParticipantRepository extends JpaRepository<RoomParticipant
   List<RoomParticipant> findAllByRoom_IdOrderByJoinedAtAsc(Long roomId);
 
   Optional<RoomParticipant>
-      findFirstByRoom_IdAndConnectionStatusOrderByJoinedAtAscIdAsc(
+      findFirstByRoom_IdAndConnectionStatusOrderByUser_IdAsc(
           Long roomId, ConnectionStatus connectionStatus);
 
   long countByRoom_IdAndConnectionStatusIn(

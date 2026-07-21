@@ -7,6 +7,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.ssafy.ssasukae.domain.room.service.RoomService;
+import com.ssafy.ssasukae.domain.room.websocket.RoomWebSocketSessionRegistry;
+import com.ssafy.ssasukae.global.security.jwt.ActiveSessionService;
+import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
+import com.ssafy.ssasukae.global.security.jwt.JwtTokenProvider;
+import com.ssafy.ssasukae.global.security.jwt.TokenBlacklistService;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.messaging.Message;
@@ -18,21 +25,21 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 
-import com.ssafy.ssasukae.global.security.jwt.ActiveSessionService;
-import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
-import com.ssafy.ssasukae.global.security.jwt.JwtTokenProvider;
-import com.ssafy.ssasukae.global.security.jwt.TokenBlacklistService;
-
 class StompJwtAuthenticationInterceptorTest {
 
   private static final String TOKEN = "access-token";
   private static final Long USER_ID = 1L;
   private static final String JTI = "token-id";
-  private static final String SID = "session-id";
+  private static final String SID = "sid-A";
+  private static final String WEB_SOCKET_SESSION_ID = "ws-1";
 
   private JwtTokenProvider jwtTokenProvider;
   private TokenBlacklistService tokenBlacklistService;
   private ActiveSessionService activeSessionService;
+  private RoomService roomService;
+  private RoomWebSocketSessionRegistry roomSessionRegistry;
+  private WebSocketLoginSessionRegistry loginSessionRegistry;
+  private WebSocketSessionCloser sessionCloser;
   private StompJwtAuthenticationInterceptor interceptor;
   private MessageChannel channel;
 
@@ -41,10 +48,21 @@ class StompJwtAuthenticationInterceptorTest {
     jwtTokenProvider = mock(JwtTokenProvider.class);
     tokenBlacklistService = mock(TokenBlacklistService.class);
     activeSessionService = mock(ActiveSessionService.class);
+    roomService = mock(RoomService.class);
+    roomSessionRegistry = mock(RoomWebSocketSessionRegistry.class);
+    loginSessionRegistry = mock(WebSocketLoginSessionRegistry.class);
+    sessionCloser = mock(WebSocketSessionCloser.class);
     channel = mock(MessageChannel.class);
+
     interceptor =
         new StompJwtAuthenticationInterceptor(
-            jwtTokenProvider, tokenBlacklistService, activeSessionService);
+            jwtTokenProvider,
+            tokenBlacklistService,
+            activeSessionService,
+            roomService,
+            roomSessionRegistry,
+            loginSessionRegistry,
+            sessionCloser);
   }
 
   @Test
@@ -89,7 +107,7 @@ class StompJwtAuthenticationInterceptorTest {
   }
 
   @Test
-  void connectSetsAuthenticatedUser() {
+  void connectSetsAuthenticatedUserAndRegistersSid() {
     Message<byte[]> message = stompMessage(StompCommand.CONNECT, "Bearer " + TOKEN);
     stubValidToken();
     when(activeSessionService.isActiveSession(USER_ID, SID)).thenReturn(true);
@@ -105,13 +123,11 @@ class StompJwtAuthenticationInterceptorTest {
     assertThat(authentication).isNotNull();
     assertThat(authentication.getPrincipal())
         .isEqualTo(new AuthenticatedUser(USER_ID, "singer@example.com", "USER"));
-    assertThat(authentication.getAuthorities())
-        .extracting("authority")
-        .containsExactly("ROLE_USER");
+    verify(loginSessionRegistry).register(WEB_SOCKET_SESSION_ID, USER_ID, SID);
   }
 
   @Test
-  void nonConnectFramePassesThrough() {
+  void nonConnectOrSubscribeFramePassesThrough() {
     Message<byte[]> message = stompMessage(StompCommand.SEND, null);
 
     assertThat(interceptor.preSend(message, channel)).isSameAs(message);
@@ -128,6 +144,7 @@ class StompJwtAuthenticationInterceptorTest {
 
   private Message<byte[]> stompMessage(StompCommand command, String authorization) {
     StompHeaderAccessor accessor = StompHeaderAccessor.create(command);
+    accessor.setSessionId(WEB_SOCKET_SESSION_ID);
     if (authorization != null) {
       accessor.setNativeHeader("Authorization", authorization);
     }

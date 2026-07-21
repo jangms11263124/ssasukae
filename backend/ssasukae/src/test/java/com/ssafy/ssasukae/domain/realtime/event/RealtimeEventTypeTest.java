@@ -16,6 +16,7 @@ class RealtimeEventTypeTest {
                     "PONG",
                     "PARTICIPANT_JOINED",
                     "PARTICIPANT_LEFT",
+                    "PARTICIPANT_CONNECTION_CHANGED",
                     "HOST_CHANGED",
                     "PARTICIPANT_MEDIA_STATE_CHANGED",
                     "ROOM_MODE_CHANGED",

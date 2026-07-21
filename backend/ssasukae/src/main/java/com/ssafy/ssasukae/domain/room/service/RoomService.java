@@ -13,6 +13,7 @@ import com.ssafy.ssasukae.domain.room.dto.RoomParticipantResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomSnapshotResponse;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
+import com.ssafy.ssasukae.domain.room.event.ParticipantConnectionChangedDomainEvent;
 import com.ssafy.ssasukae.domain.room.event.ParticipantJoinedDomainEvent;
 import com.ssafy.ssasukae.domain.room.event.ParticipantLeftDomainEvent;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
@@ -199,11 +200,7 @@ public class RoomService {
     Long hostChangedVersion = null;
 
     if (hostLeaving) {
-      RoomParticipant newHost =
-          roomParticipantRepository
-              .findFirstByRoom_IdAndConnectionStatusOrderByJoinedAtAscIdAsc(
-                  roomId, ConnectionStatus.ONLINE)
-              .orElse(null);
+      RoomParticipant newHost = findNextOnlineHost(roomId);
 
       if (newHost != null) {
         newHost.promoteToHost();
@@ -229,6 +226,101 @@ public class RoomService {
             newHostParticipantId,
             ParticipantLeaveReason.LEFT,
             hostChangedVersion));
+  }
+
+  @Transactional
+  public void connectRoomWebSocket(Long roomId, Long userId) {
+    Room room = roomRepository.findByIdForUpdate(roomId).orElseThrow(RoomException::notFound);
+    if (room.getStatus() == RoomStatus.FINISHED) {
+      throw RoomException.closed();
+    }
+
+    RoomParticipant participant =
+        roomParticipantRepository
+            .findByRoom_IdAndUser_Id(roomId, userId)
+            .filter(RoomParticipant::isActive)
+            .orElseThrow(RoomException::accessDenied);
+
+    if (participant.getConnectionStatus() == ConnectionStatus.ONLINE) {
+      return;
+    }
+    if (participant.getConnectionStatus() != ConnectionStatus.DISCONNECTED) {
+      throw RoomException.accessDenied();
+    }
+
+    LocalDateTime now = LocalDateTime.now(clock);
+    participant.reconnect(now);
+    long connectionChangedVersion = room.increaseVersion(now);
+
+    Long newHostParticipantId = null;
+    Long hostChangedVersion = null;
+    RoomParticipant onlineHost =
+        roomParticipantRepository
+            .findByRoom_IdAndRole(roomId, ParticipantRole.HOST)
+            .filter(host -> host.getConnectionStatus() == ConnectionStatus.ONLINE)
+            .orElse(null);
+
+    if (onlineHost == null) {
+      demoteExistingHostIfNecessary(roomId, participant);
+      participant.promoteToHost();
+      newHostParticipantId = participant.getId();
+      hostChangedVersion = room.increaseVersion(now);
+    }
+
+    publishConnectionChanged(
+        room,
+        participant,
+        ConnectionStatus.ONLINE,
+        connectionChangedVersion,
+        newHostParticipantId,
+        hostChangedVersion);
+  }
+
+  @Transactional
+  public void disconnectRoomWebSocket(Long roomId, Long userId) {
+    Room room = roomRepository.findByIdForUpdate(roomId).orElseThrow(RoomException::notFound);
+    if (room.getStatus() == RoomStatus.FINISHED) {
+      return;
+    }
+
+    RoomParticipant participant =
+        roomParticipantRepository
+            .findByRoom_IdAndUser_Id(roomId, userId)
+            .filter(RoomParticipant::isActive)
+            .orElse(null);
+
+    if (participant == null || participant.getConnectionStatus() != ConnectionStatus.ONLINE) {
+      return;
+    }
+
+    LocalDateTime now = LocalDateTime.now(clock);
+    boolean hostDisconnected = participant.getRole() == ParticipantRole.HOST;
+
+    participant.disconnect(now);
+    if (hostDisconnected) {
+      participant.demoteToParticipant();
+    }
+
+    long connectionChangedVersion = room.increaseVersion(now);
+    Long newHostParticipantId = null;
+    Long hostChangedVersion = null;
+
+    if (hostDisconnected) {
+      RoomParticipant newHost = findNextOnlineHost(roomId);
+      if (newHost != null) {
+        newHost.promoteToHost();
+        newHostParticipantId = newHost.getId();
+        hostChangedVersion = room.increaseVersion(now);
+      }
+    }
+
+    publishConnectionChanged(
+        room,
+        participant,
+        ConnectionStatus.DISCONNECTED,
+        connectionChangedVersion,
+        newHostParticipantId,
+        hostChangedVersion);
   }
 
   @Transactional(readOnly = true)
@@ -269,13 +361,46 @@ public class RoomService {
         null);
   }
 
+  private RoomParticipant findNextOnlineHost(Long roomId) {
+    return roomParticipantRepository
+        .findFirstByRoom_IdAndConnectionStatusOrderByUser_IdAsc(
+            roomId, ConnectionStatus.ONLINE)
+        .orElse(null);
+  }
+
+  private void demoteExistingHostIfNecessary(
+      Long roomId, RoomParticipant participantToPromote) {
+    roomParticipantRepository
+        .findByRoom_IdAndRole(roomId, ParticipantRole.HOST)
+        .filter(existingHost -> !existingHost.getId().equals(participantToPromote.getId()))
+        .ifPresent(RoomParticipant::demoteToParticipant);
+  }
+
+  private void publishConnectionChanged(
+      Room room,
+      RoomParticipant participant,
+      ConnectionStatus connectionStatus,
+      long connectionChangedVersion,
+      Long newHostParticipantId,
+      Long hostChangedVersion) {
+    applicationEventPublisher.publishEvent(
+        new ParticipantConnectionChangedDomainEvent(
+            room.getId(),
+            connectionChangedVersion,
+            participant.getId(),
+            connectionStatus,
+            newHostParticipantId,
+            hostChangedVersion));
+  }
+
   private void closeRoomAndLeaveRemainingParticipants(Room room, LocalDateTime now) {
     roomParticipantRepository.findAllByRoom_IdOrderByJoinedAtAsc(room.getId()).stream()
         .filter(RoomParticipant::isActive)
-        .forEach(participant -> {
-          participant.leave(now);
-          participant.demoteToParticipant();
-        });
+        .forEach(
+            participant -> {
+              participant.leave(now);
+              participant.demoteToParticipant();
+            });
     room.finish(now);
     mediaSessionGateway.closeSession(room.getOpenViduSessionId());
   }
