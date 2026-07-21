@@ -54,6 +54,13 @@ public class RoomException extends RuntimeException {
         "현재 공연을 시작할 수 없는 방 상태입니다.");
   }
 
+  public static RoomException notPlaying() {
+    return new RoomException(
+        HttpStatus.CONFLICT,
+        "ROOM_NOT_PLAYING",
+        "현재 공연이 진행 중인 방이 아닙니다.");
+  }
+
   public static RoomException full() {
     return new RoomException(HttpStatus.CONFLICT, "ROOM_FULL", "방의 최대 인원에 도달했습니다.");
   }

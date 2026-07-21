@@ -141,6 +141,27 @@ public class Room {
     return increaseVersion(now);
   }
 
+  public long recordPerformanceProgress(LocalDateTime now) {
+    if (status == RoomStatus.FINISHED) {
+      throw RoomException.closed();
+    }
+    if (status != RoomStatus.PLAYING) {
+      throw RoomException.notPlaying();
+    }
+    return increaseVersion(now);
+  }
+
+  public long cancelPerformance(LocalDateTime now) {
+    if (status == RoomStatus.FINISHED) {
+      throw RoomException.closed();
+    }
+    if (status != RoomStatus.PLAYING) {
+      throw RoomException.notPlaying();
+    }
+    status = RoomStatus.PREPARING;
+    return increaseVersion(now);
+  }
+
   public void finish(LocalDateTime now) {
     status = RoomStatus.FINISHED;
     finishedAt = now;
