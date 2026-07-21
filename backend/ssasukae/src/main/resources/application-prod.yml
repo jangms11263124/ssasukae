@@ -1,0 +1,33 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+
+  jpa:
+    # TODO: 정식 마이그레이션 도구(Flyway/Liquibase) 도입 전까지의 임시 설정.
+    # 스키마가 안정화되면 validate로 바꾸는 걸 권장.
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+app:
+  cors:
+    allowed-origins:
+      - http://localhost:3000
+
+  cookie:
+    # TODO: 백엔드에 HTTPS(리버스 프록시/로드밸런서)가 붙으면 true로 변경.
+    # 지금은 순수 HTTP라 true로 두면 refresh token 쿠키 자체가 전송되지 않음.
+    secure: false
+
+  oauth2:
+    # TODO: 프론트가 실제 도메인으로 배포되면 localhost:3000 대신 그 도메인으로 교체.
+    redirect-uri: http://localhost:3000/oauth/callback
+    signup-redirect-uri: http://localhost:3000/signup
+    failure-redirect-uri: http://localhost:3000/login-error
