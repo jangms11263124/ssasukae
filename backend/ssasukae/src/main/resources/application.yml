@@ -46,6 +46,9 @@ spring:
             user-info-uri: https://kapi.kakao.com/v2/user/me
             user-name-attribute: id
 
+server:
+  forward-headers-strategy: framework
+
 jwt:
   secret: ${JWT_SECRET}
   access-token-expiration: 600000      # 10분
