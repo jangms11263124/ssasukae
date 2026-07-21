@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,7 +12,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
+
+import com.ssafy.ssasukae.domain.card.event.CardsAssignedDomainEvent;
+import com.ssafy.ssasukae.domain.card.service.CardAssignmentBatch;
+import com.ssafy.ssasukae.domain.card.service.CardAssignmentService;
 
 import com.ssafy.ssasukae.domain.performance.dto.StartPerformanceRequest;
 import com.ssafy.ssasukae.domain.performance.entity.Performance;
@@ -52,6 +58,7 @@ class PerformanceServiceTest {
 
   @Mock private RoomRepository roomRepository;
   @Mock private RoomParticipantRepository roomParticipantRepository;
+  @Mock private CardAssignmentService cardAssignmentService;
   @Mock private SongRepository songRepository;
   @Mock private PerformanceRepository performanceRepository;
   @Mock private PerformanceSettingsRepository performanceSettingsRepository;
@@ -65,6 +72,7 @@ class PerformanceServiceTest {
         new PerformanceService(
             roomRepository,
             roomParticipantRepository,
+            cardAssignmentService,
             songRepository,
             performanceRepository,
             performanceSettingsRepository,
@@ -90,6 +98,8 @@ class PerformanceServiceTest {
         .thenReturn(Optional.of(performer));
     when(songRepository.findById(300L)).thenReturn(Optional.of(song));
     when(performanceRepository.findMaxRoundNoByRoomId(1L)).thenReturn(2);
+    when(cardAssignmentService.assignForPerformance(any(Performance.class), any()))
+        .thenReturn(new CardAssignmentBatch(List.of()));
     when(performanceRepository.save(any(Performance.class)))
         .thenAnswer(
             invocation -> {
@@ -106,7 +116,7 @@ class PerformanceServiceTest {
     assertThat(result.roundNo()).isEqualTo(3);
     assertThat(result.status()).isEqualTo(PerformanceStatus.PREPARING);
     assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
-    assertThat(room.getVersion()).isEqualTo(2L);
+    assertThat(room.getVersion()).isEqualTo(3L);
 
     ArgumentCaptor<PerformanceSettings> settingsCaptor =
         ArgumentCaptor.forClass(PerformanceSettings.class);
@@ -115,14 +125,29 @@ class PerformanceServiceTest {
     assertThat(settingsCaptor.getValue().getMrVolumePercent()).isEqualTo(100);
     assertThat(settingsCaptor.getValue().getMicVolumePercent()).isEqualTo(100);
 
-    ArgumentCaptor<PerformanceStartedDomainEvent> eventCaptor =
-        ArgumentCaptor.forClass(PerformanceStartedDomainEvent.class);
-    verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
-    assertThat(eventCaptor.getValue().performanceId()).isEqualTo(400L);
-    assertThat(eventCaptor.getValue().performerParticipantId()).isEqualTo(200L);
-    assertThat(eventCaptor.getValue().songId()).isEqualTo(300L);
-    assertThat(eventCaptor.getValue().roundNo()).isEqualTo(3);
-    assertThat(eventCaptor.getValue().roomVersion()).isEqualTo(2L);
+    ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+    verify(applicationEventPublisher, times(2)).publishEvent(eventCaptor.capture());
+    PerformanceStartedDomainEvent startedEvent =
+        eventCaptor.getAllValues().stream()
+            .filter(PerformanceStartedDomainEvent.class::isInstance)
+            .map(PerformanceStartedDomainEvent.class::cast)
+            .findFirst()
+            .orElseThrow();
+    assertThat(startedEvent.performanceId()).isEqualTo(400L);
+    assertThat(startedEvent.performerParticipantId()).isEqualTo(200L);
+    assertThat(startedEvent.songId()).isEqualTo(300L);
+    assertThat(startedEvent.roundNo()).isEqualTo(3);
+    assertThat(startedEvent.roomVersion()).isEqualTo(2L);
+
+    CardsAssignedDomainEvent cardsAssignedEvent =
+        eventCaptor.getAllValues().stream()
+            .filter(CardsAssignedDomainEvent.class::isInstance)
+            .map(CardsAssignedDomainEvent.class::cast)
+            .findFirst()
+            .orElseThrow();
+    assertThat(cardsAssignedEvent.performanceId()).isEqualTo(400L);
+    assertThat(cardsAssignedEvent.roomVersion()).isEqualTo(3L);
+    assertThat(cardsAssignedEvent.assignments()).isEmpty();
   }
 
   @Test
