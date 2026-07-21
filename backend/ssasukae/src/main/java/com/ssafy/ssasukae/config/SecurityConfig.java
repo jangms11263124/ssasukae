@@ -64,6 +64,7 @@ public class SecurityConfig {
                                 "/error",
                                 "/oauth2/**",
                                 "/login/oauth2/**",
+                                "/actuator/health",
                                 "/api/auth/signup",
                                 "/api/auth/refresh",
                                 "/ws",
