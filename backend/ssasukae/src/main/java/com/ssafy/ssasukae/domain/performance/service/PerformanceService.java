@@ -4,6 +4,11 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 
+import com.ssafy.ssasukae.domain.card.event.AssignedCardDetails;
+import com.ssafy.ssasukae.domain.card.event.CardsAssignedDomainEvent;
+import com.ssafy.ssasukae.domain.card.service.CardAssignmentBatch;
+import com.ssafy.ssasukae.domain.card.service.CardAssignmentService;
+
 import com.ssafy.ssasukae.domain.performance.dto.PerformanceSettingsResponse;
 import com.ssafy.ssasukae.domain.performance.dto.PerformanceTransitionResult;
 import com.ssafy.ssasukae.domain.performance.dto.StartPerformanceRequest;
@@ -48,6 +53,7 @@ public class PerformanceService {
 
   private final RoomRepository roomRepository;
   private final RoomParticipantRepository roomParticipantRepository;
+  private final CardAssignmentService cardAssignmentService;
   private final SongRepository songRepository;
   private final PerformanceRepository performanceRepository;
   private final PerformanceSettingsRepository performanceSettingsRepository;
@@ -57,6 +63,7 @@ public class PerformanceService {
   public PerformanceService(
       RoomRepository roomRepository,
       RoomParticipantRepository roomParticipantRepository,
+      CardAssignmentService cardAssignmentService,
       SongRepository songRepository,
       PerformanceRepository performanceRepository,
       PerformanceSettingsRepository performanceSettingsRepository,
@@ -64,6 +71,7 @@ public class PerformanceService {
       Clock clock) {
     this.roomRepository = roomRepository;
     this.roomParticipantRepository = roomParticipantRepository;
+    this.cardAssignmentService = cardAssignmentService;
     this.songRepository = songRepository;
     this.performanceRepository = performanceRepository;
     this.performanceSettingsRepository = performanceSettingsRepository;
@@ -100,18 +108,29 @@ public class PerformanceService {
     Performance performance =
         performanceRepository.save(Performance.prepare(room, performer, song, roundNo, now));
     performanceSettingsRepository.save(PerformanceSettings.defaults(performance));
+    CardAssignmentBatch cardAssignmentBatch =
+        cardAssignmentService.assignForPerformance(performance, now);
 
-    long roomVersion = room.startPerformance(now);
-
+    long performanceStartedVersion = room.startPerformance(now);
     applicationEventPublisher.publishEvent(
         new PerformanceStartedDomainEvent(
             roomId,
-            roomVersion,
+            performanceStartedVersion,
             performance.getId(),
             performer.getId(),
             song.getId(),
             roundNo,
             performance.getStatus()));
+
+    long cardAssignmentCompletedVersion = room.increaseVersion(now);
+    applicationEventPublisher.publishEvent(
+        new CardsAssignedDomainEvent(
+            roomId,
+            cardAssignmentCompletedVersion,
+            performance.getId(),
+            cardAssignmentBatch.assignments().stream()
+                .map(AssignedCardDetails::from)
+                .toList()));
 
     return new StartPerformanceResult(
         performance.getId(),
