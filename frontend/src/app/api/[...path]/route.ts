@@ -5,6 +5,14 @@ const API_URL = process.env.API_URL ?? 'http://localhost:8080';
 const FORWARD_REQUEST_HEADERS = ['authorization', 'content-type', 'cookie'] as const;
 const FORWARD_RESPONSE_HEADERS = ['content-type', 'set-cookie'] as const;
 
+/** refresh 실패 시 남은 HttpOnly 쿠키 제거 (킥 후 새로고침마다 동일 에러 반복 방지) */
+function clearRefreshTokenCookie(headers: Headers) {
+  headers.append(
+    'set-cookie',
+    'refreshToken=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax',
+  );
+}
+
 async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const targetPath = pathSegments.join('/');
   const targetUrl = `${API_URL}/api/${targetPath}${request.nextUrl.search}`;
@@ -38,6 +46,15 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
       }
     });
   });
+
+  if (targetPath === 'auth/refresh' && !backendResponse.ok) {
+    clearRefreshTokenCookie(responseHeaders);
+
+    return new NextResponse(backendResponse.body, {
+      status: backendResponse.status,
+      headers: responseHeaders,
+    });
+  }
 
   return new NextResponse(backendResponse.body, {
     status: backendResponse.status,

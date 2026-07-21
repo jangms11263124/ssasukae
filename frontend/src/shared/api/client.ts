@@ -45,11 +45,14 @@ async function parseErrorMessage(response: Response): Promise<string> {
 }
 
 function handleSessionEnd(message: string) {
+  // 메모리에 세션이 있을 때만 토스트 (부트스트랩 시 잔여 refresh 쿠키로 반복 노출 방지)
+  const hadSession = Boolean(getAccessToken());
+
   useAuthStore.getState().clearAccessToken();
   // userQueryKeys.all === ['user']
   getQueryClient().removeQueries({ queryKey: ['user'] });
 
-  if (isSessionKickedMessage(message)) {
+  if (hadSession && isSessionKickedMessage(message)) {
     showToast(message, 'error');
   }
 }
