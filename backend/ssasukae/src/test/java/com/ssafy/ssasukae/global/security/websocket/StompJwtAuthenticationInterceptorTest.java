@@ -1,4 +1,4 @@
-package com.ssafy.ssasukae.domain.realtime.config;
+package com.ssafy.ssasukae.global.security.websocket;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
