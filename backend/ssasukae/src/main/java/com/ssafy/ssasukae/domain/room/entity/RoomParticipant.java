@@ -53,9 +53,6 @@ public class RoomParticipant {
   @Column(name = "connection_status", nullable = false, length = 20)
   private ConnectionStatus connectionStatus;
 
-  @Column(name = "is_ready", nullable = false)
-  private boolean ready;
-
   @Column(name = "mic_enabled", nullable = false)
   private boolean micEnabled;
 
@@ -84,7 +81,6 @@ public class RoomParticipant {
     this.user = user;
     this.role = role;
     this.connectionStatus = ConnectionStatus.ONLINE;
-    this.ready = false;
     this.micEnabled = true;
     this.cameraEnabled = true;
     this.joinedAt = joinedAt;
@@ -104,7 +100,6 @@ public class RoomParticipant {
   public User getUser() { return user; }
   public ParticipantRole getRole() { return role; }
   public ConnectionStatus getConnectionStatus() { return connectionStatus; }
-  public boolean isReady() { return ready; }
   public boolean isMicEnabled() { return micEnabled; }
   public boolean isCameraEnabled() { return cameraEnabled; }
   public long getVersion() { return version; }
@@ -128,7 +123,6 @@ public class RoomParticipant {
       return;
     }
     connectionStatus = ConnectionStatus.DISCONNECTED;
-    ready = false;
     disconnectedAt = now;
     lastSeenAt = now;
   }
@@ -138,7 +132,6 @@ public class RoomParticipant {
       throw RoomException.notActiveParticipant();
     }
     connectionStatus = ConnectionStatus.LEFT;
-    ready = false;
     micEnabled = false;
     cameraEnabled = false;
     disconnectedAt = null;
