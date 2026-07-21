@@ -51,7 +51,8 @@ backend-deploy:
     - >
       docker run -d --name backend
       -p 8080:8080
-      -e SPRING_DATASOURCE_URL="jdbc:mysql://${DB_HOST}:3306/ssasukae"
+      -e SPRING_PROFILES_ACTIVE=prod
+      -e SPRING_DATASOURCE_URL="jdbc:mysql://${DB_HOST}:3306/ssasukae?serverTimezone=Asia/Seoul&characterEncoding=UTF-8"
       -e SPRING_DATASOURCE_USERNAME=${DB_USERNAME}
       -e SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
       -e SPRING_DATA_REDIS_HOST=${DB_HOST}
@@ -61,5 +62,7 @@ backend-deploy:
       -e OPENVIDU_SECRET=${OPENVIDU_SECRET}
       -e GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       -e GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      -e KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+      -e KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
       --restart unless-stopped
       ssasukae-backend
