@@ -5,6 +5,9 @@ stages:
 backend-unit-test:
   stage: test
   image: eclipse-temurin:17-jdk
+  tags:
+    - docker
+    - backend
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -25,7 +28,7 @@ backend-unit-test:
     - cd backend/ssasukae
     - chmod +x ./gradlew
   script:
-    - ./gradlew unitTest --console=plain
+    - ./gradlew unitTest --console=plain --no-daemon --max-workers=1
   artifacts:
     when: always
     expire_in: 7 days
@@ -69,3 +72,4 @@ backend-deploy:
       -e KAKAO_CLIENT_SECRET="${KAKAO_CLIENT_SECRET}"
       --restart unless-stopped
       ssasukae-backend
+    - docker image prune -f
