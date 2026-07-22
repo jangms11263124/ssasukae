@@ -1,6 +1,6 @@
 export const BRAND_NAME = '싸스케';
 export const BRAND_TAGLINE = '실시간 화상 노래방';
-export const BRAND_LOGO_SRC = '/images/ssafy-star-k.png';
+export const BRAND_LOGO_SRC = '/images/brand/logo.png';
 
 export const HERO_COPY = {
   headlineBefore: '노래해봐,',
@@ -9,6 +9,7 @@ export const HERO_COPY = {
 } as const;
 
 export const LOGIN_COPY = {
-  title: '지금 입장하기',
-  description: '소셜 계정으로 바로 참여 가능해요.',
+  title: '소셜 로그인으로 지금 바로 입장하세요.',
+  description: '지금 바로 입장하기',
+  activeUsers: (count: number) => `지금도 ${count}명이 즐기고 있습니다`,
 } as const;

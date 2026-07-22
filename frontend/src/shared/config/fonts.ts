@@ -1,4 +1,10 @@
 import localFont from 'next/font/local';
+import { JetBrains_Mono } from 'next/font/google';
+
+export const jetBrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+});
 
 export const tjJoyOfSinging = localFont({
   src: [
