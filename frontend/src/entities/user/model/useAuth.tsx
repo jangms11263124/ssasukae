@@ -49,13 +49,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // OAuth 콜백 URL의 accessToken 처리와 refresh 레이스 방지
+      if (
+        typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).has('accessToken')
+      ) {
+        if (!cancelled) {
+          setIsBootstrapped(true);
+        }
+        return;
+      }
+
       try {
         const refreshed = await refreshAccessToken();
         if (!cancelled) {
           setAccessToken(refreshed.accessToken);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && !useAuthStore.getState().accessToken) {
           clearAccessToken();
         }
       } finally {
