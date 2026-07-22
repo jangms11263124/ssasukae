@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 
 import { decodeJwtPayload, type SignupTokenClaims } from '@/entities/user';
 import { getSignupDefaults, SignupForm } from '@/features/auth-signup';
-import { AuthShell } from '@/widgets/auth-shell';
+import { LandingSplit } from '@/widgets/landing-split';
 
 function SignupPageContent() {
   const searchParams = useSearchParams();
@@ -41,10 +41,10 @@ function SignupPageContent() {
 
 export default function SignupPage() {
   return (
-    <AuthShell>
+    <LandingSplit>
       <Suspense fallback={<p className="text-center text-sm text-zinc-400">불러오는 중...</p>}>
         <SignupPageContent />
       </Suspense>
-    </AuthShell>
+    </LandingSplit>
   );
 }
