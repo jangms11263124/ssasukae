@@ -1,3 +1,8 @@
+aws:
+  s3:
+    bucket: ssasukae-assets
+    region: ap-northeast-2
+
 spring:
   application:
     name: ssasukae
