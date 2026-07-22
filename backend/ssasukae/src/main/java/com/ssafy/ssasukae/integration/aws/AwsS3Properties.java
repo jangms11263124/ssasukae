@@ -5,6 +5,7 @@ import lombok.Setter;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 @Getter
 @Setter
@@ -27,5 +28,9 @@ public class AwsS3Properties {
     public static class Credentials {
         private String accessKey;
         private String secretKey;
+
+        public boolean isConfigured() {
+            return StringUtils.hasText(accessKey) && StringUtils.hasText(secretKey);
+        }
     }
 }

@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -37,11 +38,15 @@ public class S3Config {
     }
 
     private AwsCredentialsProvider credentialsProvider() {
-        AwsBasicCredentials credentials = AwsBasicCredentials.create(
-                awsS3Properties.getCredentials().getAccessKey(),
-                awsS3Properties.getCredentials().getSecretKey()
-        );
+        AwsS3Properties.Credentials credentials = awsS3Properties.getCredentials();
 
-        return StaticCredentialsProvider.create(credentials);
+        if (credentials.isConfigured()) {
+            return StaticCredentialsProvider.create(
+                    AwsBasicCredentials.create(credentials.getAccessKey(), credentials.getSecretKey())
+            );
+        }
+
+        // Access key가 없는 환경에서는 EC2 IAM Role 등 AWS SDK의 기본 인증 체인을 사용한다.
+        return DefaultCredentialsProvider.builder().build();
     }
 }
