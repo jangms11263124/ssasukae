@@ -19,8 +19,15 @@
   --color-neon-cyan: var(--neon-cyan);
   --color-neon-purple: var(--neon-purple);
   --font-sans: var(--font-tj-joy);
+  --animate-ticker: ticker-scroll 18s linear infinite;
   --animate-toast-in: toast-in 0.35s ease-out both;
   --animate-toast-out: toast-out 0.32s ease-in both;
+}
+
+@keyframes ticker-scroll {
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes toast-in {
@@ -58,6 +65,34 @@ body {
 ::selection {
   background: rgb(236 72 153 / 35%);
   color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .pointer-glow {
+    position: fixed;
+    top: -6px;
+    left: -6px;
+    z-index: 9998;
+    width: 12px;
+    height: 12px;
+    border-radius: 9999px;
+    background: radial-gradient(
+      circle,
+      rgb(207 250 254 / 95%) 0%,
+      rgb(34 211 238 / 78%) 32%,
+      rgb(34 211 238 / 30%) 58%,
+      transparent 78%
+    );
+    box-shadow: 0 0 5px rgb(34 211 238 / 65%);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms ease-out;
+    will-change: transform;
+  }
+
+  .pointer-glow[data-visible="true"] {
+    opacity: 0.85;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
