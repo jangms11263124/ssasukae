@@ -1,25 +1,20 @@
 package com.ssafy.ssasukae.global.exception.websocket;
 
-public class WebSocketAuthenticationException extends RuntimeException {
+public class WebSocketAuthenticationException extends WebSocketException {
 
-  private final String errorCode;
-
-  private WebSocketAuthenticationException(String errorCode, String message) {
-    super(message);
-    this.errorCode = errorCode;
+  private WebSocketAuthenticationException(WebSocketErrorCode errorCode) {
+    super(errorCode);
   }
 
   public static WebSocketAuthenticationException unauthorized() {
     return new WebSocketAuthenticationException(
-        "WEBSOCKET_UNAUTHORIZED", "WebSocket 인증에 실패했습니다.");
+            WebSocketErrorCode.UNAUTHORIZED
+    );
   }
 
   public static WebSocketAuthenticationException tokenExpired() {
     return new WebSocketAuthenticationException(
-        "WEBSOCKET_TOKEN_EXPIRED", "Access Token이 만료되었습니다.");
-  }
-
-  public String getErrorCode() {
-    return errorCode;
+            WebSocketErrorCode.TOKEN_EXPIRED
+    );
   }
 }
