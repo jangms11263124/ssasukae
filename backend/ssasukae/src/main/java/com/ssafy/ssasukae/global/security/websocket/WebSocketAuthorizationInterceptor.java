@@ -5,6 +5,7 @@ import com.ssafy.ssasukae.global.exception.websocket.WebSocketException;
 
 import java.security.Principal;
 
+import com.ssafy.ssasukae.global.websocket.destination.WebSocketDestinations;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -21,21 +22,6 @@ import org.springframework.util.StringUtils;
  */
 @Component
 public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
-
-  /**
-   * 클라이언트가 서버의 @MessageMapping 메서드로 메시지를 보낼 때 사용하는 경로 패턴.
-   */
-  private static final String APPLICATION_PATTERN = "/app/**";
-
-  /**
-   * 방 단위 브로드캐스트 메시지를 구독하는 경로 패턴.
-   */
-  private static final String ROOM_TOPIC_PATTERN = "/topic/rooms/**";
-
-  /**
-   * 특정 사용자에게 전달되는 개인 메시지를 구독하는 경로 패턴.
-   */
-  private static final String USER_QUEUE_PATTERN = "/user/queue/**";
 
   private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
@@ -123,7 +109,10 @@ public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
    * SEND 목적지가 /app/** 경로인지 검사한다.
    */
   private void requireApplicationDestination(String destination) {
-    if (!matches(destination, APPLICATION_PATTERN)) {
+    if (!matches(
+            destination,
+            WebSocketDestinations.APPLICATION_DESTINATION_PATTERN
+    )) {
       throw new WebSocketException(
               WebSocketErrorCode.INVALID_SEND_DESTINATION
       );
@@ -135,10 +124,16 @@ public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
    */
   private void requireSubscriptionDestination(String destination) {
     boolean roomTopic =
-            matches(destination, ROOM_TOPIC_PATTERN);
+            matches(
+                    destination,
+                    WebSocketDestinations.ROOM_TOPIC_SUBSCRIPTION_PATTERN
+            );
 
     boolean userQueue =
-            matches(destination, USER_QUEUE_PATTERN);
+            matches(
+                    destination,
+                    WebSocketDestinations.USER_QUEUE_SUBSCRIPTION_PATTERN
+            );
 
     if (!roomTopic && !userQueue) {
       throw new WebSocketException(
