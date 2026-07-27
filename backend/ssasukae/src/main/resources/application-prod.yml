@@ -17,6 +17,10 @@ spring:
       ddl-auto: update
     show-sql: false
 
+openvidu:
+  url: ${OPENVIDU_URL}
+  secret: ${OPENVIDU_SECRET}
+
 app:
   cors:
     allowed-origins:
