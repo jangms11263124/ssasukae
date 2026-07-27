@@ -1,5 +1,7 @@
 package com.ssafy.ssasukae.global.exception;
 
+import com.ssafy.ssasukae.global.exception.room.RoomException;
+
 import io.jsonwebtoken.JwtException;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -30,5 +32,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of(HttpStatus.INTERNAL_SERVER_ERROR.value(), "서버 오류가 발생했습니다."));
+    }
+
+    @ExceptionHandler(RoomException.class)
+    public ResponseEntity<ErrorResponse> handleRoomException(RoomException e) {
+        return ResponseEntity
+                .status(e.getErrorCode().getHttpStatus())
+                .body(ErrorResponse.of(
+                        e.getErrorCode().getHttpStatus().value(),
+                        e.getMessage()
+                ));
     }
 }
