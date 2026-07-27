@@ -1,0 +1,18 @@
+package com.ssafy.ssasukae.domain.card.websocket.payload;
+
+import com.ssafy.ssasukae.domain.card.type.CardTier;
+import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectTargetType;
+import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
+
+// 카드 할당 페이로드
+public record CardAssignedPayload(
+    Long participantId,
+    Long cardId,
+    String cardCode,
+    String cardName,
+    String description,
+    CardEffectType effectType,
+    CardEffectTargetType targetType,
+    Integer effectValue,
+    Integer durationSeconds,
+    CardTier tier) {}
