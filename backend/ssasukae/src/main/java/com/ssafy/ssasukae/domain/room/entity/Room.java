@@ -6,7 +6,8 @@ import com.ssafy.ssasukae.domain.room.type.RoomMode;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 import com.ssafy.ssasukae.domain.user.entity.User;
 
-import com.ssafy.ssasukae.global.exception.restapi.room.RoomException;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -95,39 +96,39 @@ public class Room {
 
     public void validateJoinable(long activeParticipantCount) {
         if (status == RoomStatus.TERMINATED) {
-            throw RoomException.closed();
+            throw new CustomException(RoomErrorCode.ROOM_CLOSED);
         }
         if (status != RoomStatus.PREPARING) {
-            throw RoomException.notJoinable();
+            throw new CustomException(RoomErrorCode.ROOM_NOT_JOINABLE);
         }
         if (activeParticipantCount >= maxParticipants) {
-            throw RoomException.full();
+            throw new CustomException(RoomErrorCode.ROOM_FULL);
         }
     }
 
     public void startPerformance() {
         if (status == RoomStatus.TERMINATED) {
-            throw RoomException.closed();
+            throw new CustomException(RoomErrorCode.ROOM_CLOSED);
         }
         if (status != RoomStatus.PREPARING) {
-            throw RoomException.notReadyForPerformance();
+            throw new CustomException(RoomErrorCode.ROOM_NOT_READY_FOR_PERFORMANCE);
         }
         status = RoomStatus.PLAYING;
     }
 
     public void cancelPerformance() {
         if (status == RoomStatus.TERMINATED) {
-            throw RoomException.closed();
+            throw new CustomException(RoomErrorCode.ROOM_CLOSED);
         }
         if (status != RoomStatus.PLAYING) {
-            throw RoomException.notPlaying();
+            throw new CustomException(RoomErrorCode.ROOM_NOT_PLAYING);
         }
         status = RoomStatus.PREPARING;
     }
 
     public void delegateHost(User newHost) {
         if (status == RoomStatus.TERMINATED) {
-            throw RoomException.closed();
+            throw new CustomException(RoomErrorCode.ROOM_CLOSED);
         }
         this.host = newHost;
     }
