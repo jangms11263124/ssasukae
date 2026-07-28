@@ -1,4 +1,4 @@
-package com.ssafy.ssasukae.domain.performance.redis;
+package com.ssafy.ssasukae.domain.performance.redis.performance;
 
 import java.time.Duration;
 import java.util.Collections;
