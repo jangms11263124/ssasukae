@@ -11,11 +11,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException e) {
+    @ExceptionHandler(CustomException.class)
+    public ResponseEntity<ErrorResponse> handleCustomException(CustomException e) {
+        BaseErrorCode errorCode = e.getErrorCode();
         return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of(HttpStatus.BAD_REQUEST.value(), "INVALID_ARGUMENT", e.getMessage()));
+                .status(errorCode.getHttpStatus())
+                .body(ErrorResponse.of(
+                        errorCode.getHttpStatus().value(),
+                        errorCode.name(),
+                        errorCode.getMessage()
+                ));
     }
 
     @ExceptionHandler(JwtException.class)
@@ -30,17 +35,5 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of(HttpStatus.INTERNAL_SERVER_ERROR.value(), "INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다."));
-    }
-
-    @ExceptionHandler(CustomException.class)
-    public ResponseEntity<ErrorResponse> handleCustomException(CustomException e) {
-        BaseErrorCode errorCode = e.getErrorCode();
-        return ResponseEntity
-                .status(errorCode.getHttpStatus())
-                .body(ErrorResponse.of(
-                        errorCode.getHttpStatus().value(),
-                        errorCode.name(),
-                        errorCode.getMessage()
-                ));
     }
 }

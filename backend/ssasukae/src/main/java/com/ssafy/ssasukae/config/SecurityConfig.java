@@ -67,6 +67,7 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/api/auth/signup",
                                 "/api/auth/refresh",
+                                "/api/users/nickname/check",
                                 "/ws",
                                 "/ws/**"
                         ).permitAll()
