@@ -9,9 +9,28 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.ssafy.ssasukae.domain.performance.redis.PerformanceSettings;
-import com.ssafy.ssasukae.domain.performance.redis.PerformanceSnapShot;
-import com.ssafy.ssasukae.domain.performance.redis.PerformanceStore;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSettings;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceCancelReason;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventPublisher;
@@ -39,23 +58,6 @@ import com.ssafy.ssasukae.domain.user.type.Role;
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketBusinessException;
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketErrorCode;
 import com.ssafy.ssasukae.integration.aws.S3StorageService;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class PerformanceServiceTest {
@@ -99,6 +101,7 @@ class PerformanceServiceTest {
             roomParticipantRepository,
             songRepository,
             performanceStore,
+            new PerformanceTransactionSupport(performanceStore),
             s3StorageService,
             eventPublisher);
   }
