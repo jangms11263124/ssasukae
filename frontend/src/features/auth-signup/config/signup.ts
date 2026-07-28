@@ -5,7 +5,8 @@ export const SIGNUP_COPY = {
   nicknameLabel: 'STAR NICKNAME',
   nicknamePlaceholder: 'ENTER_IDENTITY',
   checkNickname: 'CHECK ID',
-  nicknameAvailable: 'NICKNAME_AVAILABLE',
+  checkingNickname: 'CHECKING...',
+  nicknameAvailable: '사용 가능한 닉네임입니다.',
   termsPrefix: 'I agree to the',
   termsOfService: 'Terms of Service.',
   privacyPolicy: 'Privacy Policy.',
@@ -16,10 +17,10 @@ export const SIGNUP_COPY = {
 
 export const SIGNUP_ERROR_COPY = {
   nicknameRequired: '닉네임을 입력해 주세요.',
+  nicknameDuplicate: '이미 사용 중인 닉네임입니다.',
+  nicknameCheckFailed: '닉네임 확인에 실패했습니다. 다시 시도해 주세요.',
   alreadySignedUp: '이미 가입된 계정입니다. 로그인으로 입장해 주세요.',
   default: '회원가입에 실패했습니다. 다시 시도해 주세요.',
 } as const;
-
-export const ALREADY_SIGNED_UP_ERROR_FRAGMENT = '이미 가입된 사용자';
 
 export const NICKNAME_MAX_LENGTH = 20;

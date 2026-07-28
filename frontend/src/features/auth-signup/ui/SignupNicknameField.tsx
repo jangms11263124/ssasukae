@@ -4,14 +4,16 @@ interface SignupNicknameFieldProps {
   nickname: string;
   error: string | null;
   isConfirmed: boolean;
+  isChecking: boolean;
   onNicknameChange: (value: string) => void;
-  onCheck: () => void;
+  onCheck: () => void | Promise<void>;
 }
 
 export function SignupNicknameField({
   nickname,
   error,
   isConfirmed,
+  isChecking,
   onNicknameChange,
   onCheck,
 }: SignupNicknameFieldProps) {
@@ -35,16 +37,17 @@ export function SignupNicknameField({
         />
         <button
           type="button"
-          onClick={onCheck}
-          className="h-[54px] shrink-0 border border-white/[0.06] bg-[#202020] px-5 text-sm tracking-[0.08em] text-neon-cyan transition-colors hover:bg-[#292929] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neon-cyan"
+          onClick={() => void onCheck()}
+          disabled={isChecking}
+          className="h-[54px] shrink-0 border border-white/[0.06] bg-[#202020] px-5 text-sm tracking-[0.08em] text-neon-cyan transition-colors hover:bg-[#292929] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neon-cyan disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {SIGNUP_COPY.checkNickname}
+          {isChecking ? SIGNUP_COPY.checkingNickname : SIGNUP_COPY.checkNickname}
         </button>
       </div>
 
       {isConfirmed ? (
-        <p className="text-xs tracking-[0.08em] text-neon-cyan">
-          ⊙ {SIGNUP_COPY.nicknameAvailable}
+        <p className="text-xs text-green-400">
+          {SIGNUP_COPY.nicknameAvailable}
         </p>
       ) : null}
       {error ? (

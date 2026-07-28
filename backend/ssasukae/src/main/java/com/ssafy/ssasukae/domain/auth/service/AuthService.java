@@ -9,6 +9,8 @@ import com.ssafy.ssasukae.domain.user.dto.UserResponse;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.service.UserService;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.auth.AuthErrorCode;
 import com.ssafy.ssasukae.global.security.jwt.ActiveSessionService;
 import com.ssafy.ssasukae.global.security.jwt.JwtProperties;
 import com.ssafy.ssasukae.global.security.jwt.JwtTokenProvider;
@@ -45,7 +47,7 @@ public class AuthService {
 
         userService.findByProviderAndProviderId(claims.getProvider(), claims.getProviderId())
                 .ifPresent(user -> {
-                    throw new IllegalArgumentException("이미 가입된 사용자입니다.");
+                    throw new CustomException(AuthErrorCode.ALREADY_REGISTERED);
                 });
 
         String nickname = StringUtils.hasText(request.getNickname()) ? request.getNickname() : claims.getNickname();
@@ -76,20 +78,20 @@ public class AuthService {
 
     public TokenReissueResponse reissueToken(String refreshToken) {
         if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new IllegalArgumentException("유효하지 않은 refresh token 입니다.");
+            throw new CustomException(AuthErrorCode.INVALID_REFRESH_TOKEN);
         }
 
         String jti = jwtTokenProvider.getJti(refreshToken);
 
         if (tokenBlacklistService.isBlacklisted(jti)) {
-            throw new IllegalArgumentException("이미 사용되었거나 만료된 refresh token 입니다.");
+            throw new CustomException(AuthErrorCode.REFRESH_TOKEN_ALREADY_USED);
         }
 
         Long userId = jwtTokenProvider.getUserId(refreshToken);
         String sid = jwtTokenProvider.getSid(refreshToken);
 
         if (!activeSessionService.isActiveSession(userId, sid)) {
-            throw new IllegalArgumentException("다른 기기에서 로그인되어 세션이 만료되었습니다.");
+            throw new CustomException(AuthErrorCode.SESSION_EXPIRED);
         }
 
         User user = userService.findById(userId);

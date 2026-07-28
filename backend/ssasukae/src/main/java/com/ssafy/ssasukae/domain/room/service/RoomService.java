@@ -152,6 +152,21 @@ public class RoomService {
         mediaSessionGateway.closeSession(room.getOpenViduSessionId());
     }
 
+    @Transactional
+    public void leaveRoom(Long userId, Long roomId) {
+        roomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+
+        RoomParticipant participant = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
+
+        if (!participant.isActive()) {
+            throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
+        }
+
+        participant.leave(LocalDateTime.now());
+    }
+
     private User getUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. id=" + userId));

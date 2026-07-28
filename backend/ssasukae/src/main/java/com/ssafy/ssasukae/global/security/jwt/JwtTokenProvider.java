@@ -3,6 +3,9 @@ package com.ssafy.ssasukae.global.security.jwt;
 import com.ssafy.ssasukae.domain.auth.dto.SignupTokenClaims;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.auth.AuthErrorCode;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -115,7 +118,7 @@ public class JwtTokenProvider {
 
         String purpose = claims.get("purpose", String.class);
         if (!"SIGNUP".equals(purpose)) {
-            throw new IllegalArgumentException("회원가입용 토큰이 아닙니다.");
+            throw new CustomException(AuthErrorCode.INVALID_SIGNUP_TOKEN);
         }
 
         return SignupTokenClaims.builder()

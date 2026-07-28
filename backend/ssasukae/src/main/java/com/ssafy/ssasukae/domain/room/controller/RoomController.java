@@ -63,4 +63,13 @@ public class RoomController {
         roomService.terminateRoom(authenticatedUser.userId(), roomId);
         return ResponseEntity.noContent().build();
     }
+
+    @DeleteMapping("/{roomId}/leave")
+    public ResponseEntity<Void> leaveRoom(
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @PathVariable Long roomId
+    ) {
+        roomService.leaveRoom(authenticatedUser.userId(), roomId);
+        return ResponseEntity.noContent().build();
+    }
 }

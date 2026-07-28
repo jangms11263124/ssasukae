@@ -31,3 +31,7 @@ export interface SignupTokenClaims {
   nickname?: string;
   profileImageUrl?: string;
 }
+
+export interface NicknameCheckResponse {
+  available: boolean;
+}
