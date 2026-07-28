@@ -31,7 +31,7 @@ public class PerformanceResult {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
-  @Column(name = "performance_id")
+  @Column(name = "performance_result_id")
   private Long id;
 
   /**

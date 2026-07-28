@@ -1,6 +1,7 @@
 package com.ssafy.ssasukae.domain.performance.websocket.payload;
 
-import com.ssafy.ssasukae.domain.performanceResult.type.PerformanceStatus;
+import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
+import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 
 // 공연 시작 페이로드
 public record PerformanceStartedPayload(
@@ -8,4 +9,4 @@ public record PerformanceStartedPayload(
     Long performerParticipantId,
     Long songId,
     PerformanceStatus performanceStatus,
-    String roomStatus) {}
+    RoomStatus roomStatus) {}
