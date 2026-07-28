@@ -1,4 +1,4 @@
-package com.ssafy.ssasukae.global.exception.room;
+package com.ssafy.ssasukae.global.exception.restapi.room;
 
 import lombok.Getter;
 

@@ -26,7 +26,7 @@ import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
-import com.ssafy.ssasukae.global.exception.room.RoomException;
+import com.ssafy.ssasukae.global.exception.restapi.room.RoomException;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 
 import org.junit.jupiter.api.BeforeEach;
