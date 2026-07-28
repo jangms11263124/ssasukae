@@ -1,4 +1,6 @@
-package com.ssafy.ssasukae.global.exception.restapi.room;
+package com.ssafy.ssasukae.global.exception.room;
+
+import com.ssafy.ssasukae.global.exception.BaseErrorCode;
 
 import org.springframework.http.HttpStatus;
 
@@ -7,7 +9,7 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public enum RoomErrorCode {
+public enum RoomErrorCode implements BaseErrorCode {
 
     // 방 상태
     ROOM_CLOSED(HttpStatus.CONFLICT, "이미 종료된 방입니다."),
@@ -27,6 +29,7 @@ public enum RoomErrorCode {
     ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 방입니다."),
     PARTICIPANT_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 참가자입니다."),
     ALREADY_JOINED(HttpStatus.CONFLICT, "이미 참가 중인 방입니다."),
+    ALREADY_IN_ANOTHER_ROOM(HttpStatus.CONFLICT, "이미 다른 방에 참여 중입니다."),
     HOST_ONLY(HttpStatus.FORBIDDEN, "방장만 수행할 수 있는 요청입니다.");
 
     private final HttpStatus httpStatus;
