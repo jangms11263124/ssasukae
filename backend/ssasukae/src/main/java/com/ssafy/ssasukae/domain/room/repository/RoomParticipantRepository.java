@@ -22,4 +22,9 @@ public interface RoomParticipantRepository extends JpaRepository<RoomParticipant
             Long userId,
             Collection<ConnectionStatus> connectionStatuses
     );
+
+    boolean existsByUserIdAndConnectionStatusIn(
+            Long userId,
+            Collection<ConnectionStatus> connectionStatuses
+    );
 }

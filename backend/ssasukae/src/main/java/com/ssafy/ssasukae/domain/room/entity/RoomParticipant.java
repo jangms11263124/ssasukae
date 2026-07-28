@@ -4,7 +4,8 @@ import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 import com.ssafy.ssasukae.domain.room.type.ParticipantRole;
 import com.ssafy.ssasukae.domain.user.entity.User;
 
-import com.ssafy.ssasukae.global.exception.restapi.room.RoomException;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -72,11 +73,11 @@ public class RoomParticipant {
 
     public void reconnect() {
         if (connectionStatus == ConnectionStatus.KICKED) {
-            throw RoomException.reentryBanned();
+            throw new CustomException(RoomErrorCode.REENTRY_BANNED);
         }
 
         if (connectionStatus == ConnectionStatus.LEFT) {
-            throw RoomException.participantNotActive();
+            throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
         }
 
         connectionStatus = ConnectionStatus.CONNECTED;
@@ -103,7 +104,7 @@ public class RoomParticipant {
 
     public void kick(LocalDateTime now) {
         if (!isActive()) {
-            throw RoomException.participantNotActive();
+            throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
         }
 
         connectionStatus = ConnectionStatus.KICKED;
@@ -117,7 +118,7 @@ public class RoomParticipant {
 
     public void demoteToParticipant() {
         if (!isActive()) {
-            throw RoomException.participantNotActive();
+            throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
         }
 
         stageRole = ParticipantRole.PARTICIPANT;
@@ -138,7 +139,7 @@ public class RoomParticipant {
 
     private void requireOnline() {
         if (connectionStatus != ConnectionStatus.CONNECTED) {
-            throw RoomException.participantMustBeOnline();
+            throw new CustomException(RoomErrorCode.PARTICIPANT_MUST_BE_ONLINE);
         }
     }
 }

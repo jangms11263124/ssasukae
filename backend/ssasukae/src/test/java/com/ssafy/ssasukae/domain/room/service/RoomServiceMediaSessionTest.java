@@ -26,7 +26,7 @@ import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
-import com.ssafy.ssasukae.global.exception.restapi.room.RoomException;
+import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -150,7 +150,7 @@ class RoomServiceMediaSessionTest {
 
     // when & then
     assertThatThrownBy(() -> roomService.issueConnectionToken(2L, 10L))
-        .isInstanceOf(RoomException.class)
+        .isInstanceOf(CustomException.class)
         .hasMessage("활성 상태의 참가자가 아닙니다.");
     verifyNoInteractions(mediaSessionGateway);
   }
@@ -181,7 +181,7 @@ class RoomServiceMediaSessionTest {
 
     // when & then
     assertThatThrownBy(() -> roomService.terminateRoom(2L, 10L))
-        .isInstanceOf(RoomException.class)
+        .isInstanceOf(CustomException.class)
         .hasMessage("방장만 수행할 수 있는 요청입니다.");
     verifyNoInteractions(mediaSessionGateway);
   }
