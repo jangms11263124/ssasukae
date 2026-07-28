@@ -17,7 +17,8 @@ import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
-import com.ssafy.ssasukae.global.exception.restapi.room.RoomException;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,7 @@ public class RoomService {
     @Transactional
     public RoomCreateResponse createRoom(Long hostUserId, RoomCreateRequest request) {
         User host = getUser(hostUserId);
+        validateNoActiveRoom(host.getId());
 
         String inviteCode = generateInviteCode();
         String openViduSessionId = mediaSessionGateway.createSession();
@@ -82,16 +84,18 @@ public class RoomService {
     public RoomJoinResponse joinRoom(Long userId, String inviteCode) {
         User user = getUser(userId);
 
-        Room room = roomRepository.findByInviteCode(inviteCode)
-                .orElseThrow(RoomException::notFound);
+        Room room = roomRepository.findByInviteCode(inviteCode.toUpperCase())
+                .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
         if (roomParticipantRepository.existsByRoomIdAndUserIdAndConnectionStatusIn(
                 room.getId(),
                 user.getId(),
                 ACTIVE_STATUSES
         )) {
-            throw RoomException.alreadyJoined();
+            throw new CustomException(RoomErrorCode.ALREADY_JOINED);
         }
+
+        validateNoActiveRoom(user.getId());
 
         long activeParticipantCount = roomParticipantRepository.countByRoomIdAndConnectionStatusIn(
                 room.getId(),
@@ -120,13 +124,13 @@ public class RoomService {
     @Transactional
     public String issueConnectionToken(Long userId, Long roomId) {
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(RoomException::notFound);
+                .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
         RoomParticipant participant = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
-                .orElseThrow(RoomException::participantNotFound);
+                .orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
 
         if (!participant.isActive()) {
-            throw RoomException.participantNotActive();
+            throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
         }
 
         return mediaSessionGateway.createConnectionToken(
@@ -138,10 +142,10 @@ public class RoomService {
     @Transactional
     public void terminateRoom(Long userId, Long roomId) {
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(RoomException::notFound);
+                .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
         if (!room.isHost(userId)) {
-            throw RoomException.hostOnly();
+            throw new CustomException(RoomErrorCode.HOST_ONLY);
         }
 
         room.terminate(LocalDateTime.now());
@@ -151,6 +155,12 @@ public class RoomService {
     private User getUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. id=" + userId));
+    }
+
+    private void validateNoActiveRoom(Long userId) {
+        if (roomParticipantRepository.existsByUserIdAndConnectionStatusIn(userId, ACTIVE_STATUSES)) {
+            throw new CustomException(RoomErrorCode.ALREADY_IN_ANOTHER_ROOM);
+        }
     }
 
     private String generateInviteCode() {
