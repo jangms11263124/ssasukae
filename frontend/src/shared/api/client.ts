@@ -3,10 +3,13 @@ import { isSessionKickedMessage } from '@/shared/config/session';
 import { getAccessToken, useAuthStore } from '@/shared/model/authStore';
 import { showToast } from '@/shared/model/toastStore';
 
+import { API_ERROR_CODE, parseErrorResponse } from './errorResponse';
+
 export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -22,29 +25,11 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 
 let refreshInFlight: Promise<string> | null = null;
 
-async function parseErrorMessage(response: Response): Promise<string> {
-  let message = '요청에 실패했습니다.';
-
-  try {
-    const contentType = response.headers.get('content-type') ?? '';
-
-    if (contentType.includes('application/json')) {
-      const errorBody = (await response.json()) as { message?: string; error?: string };
-      message = errorBody.message ?? errorBody.error ?? message;
-    } else {
-      const errorText = (await response.text()).trim();
-      if (errorText) {
-        message = errorText;
-      }
-    }
-  } catch {
-    // ignore parse errors
-  }
-
-  return message;
+function isSessionKickedError(message: string, code?: string) {
+  return code === API_ERROR_CODE.SESSION_EXPIRED || isSessionKickedMessage(message);
 }
 
-function handleSessionEnd(message: string) {
+function handleSessionEnd(message: string, code?: string) {
   // 메모리에 세션이 있을 때만 토스트 (부트스트랩 시 잔여 refresh 쿠키로 반복 노출 방지)
   const hadSession = Boolean(getAccessToken());
 
@@ -52,7 +37,7 @@ function handleSessionEnd(message: string) {
   // userQueryKeys.all === ['user']
   getQueryClient().removeQueries({ queryKey: ['user'] });
 
-  if (hadSession && isSessionKickedMessage(message)) {
+  if (hadSession && isSessionKickedError(message, code)) {
     showToast(message, 'error');
   }
 }
@@ -66,9 +51,9 @@ async function reissueAccessToken(): Promise<string> {
       });
 
       if (!response.ok) {
-        const message = await parseErrorMessage(response);
-        handleSessionEnd(message);
-        throw new ApiError(message, response.status);
+        const { message, code, status } = await parseErrorResponse(response);
+        handleSessionEnd(message, code);
+        throw new ApiError(message, status, code);
       }
 
       const data = (await response.json()) as { accessToken: string };
@@ -125,13 +110,13 @@ export async function apiClient<T>(path: string, options: RequestOptions = {}): 
   }
 
   if (!response.ok) {
-    const message = await parseErrorMessage(response);
+    const { message, code, status } = await parseErrorResponse(response);
 
-    if (isSessionKickedMessage(message)) {
-      handleSessionEnd(message);
+    if (isSessionKickedError(message, code)) {
+      handleSessionEnd(message, code);
     }
 
-    throw new ApiError(message, response.status);
+    throw new ApiError(message, status, code);
   }
 
   if (response.status === 204) {

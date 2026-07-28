@@ -46,6 +46,7 @@ export function SignupForm({
           nickname={form.nickname}
           error={form.nicknameError}
           isConfirmed={form.isNicknameConfirmed}
+          isChecking={form.isNicknameChecking}
           onNicknameChange={form.handleNicknameChange}
           onCheck={form.handleNicknameCheck}
         />

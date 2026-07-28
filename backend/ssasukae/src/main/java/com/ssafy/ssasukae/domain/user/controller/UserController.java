@@ -1,6 +1,7 @@
 package com.ssafy.ssasukae.domain.user.controller;
 
 import com.ssafy.ssasukae.domain.user.dto.MyPageResponse;
+import com.ssafy.ssasukae.domain.user.dto.NicknameCheckResponse;
 import com.ssafy.ssasukae.domain.user.dto.UserResponse;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.service.UserService;
@@ -12,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -31,5 +33,11 @@ public class UserController {
     public ResponseEntity<MyPageResponse> getMyPage(@AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
         MyPageResponse data = userService.getMyPage(authenticatedUser);
         return ResponseEntity.ok(data);
+    }
+
+    @GetMapping("/nickname/check")
+    public ResponseEntity<NicknameCheckResponse> checkNickname(@RequestParam String nickname) {
+        boolean available = userService.isNicknameAvailable(nickname);
+        return ResponseEntity.ok(new NicknameCheckResponse(available));
     }
 }

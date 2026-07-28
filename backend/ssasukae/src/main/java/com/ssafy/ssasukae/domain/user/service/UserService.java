@@ -6,11 +6,15 @@ import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
 
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
 import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
+
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.Optional;
 
@@ -47,10 +51,19 @@ public class UserService {
     @Transactional(readOnly = true)
     public User findById(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. id=" + userId));
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
     }
 
     public MyPageResponse getMyPage(AuthenticatedUser authenticatedUser) {
         return null;
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isNicknameAvailable(String nickname) {
+        if (!StringUtils.hasText(nickname)) {
+            throw new CustomException(UserErrorCode.NICKNAME_REQUIRED);
+        }
+
+        return !userRepository.existsByNickname(nickname);
     }
 }

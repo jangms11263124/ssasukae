@@ -10,4 +10,9 @@ GOOGLE_CLIENT_ID: test-client-id
 GOOGLE_CLIENT_SECRET: test-client-secret
 KAKAO_CLIENT_ID: test-client-id
 KAKAO_CLIENT_SECRET: test-client-secret
+
 JWT_SECRET: test-jwt-secret-key-must-be-at-least-32-bytes
+
+openvidu:
+  url: http://localhost:0
+  secret: test-openvidu-secret
