@@ -1,4 +1,4 @@
-package com.ssafy.ssasukae.global.exception;
+package com.ssafy.ssasukae.global.exception.restapi;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

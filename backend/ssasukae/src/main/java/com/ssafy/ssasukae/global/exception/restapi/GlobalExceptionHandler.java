@@ -1,7 +1,8 @@
-package com.ssafy.ssasukae.global.exception;
+package com.ssafy.ssasukae.global.exception.restapi;
 
-import com.ssafy.ssasukae.global.exception.room.RoomException;
+import com.ssafy.ssasukae.global.exception.restapi.room.RoomException;
 
+import com.ssafy.ssasukae.global.exception.restapi.song.SongException;
 import io.jsonwebtoken.JwtException;
 
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,12 +36,26 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(RoomException.class)
-    public ResponseEntity<ErrorResponse> handleRoomException(RoomException e) {
+    public ResponseEntity<ApiResponse> handleRoomException(RoomException e) {
         return ResponseEntity
                 .status(e.getErrorCode().getHttpStatus())
-                .body(ErrorResponse.of(
-                        e.getErrorCode().getHttpStatus().value(),
-                        e.getMessage()
+                .body(ApiResponse.of(
+                        ErrorResponse.of(
+                                e.getErrorCode().getHttpStatus().value(),
+                                e.getMessage()
+                        )
+                ));
+    }
+
+    @ExceptionHandler(SongException.class)
+    public ResponseEntity<ApiResponse> handleSongException(SongException e) {
+        return ResponseEntity
+                .status(e.getErrorCode().getHttpStatus())
+                .body(ApiResponse.of(
+                        ErrorResponse.of(
+                                e.getErrorCode().getHttpStatus().value(),
+                                e.getMessage()
+                        )
                 ));
     }
 }
