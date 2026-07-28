@@ -81,7 +81,7 @@ public class PerformanceResult {
   /**
    * 공연 결과에 대한 피드백
    */
-  @Column(name = "feedback", columnDefinition = "TEXT")
+  @Column(name = "feedback",  nullable = true, columnDefinition = "TEXT")
   private String feedback;
 
   /**
@@ -98,8 +98,7 @@ public class PerformanceResult {
           BigDecimal rhythmScore,
           BigDecimal lyricsScore,
           BigDecimal stabilityScore,
-          BigDecimal finalScore,
-          String feedback) {
+          BigDecimal finalScore) {
     this.song = song;
     this.user = user;
     this.pitchScore = pitchScore;
@@ -107,7 +106,6 @@ public class PerformanceResult {
     this.lyricsScore = lyricsScore;
     this.stabilityScore = stabilityScore;
     this.finalScore = finalScore;
-    this.feedback = feedback;
   }
 
   /**
@@ -120,8 +118,7 @@ public class PerformanceResult {
           BigDecimal rhythmScore,
           BigDecimal lyricsScore,
           BigDecimal stabilityScore,
-          BigDecimal finalScore,
-          String feedback) {
+          BigDecimal finalScore) {
     return new PerformanceResult(
             song,
             user,
@@ -129,7 +126,6 @@ public class PerformanceResult {
             rhythmScore,
             lyricsScore,
             stabilityScore,
-            finalScore,
-            feedback);
+            finalScore);
   }
 }

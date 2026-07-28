@@ -1,6 +1,6 @@
 package com.ssafy.ssasukae.domain.performance.websocket.payload;
 
-import com.ssafy.ssasukae.domain.performance.redis.PerformanceSettings;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSettings;
 
 // 공연 설정 페이로드
 public record PerformanceSettingsPayload(
