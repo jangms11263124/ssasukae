@@ -1,10 +1,12 @@
 package com.ssafy.ssasukae.domain.user.service;
 
+import com.ssafy.ssasukae.domain.user.dto.MyPageResponse;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
 
+import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
@@ -46,5 +48,9 @@ public class UserService {
     public User findById(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. id=" + userId));
+    }
+
+    public MyPageResponse getMyPage(AuthenticatedUser authenticatedUser) {
+        return null;
     }
 }
