@@ -2,6 +2,7 @@ package com.ssafy.ssasukae.domain.performance.service;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.Objects;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
+import com.ssafy.ssasukae.domain.room.type.RoomMode;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 import com.ssafy.ssasukae.domain.song.entity.Song;
 import com.ssafy.ssasukae.domain.song.repository.SongRepository;
@@ -100,9 +102,6 @@ public class PerformanceService {
                     song.getId(),
                     now()
             );
-    // 공연 시작
-    room.startPerformance();
-
     // snapshot대로 redis에 저장
     if (!performanceStore.create(snapShot)) {
       throw business(
@@ -113,6 +112,10 @@ public class PerformanceService {
     restoreOnRollback(
             () -> performanceStore.delete(snapShot)
     );
+
+    // Redis 활성 공연 선점에 성공한 뒤 DB 방 상태를 변경
+    room.startPerformance();
+
     // 정상적으로 DB에 저장이 되었으면 이벤트 발행
     afterCommit(() -> {
       eventPublisher.publish(
@@ -231,7 +234,7 @@ public class PerformanceService {
           PerformanceSettingsChangeRequest request
   ) {
     validateSettings(request);
-    validatePlayingRoomAndPerformer(userId, roomId);
+    Room room = validatePlayingRoomAndPerformer(userId, roomId);
 
     PerformanceSnapShot previous =
             getValidatedSnapShot(
@@ -239,6 +242,8 @@ public class PerformanceService {
                     performanceId,
                     userId
             );
+
+    validateBattleModeSettings(room, previous.settings(), request);
 
     PerformanceSettings settings =
             new PerformanceSettings(
@@ -509,6 +514,37 @@ public class PerformanceService {
     return value != null
             && value >= minimum
             && value <= maximum;
+  }
+
+  private void validateBattleModeSettings(
+          Room room,
+          PerformanceSettings currentSettings,
+          PerformanceSettingsChangeRequest request
+  ) {
+    if (room.getMode() != RoomMode.BATTLE) {
+      return;
+    }
+
+    boolean restrictedSettingChanged =
+            !Objects.equals(
+                    request.keyOffset(),
+                    currentSettings.keyOffset()
+            )
+                    || !Objects.equals(
+                    request.tempoPercent(),
+                    currentSettings.tempoPercent()
+            )
+                    || !Objects.equals(
+                    request.mrVolumePercent(),
+                    currentSettings.mrVolumePercent()
+            );
+
+    if (restrictedSettingChanged) {
+      throw business(
+              WebSocketErrorCode.INVALID_PERFORMANCE_SETTING,
+              "BATTLE 모드에서는 공연자가 키, 템포, MR 볼륨을 직접 변경할 수 없습니다."
+      );
+    }
   }
 
   private void saveWithRollback(
