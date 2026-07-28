@@ -68,6 +68,7 @@ public class SecurityConfig {
                                 "/api/auth/signup",
                                 "/api/auth/refresh",
                                 "/api/users/nickname/check",
+                                "/internal/api/v1/performances/**",
                                 "/ws",
                                 "/ws/**"
                         ).permitAll()
