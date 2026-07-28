@@ -1,5 +1,6 @@
 package com.ssafy.ssasukae.domain.user.controller;
 
+import com.ssafy.ssasukae.domain.user.dto.MyPageResponse;
 import com.ssafy.ssasukae.domain.user.dto.UserResponse;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.service.UserService;
@@ -24,5 +25,11 @@ public class UserController {
     public ResponseEntity<UserResponse> getCurrentUser(@AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
         User user = userService.findById(authenticatedUser.userId());
         return ResponseEntity.ok(UserResponse.from(user));
+    }
+
+    @GetMapping("/me/mypage")
+    public ResponseEntity<MyPageResponse> getMyPage(@AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
+        MyPageResponse data = userService.getMyPage(authenticatedUser);
+        return ResponseEntity.ok(data);
     }
 }
