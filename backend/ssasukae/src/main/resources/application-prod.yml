@@ -24,15 +24,12 @@ openvidu:
 app:
   cors:
     allowed-origins:
-      - http://localhost:3000
+      - https://ssafystar-k.site
 
   cookie:
-    # TODO: 백엔드에 HTTPS(리버스 프록시/로드밸런서)가 붙으면 true로 변경.
-    # 지금은 순수 HTTP라 true로 두면 refresh token 쿠키 자체가 전송되지 않음.
-    secure: false
+    secure: true
 
   oauth2:
-    # TODO: 프론트가 실제 도메인으로 배포되면 localhost:3000 대신 그 도메인으로 교체.
-    redirect-uri: http://localhost:3000/oauth/callback
-    signup-redirect-uri: http://localhost:3000/signup
-    failure-redirect-uri: http://localhost:3000/login-error
+    redirect-uri: https://ssafystar-k.site/oauth/callback
+    signup-redirect-uri: https://ssafystar-k.site/signup
+    failure-redirect-uri: https://ssafystar-k.site/login-error
