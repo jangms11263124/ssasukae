@@ -1,9 +1,10 @@
-package com.ssafy.ssasukae.domain.performance.websocket.type;
+package com.ssafy.ssasukae.domain.performance.type;
 
 public enum PerformanceStatus {
     PREPARING,
     PLAYING,
     ANALYZING,
+    ANALYSIS_FAILED,
     FINISHED,
-    CANCELLED
+    CANCELLED,
 }
