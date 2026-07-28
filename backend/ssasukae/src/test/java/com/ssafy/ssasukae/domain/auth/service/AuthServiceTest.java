@@ -9,6 +9,8 @@ import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.service.UserService;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.auth.AuthErrorCode;
 import com.ssafy.ssasukae.global.security.jwt.ActiveSessionService;
 import com.ssafy.ssasukae.global.security.jwt.JwtProperties;
 import com.ssafy.ssasukae.global.security.jwt.JwtTokenProvider;
@@ -123,7 +125,9 @@ class AuthServiceTest {
 
         // when & then
         assertThatThrownBy(() -> authService.completeSignup(request))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.ALREADY_REGISTERED);
     }
 
     @Test
@@ -169,7 +173,9 @@ class AuthServiceTest {
 
         // when & then
         assertThatThrownBy(() -> authService.reissueToken("bad-token"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.INVALID_REFRESH_TOKEN);
     }
 
     @Test
@@ -182,7 +188,9 @@ class AuthServiceTest {
 
         // when & then
         assertThatThrownBy(() -> authService.reissueToken("used-token"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.REFRESH_TOKEN_ALREADY_USED);
     }
 
     @Test
@@ -198,7 +206,9 @@ class AuthServiceTest {
 
         // when & then
         assertThatThrownBy(() -> authService.reissueToken("stale-token"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.SESSION_EXPIRED);
     }
 
     @Test

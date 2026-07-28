@@ -3,6 +3,9 @@ package com.ssafy.ssasukae.global.security.jwt;
 import com.ssafy.ssasukae.domain.auth.dto.SignupTokenClaims;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.auth.AuthErrorCode;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -147,6 +150,8 @@ class JwtTokenProviderTest {
 
         // when & then
         assertThatThrownBy(() -> jwtTokenProvider.getSignupTokenClaims(accessToken))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(AuthErrorCode.INVALID_SIGNUP_TOKEN);
     }
 }
