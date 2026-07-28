@@ -17,7 +17,7 @@ import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
-import com.ssafy.ssasukae.global.exception.room.RoomException;
+import com.ssafy.ssasukae.global.exception.restapi.room.RoomException;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 
 import lombok.RequiredArgsConstructor;
