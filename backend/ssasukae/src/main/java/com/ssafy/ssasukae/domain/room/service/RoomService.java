@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomJoinResponse;
+import com.ssafy.ssasukae.domain.room.dto.RoomSnapshotResponse;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
@@ -119,6 +120,27 @@ public class RoomService {
                 room.getOpenViduSessionId(),
                 token
         );
+    }
+
+    public RoomSnapshotResponse getRoomSnapshot(Long userId, Long roomId) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+
+        RoomParticipant requester =
+                roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
+                        .orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
+
+        if (!requester.isActive()) {
+            throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
+        }
+
+        List<RoomParticipant> activeParticipants =
+                roomParticipantRepository.findAllByRoomIdAndConnectionStatusInOrderByJoinedAtAsc(
+                        roomId,
+                        ACTIVE_STATUSES
+                );
+
+        return RoomSnapshotResponse.from(room, activeParticipants);
     }
 
     @Transactional
