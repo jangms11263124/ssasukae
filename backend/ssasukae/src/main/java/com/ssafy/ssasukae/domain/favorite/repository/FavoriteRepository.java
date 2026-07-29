@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
     @Query("SELECT f FROM Favorite f WHERE f.user.id = :userId AND f.song.id = :songId")
@@ -37,4 +38,7 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
 
     @Query("SELECT COUNT(f) FROM Favorite f JOIN f.song s WHERE f.user = :user AND :query = '' OR LOWER(s.title) LIKE LOWER(CONCAT('%', :query, '%'))")
     int countByUserAndQuery(User user, String query);
+
+    @Query("SELECT f.song.id FROM Favorite f WHERE f.user = :user")
+    Set<Long> findSongIdByUser(User user);
 }
