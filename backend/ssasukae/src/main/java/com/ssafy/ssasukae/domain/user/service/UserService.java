@@ -8,7 +8,10 @@ import com.ssafy.ssasukae.domain.performanceResult.entity.PerformanceResult;
 import com.ssafy.ssasukae.domain.performanceResult.repository.PerformanceResultRepository;
 import com.ssafy.ssasukae.domain.song.entity.Song;
 import com.ssafy.ssasukae.domain.user.dto.MyPageResponse;
+import com.ssafy.ssasukae.domain.user.dto.PerformanceStatResponse;
 import com.ssafy.ssasukae.domain.user.entity.User;
+import com.ssafy.ssasukae.domain.user.entity.UserPerformanceStat;
+import com.ssafy.ssasukae.domain.user.repository.UserPerformanceStatRepository;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
@@ -22,6 +25,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,6 +38,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final FavoriteRepository favoriteRepository;
     private final PerformanceResultRepository performanceResultRepository;
+    private final UserPerformanceStatRepository userPerformanceStatRepository;
 
     public Optional<User> findByProviderAndProviderId(OAuthProvider provider, String providerId) {
         return userRepository.findByProviderAndProviderId(provider, providerId);
@@ -107,5 +114,44 @@ public class UserService {
         }
 
         return !userRepository.existsByNickname(nickname);
+    }
+
+    public PerformanceStatResponse refreshPerformanceStat(AuthenticatedUser authenticatedUser) {
+        User user = userRepository.findById(authenticatedUser.userId()).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
+        UserPerformanceStat beforeStat = userPerformanceStatRepository.findByUser(user).orElseGet(() ->
+                UserPerformanceStat.builder()
+                        .user(user)
+                        .total(0L)
+                        .avgScore(BigDecimal.valueOf(0))
+                        .updatedAt(LocalDateTime.now()).build()
+        );
+
+        List<PerformanceResult> recentPerforms = performanceResultRepository.findNRecentPerformances(user, 10);
+        Long perFormsCnt = performanceResultRepository.countByUser(user);
+        beforeStat.setTotal(perFormsCnt);
+        BigDecimal newAvg = average(recentPerforms);
+        BigDecimal difference = newAvg.subtract(beforeStat.getAvgScore());
+        beforeStat.setAvgScore(newAvg);
+        UserPerformanceStat newStat = userPerformanceStatRepository.save(beforeStat);
+
+        return PerformanceStatResponse.builder()
+                .avgScore(newAvg)
+                .difference(difference)
+                .totalSongs(newStat.getTotal())
+                .updatedAt(newStat.getUpdatedAt()).build();
+    }
+
+    private BigDecimal average(List<PerformanceResult> items) {
+        if(items.isEmpty()) return BigDecimal.ZERO;
+
+        BigDecimal sum = items.stream()
+                .map(PerformanceResult::getFinalScore)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return sum.divide(
+                BigDecimal.valueOf(items.size()),
+                1,
+                RoundingMode.HALF_UP
+        );
     }
 }

@@ -2,6 +2,7 @@ package com.ssafy.ssasukae.domain.user.controller;
 
 import com.ssafy.ssasukae.domain.user.dto.MyPageResponse;
 import com.ssafy.ssasukae.domain.user.dto.NicknameCheckResponse;
+import com.ssafy.ssasukae.domain.user.dto.PerformanceStatResponse;
 import com.ssafy.ssasukae.domain.user.dto.UserResponse;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.service.UserService;
@@ -39,5 +40,11 @@ public class UserController {
     public ResponseEntity<NicknameCheckResponse> checkNickname(@RequestParam String nickname) {
         boolean available = userService.isNicknameAvailable(nickname);
         return ResponseEntity.ok(new NicknameCheckResponse(available));
+    }
+
+    @GetMapping("/me/reperformance")
+    public ResponseEntity<PerformanceStatResponse> refreshPerformanceStat(@AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
+        PerformanceStatResponse data = userService.refreshPerformanceStat(authenticatedUser);
+        return ResponseEntity.ok(data);
     }
 }
