@@ -148,7 +148,13 @@ public class RoomService {
             throw new CustomException(RoomErrorCode.HOST_ONLY);
         }
 
-        room.terminate(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        room.terminate(now);
+
+        List<RoomParticipant> activeParticipants =
+                roomParticipantRepository.findAllByRoomIdAndConnectionStatusIn(roomId, ACTIVE_STATUSES);
+        activeParticipants.forEach(participant -> participant.leave(now));
+
         mediaSessionGateway.closeSession(room.getOpenViduSessionId());
     }
 
