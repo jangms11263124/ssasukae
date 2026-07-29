@@ -25,7 +25,7 @@ export function OAuthCallbackHandler() {
       try {
         await loginWithAccessToken(token);
         if (!cancelled) {
-          router.replace('/');
+          router.replace('/loby');
         }
       } catch {
         if (!cancelled) {
@@ -48,7 +48,7 @@ export function OAuthCallbackHandler() {
           로그인 정보가 없습니다. 다시 시도해 주세요.
         </p>
         <Link
-          href="/"
+          href="/login"
           className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 px-6 text-sm font-medium text-white transition-colors hover:bg-white/5"
         >
           로그인으로 돌아가기
@@ -64,7 +64,7 @@ export function OAuthCallbackHandler() {
           {error}
         </p>
         <Link
-          href="/"
+          href="/login"
           className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 px-6 text-sm font-medium text-white transition-colors hover:bg-white/5"
         >
           로그인으로 돌아가기
