@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 import { AppProviders } from '@/app/providers/AppProviders';
 import { BRAND_NAME, BRAND_TAGLINE } from '@/shared/config/brand';
-import { tjJoyOfSinging } from '@/shared/config/fonts';
+import { anybody, tjJoyOfSinging } from '@/shared/config/fonts';
 import { PointerGlow } from '@/shared/ui/pointer-glow/PointerGlow';
 
 import './globals.css';
@@ -18,7 +18,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className={`${tjJoyOfSinging.variable} h-full antialiased`}>
+    <html
+      lang="ko"
+      className={`${tjJoyOfSinging.variable} ${anybody.variable} h-full antialiased`}
+    >
       <body className="flex min-h-full flex-col font-sans">
         <AppProviders>{children}</AppProviders>
         <PointerGlow />
