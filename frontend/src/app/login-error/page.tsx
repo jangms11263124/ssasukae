@@ -17,7 +17,7 @@ function LoginErrorContent() {
         <p className="text-sm leading-relaxed text-zinc-400">{error}</p>
       </div>
       <Link
-        href="/"
+        href="/login"
         className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 px-6 text-sm font-medium text-white transition-colors hover:bg-white/5"
       >
         다시 로그인하기
