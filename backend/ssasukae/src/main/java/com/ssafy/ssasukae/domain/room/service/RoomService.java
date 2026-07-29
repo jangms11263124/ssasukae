@@ -2,8 +2,15 @@ package com.ssafy.ssasukae.domain.room.service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
+import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantJoinedPayload;
+import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantLeftPayload;
+import com.ssafy.ssasukae.domain.room.websocket.payload.RoomHostChangedPayload;
+import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
+import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +32,8 @@ import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 
 import lombok.RequiredArgsConstructor;
 
+import static com.ssafy.ssasukae.domain.room.websocket.RoomWebSocketEventType.*;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -45,6 +54,7 @@ public class RoomService {
     private final MediaSessionGateway mediaSessionGateway;
     private final PerformanceRecoveryService performanceRecoveryService;
     private final SecureRandom secureRandom = new SecureRandom();
+    private final WebSocketEventPublisher webSocketEventPublisher;
 
     @Transactional
     public RoomCreateResponse createRoom(Long hostUserId, RoomCreateRequest request) {
@@ -115,6 +125,8 @@ public class RoomService {
                 savedParticipant.getId()
         );
 
+        webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_JOINED, room.getId(), new ParticipantJoinedPayload(savedParticipant.getId(), user.getNickname())));
+
         return new RoomJoinResponse(
                 room.getId(),
                 savedParticipant.getId(),
@@ -184,7 +196,7 @@ public class RoomService {
 
     @Transactional
     public void leaveRoom(Long userId, Long roomId) {
-        roomRepository.findById(roomId)
+        Room currentRoom = roomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
         RoomParticipant participant = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
@@ -194,8 +206,35 @@ public class RoomService {
             throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
         }
 
+        RoomParticipant newHost = null;
+        if(currentRoom.isHost(userId)) {
+            List<RoomParticipant> participants = roomParticipantRepository.findRoomParticipantsByRoom(currentRoom);
+            newHost = participants
+                    .stream()
+                    .filter(RoomParticipant::isActive)
+                    .filter(p ->
+                            !p.getUser().getId().equals(userId)
+                    )
+                    .min(Comparator
+                            .comparing(RoomParticipant::getJoinedAt)
+                            .thenComparing(RoomParticipant::getId))
+                    .orElse(null);
+
+            if(newHost == null) {
+                terminateRoom(userId, roomId);
+                participant.leave(LocalDateTime.now());
+                webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(PARTICIPANT_LEFT, roomId, new ParticipantLeftPayload(participant.getId())));
+                return;
+            }
+
+            currentRoom.delegateHost(newHost.getUser());
+        }
+
         participant.leave(LocalDateTime.now());
         performanceRecoveryService.recoverPerformerExitCase(roomId, userId);
+
+        if(newHost != null) webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(ROOM_HOST_CHANGED, roomId, new RoomHostChangedPayload(newHost.getId())));
+        webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(PARTICIPANT_LEFT, roomId, new ParticipantLeftPayload(participant.getId())));
     }
 
     private User getUser(Long userId) {
