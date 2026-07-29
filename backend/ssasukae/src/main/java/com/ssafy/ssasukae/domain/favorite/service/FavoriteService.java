@@ -41,13 +41,9 @@ public class FavoriteService {
     }
 
     public FavoriteResponseDTO.QueryDTO query(long userId, String query, Long cursor, Integer size) {
-        // 사용자가 좋아요 한 노래 중 제목에 query가 포함된 노래
-        // cursor = favorite_id
-        // size = 검색한 내용의 크기 (20 <= x <= 50)
         LocalDateTime cursorCreatedAt = null;
         Long cursorId = null;
 
-        // 첫 조회가 아니라면 커서에 해당하는 찜 데이터 확인
         if (cursor != null) {
             Favorite cursorFavorite = favoriteRepository.findById(cursor).orElseThrow(() -> new RuntimeException("커서에 해당하는 찜 정보가 없습니다."));
 

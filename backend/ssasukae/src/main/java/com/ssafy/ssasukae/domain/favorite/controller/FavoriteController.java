@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 public class FavoriteController {
     private final FavoriteService favoriteService;
 
-    @PostMapping("/{songId}")
+    @PutMapping("/{songId}")
     public ResponseEntity favor(@AuthenticationPrincipal AuthenticatedUser authenticatedUser, @PathVariable Long songId) {
         favoriteService.favorite(authenticatedUser.userId(), songId);
         return ResponseEntity.noContent().build();
