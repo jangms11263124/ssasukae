@@ -9,4 +9,6 @@ import java.util.List;
 public interface PerformanceResultRepository extends JpaRepository<PerformanceResult, Long> {
     @Query("SELECT pr FROM PerformanceResult pr WHERE pr.user = :user ORDER BY pr.createdAt DESC LIMIT :N")
     List<PerformanceResult> findNRecentPerformances(User user, Integer N);
+
+    Long countByUser(User user);
 }
