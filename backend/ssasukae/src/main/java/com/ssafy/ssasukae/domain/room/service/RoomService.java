@@ -1,14 +1,20 @@
 package com.ssafy.ssasukae.domain.room.service;
 
+import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantJoinedPayload;
 import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantLeftPayload;
 import com.ssafy.ssasukae.domain.room.websocket.payload.RoomHostChangedPayload;
+import com.ssafy.ssasukae.domain.room.websocket.payload.RoomParticipantChatPayload;
+import com.ssafy.ssasukae.domain.room.websocket.request.ParticipantChatRequest;
+import com.ssafy.ssasukae.global.exception.websocket.WebSocketErrorCode;
+import com.ssafy.ssasukae.global.exception.websocket.WebSocketException;
 import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
 import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import org.springframework.stereotype.Service;
@@ -269,5 +275,16 @@ public class RoomService {
         }
 
         return builder.toString();
+    }
+
+    @Transactional
+    public void chat(Long roomId, ParticipantChatRequest request, Principal principal) {
+        User user = getUser(Long.valueOf(principal.getName()));
+        Room room = roomRepository.findById(roomId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+        if(room.getStatus() == RoomStatus.TERMINATED) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
+        RoomParticipant sender = roomParticipantRepository.findByRoomIdAndUserId(room.getId(), user.getId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED));
+        if(!sender.isActive()) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
+
+        webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_CHAT, room.getId(), new RoomParticipantChatPayload(sender.getId(), request.message().trim(), LocalDateTime.now())));
     }
 }
