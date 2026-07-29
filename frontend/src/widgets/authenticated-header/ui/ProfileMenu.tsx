@@ -90,8 +90,8 @@ export function ProfileMenu() {
       showToast('로그아웃에 실패했습니다', 'error');
     }
 
-    // 요청이 실패해도 onSettled에서 로컬 세션은 정리되므로 홈으로 이동시킨다
-    router.replace('/');
+    // 요청이 실패해도 onSettled에서 로컬 세션은 정리되므로 로그인 페이지로 이동시킨다
+    router.replace('/login');
   };
 
   const nickname = user?.nickname ?? '사용자';

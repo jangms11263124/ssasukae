@@ -1,5 +1,5 @@
-import { HomeGate } from '@/widgets/home-gate';
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-  return <HomeGate />;
+  redirect('/loby');
 }

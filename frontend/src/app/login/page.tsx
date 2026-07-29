@@ -1,5 +1,10 @@
-import { redirect } from 'next/navigation';
+import { GuestOnlyGuard } from '@/features/auth-guard';
+import { LandingSplit } from '@/widgets/landing-split';
 
 export default function LoginPage() {
-  redirect('/');
+  return (
+    <GuestOnlyGuard>
+      <LandingSplit />
+    </GuestOnlyGuard>
+  );
 }
