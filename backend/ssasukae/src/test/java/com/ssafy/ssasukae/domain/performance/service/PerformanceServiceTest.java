@@ -31,6 +31,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSettings;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceCancelReason;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventPublisher;
@@ -87,6 +89,8 @@ class PerformanceServiceTest {
 
   @Mock private PerformanceStore performanceStore;
 
+  @Mock private PerformanceRecoveryDeadlineStore recoveryDeadlineStore;
+
   @Mock private S3StorageService s3StorageService;
 
   @Mock private PerformanceWebSocketEventPublisher eventPublisher;
@@ -95,13 +99,21 @@ class PerformanceServiceTest {
 
   @BeforeEach
   void setUp() {
+    PerformanceTransactionSupport transactionSupport =
+        new PerformanceTransactionSupport(performanceStore, recoveryDeadlineStore);
+    PerformanceCancellationProcessor cancellationProcessor =
+        new PerformanceCancellationProcessor(transactionSupport, eventPublisher);
+
     performanceService =
         new PerformanceService(
             roomRepository,
             roomParticipantRepository,
             songRepository,
             performanceStore,
-            new PerformanceTransactionSupport(performanceStore),
+            recoveryDeadlineStore,
+            new PerformanceRecoveryProperties(),
+            transactionSupport,
+            cancellationProcessor,
             s3StorageService,
             eventPublisher);
   }
@@ -441,6 +453,11 @@ class PerformanceServiceTest {
 
     assertThat(changed.playbackFinishedAt()).isNotNull().isAfterOrEqualTo(STARTED_AT);
 
+    verify(recoveryDeadlineStore)
+        .save(
+            PERFORMANCE_ID,
+            changed.playbackFinishedAt().toInstant().plusSeconds(120));
+
     verifyNoInteractions(eventPublisher);
 
     commitTransaction();
@@ -451,6 +468,25 @@ class PerformanceServiceTest {
             PerformanceWebSocketEventType.PLAYBACK_FINISHED,
             new PlaybackFinishedPayload(
                 PERFORMANCE_ID, PARTICIPANT_ID, changed.playbackFinishedAt()));
+  }
+
+  @Test
+  @DisplayName("재생 종료 트랜잭션이 롤백되면 분석 마감 예약과 스냅샷을 복구한다")
+  void finishPlaybackRestoresDeadlineAndSnapshotOnRollback() {
+    Room room = playingRoom();
+    stubPlayingContext(room, performer(room));
+
+    PerformanceSnapShot playing = preparingSnapshot().startPlayback(STARTED_AT);
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(playing));
+
+    beginTransaction();
+
+    performanceService.finishPlayback(USER_ID, ROOM_ID, PERFORMANCE_ID);
+    rollbackTransaction();
+
+    verify(recoveryDeadlineStore).delete(PERFORMANCE_ID);
+    verify(performanceStore).save(playing);
+    verifyNoInteractions(eventPublisher);
   }
 
   @Test

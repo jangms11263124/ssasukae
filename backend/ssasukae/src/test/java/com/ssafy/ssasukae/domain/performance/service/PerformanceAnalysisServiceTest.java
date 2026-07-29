@@ -11,6 +11,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -32,6 +34,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardEntry;
 import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardStore;
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.rest.request.AiAnalysisFailureRequest;
@@ -70,11 +74,13 @@ class PerformanceAnalysisServiceTest {
       OffsetDateTime.of(2026, 7, 28, 10, 0, 0, 0, ZoneOffset.ofHours(9));
   private static final OffsetDateTime STARTED_AT = PREPARED_AT.plusSeconds(3);
   private static final OffsetDateTime FINISHED_AT = STARTED_AT.plusMinutes(3);
+  private static final Instant ANALYSIS_DEADLINE = FINISHED_AT.toInstant().plusSeconds(120);
 
   @Mock private RoomRepository roomRepository;
   @Mock private SongRepository songRepository;
   @Mock private UserRepository userRepository;
   @Mock private PerformanceStore performanceStore;
+  @Mock private PerformanceRecoveryDeadlineStore recoveryDeadlineStore;
   @Mock private RoomLeaderboardStore roomLeaderboardStore;
   @Mock private PerformanceResultRepository performanceResultRepository;
   @Mock private PerformanceWebSocketEventPublisher eventPublisher;
@@ -83,16 +89,21 @@ class PerformanceAnalysisServiceTest {
 
   @BeforeEach
   void setUp() {
-    service =
-        new PerformanceAnalysisService(
-            roomRepository,
-            songRepository,
-            userRepository,
-            performanceStore,
-            new PerformanceTransactionSupport(performanceStore),
-            roomLeaderboardStore,
-            performanceResultRepository,
-            eventPublisher);
+    service = createServiceAt(ANALYSIS_DEADLINE.minusSeconds(1));
+  }
+
+  private PerformanceAnalysisService createServiceAt(Instant currentTime) {
+    return new PerformanceAnalysisService(
+        roomRepository,
+        songRepository,
+        userRepository,
+        performanceStore,
+        new PerformanceRecoveryProperties(),
+        Clock.fixed(currentTime, ZoneOffset.UTC),
+        new PerformanceTransactionSupport(performanceStore, recoveryDeadlineStore),
+        roomLeaderboardStore,
+        performanceResultRepository,
+        eventPublisher);
   }
 
   @AfterEach
@@ -247,6 +258,54 @@ class PerformanceAnalysisServiceTest {
             PerformanceWebSocketEventType.PERFORMANCE_STATE_CHANGED,
             new PerformanceStateChangedPayload(
                 PERFORMANCE_ID, PerformanceStatus.ANALYZING, PerformanceStatus.ANALYSIS_FAILED));
+  }
+
+  @Test
+  @DisplayName("분석 마감 시각에 도착한 AI 성공 결과는 반영하지 않는다")
+  void completeAnalysisRejectsResultAtDeadline() {
+    Room room = playingRoom();
+    PerformanceSnapShot analyzing = analyzingSnapshot();
+    service = createServiceAt(ANALYSIS_DEADLINE);
+
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
+    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
+
+    assertAnalysisError(
+        PerformanceAnalysisErrorCode.ANALYSIS_DEADLINE_EXPIRED,
+        () -> service.completeAnalysis(PERFORMANCE_ID, scoreRequest()));
+
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
+    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
+    verifyNoInteractions(
+        userRepository,
+        songRepository,
+        performanceResultRepository,
+        roomLeaderboardStore,
+        eventPublisher);
+  }
+
+  @Test
+  @DisplayName("분석 마감 시각 이후 도착한 AI 실패 결과는 반영하지 않는다")
+  void failAnalysisRejectsResultAfterDeadline() {
+    Room room = playingRoom();
+    PerformanceSnapShot analyzing = analyzingSnapshot();
+    service = createServiceAt(ANALYSIS_DEADLINE.plusSeconds(1));
+
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
+    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
+
+    assertAnalysisError(
+        PerformanceAnalysisErrorCode.ANALYSIS_DEADLINE_EXPIRED,
+        () ->
+            service.failAnalysis(
+                PERFORMANCE_ID, new AiAnalysisFailureRequest("분석 서버 처리 실패")));
+
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
+    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
+    verifyNoInteractions(
+        performanceResultRepository,
+        roomLeaderboardStore,
+        eventPublisher);
   }
 
   @Test
