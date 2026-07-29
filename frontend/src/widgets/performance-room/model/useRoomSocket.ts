@@ -1,0 +1,242 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+
+import type {
+  LeaderboardUpdatedPayload,
+  PerformanceCancelledPayload,
+  PerformancePreparationStartedPayload,
+  PerformanceSettings,
+  PerformanceSettingsChangedPayload,
+  PerformanceStartedPayload,
+} from '@/entities/performance';
+import {
+  useRoomStore,
+  type ParticipantConnectionStatusChangedPayload,
+  type ParticipantJoinedPayload,
+  type ParticipantKickedPayload,
+  type ParticipantLeftPayload,
+  type PongPayload,
+  type RoomHostChangedPayload,
+  type RoomWebSocketEvent,
+  type WebSocketErrorEvent,
+} from '@/entities/room';
+import { createStompClient, subscribeJson } from '@/shared/api/stomp';
+import { showToast } from '@/shared/model/toastStore';
+
+import { useStageStore } from './stageStore';
+
+/** 연결 상태 확인 PING 전송 주기 (백엔드 하트비트 10초와 동일) */
+const PING_INTERVAL_MS = 10_000;
+
+export interface RoomSocketApi {
+  isConnected: boolean;
+  /** 최근 PING-PONG 왕복 지연(ms). 아직 PONG을 받지 못했으면 null */
+  latencyMs: number | null;
+  /** 연결 상태 확인 PING을 즉시 전송한다 */
+  sendPing: () => void;
+  /** 곡을 확정하고 공연 준비를 요청한다 (가창자 전용) */
+  sendPrepare: (songId: number) => void;
+  /** 음원 재생 시작을 알린다 (가창자 전용) */
+  sendPlaybackStart: () => void;
+  /** 음원 재생 정상 종료를 알린다 (가창자 전용) */
+  sendPlaybackFinish: () => void;
+  /** 공연 설정(키/템포/볼륨/이펙트) 변경 (가창자 전용) */
+  sendSettings: (settings: PerformanceSettings) => void;
+  /** 진행 중인 공연을 취소한다 (가창자 전용) */
+  sendCancel: () => void;
+}
+
+/**
+ * 방 입장 후 STOMP 연결을 맺고, 방 브로드캐스트/개인 큐 이벤트를
+ * roomStore·stageStore에 반영한다.
+ */
+export function useRoomSocket(roomId: number | null): RoomSocketApi {
+  const [isConnected, setIsConnected] = useState(false);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const clientRef = useRef<ReturnType<typeof createStompClient> | null>(null);
+
+  useEffect(() => {
+    if (roomId === null) {
+      return;
+    }
+
+    let pingInterval: ReturnType<typeof setInterval> | null = null;
+
+    const stopPing = () => {
+      if (pingInterval !== null) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+      }
+    };
+
+    const handleEvent = (event: RoomWebSocketEvent) => {
+      const roomStore = useRoomStore.getState();
+      const stageStore = useStageStore.getState();
+
+      switch (event.eventType) {
+        // ── Room ──
+        case 'PARTICIPANT_JOINED':
+          roomStore.applyParticipantJoined(event.payload as ParticipantJoinedPayload);
+          break;
+        case 'PARTICIPANT_LEFT':
+          roomStore.applyParticipantLeft(event.payload as ParticipantLeftPayload);
+          break;
+        case 'PARTICIPANT_KICKED':
+          roomStore.applyParticipantKicked(event.payload as ParticipantKickedPayload);
+          break;
+        case 'ROOM_HOST_CHANGED':
+          roomStore.applyHostChanged(event.payload as RoomHostChangedPayload);
+          break;
+        case 'PARTICIPANT_CONNECTION_STATUS_CHANGED':
+          roomStore.applyConnectionStatusChanged(
+            event.payload as ParticipantConnectionStatusChangedPayload,
+          );
+          break;
+        // ── Performance ──
+        case 'PERFORMANCE_STARTED':
+          stageStore.applyPerformanceStarted(event.payload as PerformanceStartedPayload);
+          break;
+        case 'PERFORMANCE_PREPARATION_STARTED':
+          stageStore.applyPreparationStarted(
+            event.payload as PerformancePreparationStartedPayload,
+          );
+          break;
+        case 'PLAYBACK_STARTED':
+          stageStore.applyPlaybackStarted();
+          break;
+        case 'PLAYBACK_FINISHED':
+          stageStore.applyPlaybackFinished();
+          break;
+        case 'PERFORMANCE_SETTINGS_CHANGED':
+          stageStore.applySettingsChanged(
+            (event.payload as PerformanceSettingsChangedPayload).settings,
+          );
+          break;
+        case 'PERFORMANCE_CANCELLED': {
+          const payload = event.payload as PerformanceCancelledPayload;
+          stageStore.applyPerformanceCancelled();
+          if (payload.cancelReason !== 'PERFORMER_REQUEST') {
+            showToast('공연이 중단되었습니다.', 'error');
+          }
+          break;
+        }
+        case 'PERFORMANCE_STATE_CHANGED':
+          // 세부 상태(ANALYZING 등) UI는 추후 확장. 현재는 주요 이벤트로만 전이한다.
+          break;
+        case 'LEADERBOARD_UPDATED': {
+          // 리더보드 저장은 GeneralRoomScreen에서 구독 중인 스토어가 없어
+          // 이벤트 발행이 시작되면 roomStore 확장으로 연결한다. (백엔드 미완성)
+          void (event.payload as LeaderboardUpdatedPayload);
+          break;
+        }
+        default:
+          break;
+      }
+    };
+
+    const sendPing = () => {
+      if (!client.connected) {
+        return;
+      }
+      client.publish({
+        destination: `/app/rooms/${roomId}/ping`,
+        body: JSON.stringify({ clientSentAt: new Date().toISOString() }),
+      });
+    };
+
+    const client = createStompClient({
+      onConnect: () => {
+        setIsConnected(true);
+
+        subscribeJson<RoomWebSocketEvent>(client, `/topic/rooms/${roomId}`, handleEvent);
+        subscribeJson<RoomWebSocketEvent>(client, `/user/queue/rooms/${roomId}`, handleEvent);
+        subscribeJson<WebSocketErrorEvent>(client, '/user/queue/errors', (event) => {
+          showToast(event.payload.message, 'error');
+        });
+        subscribeJson<RoomWebSocketEvent<PongPayload>>(client, '/user/queue/pong', (event) => {
+          const roundTrip = Date.now() - new Date(event.payload.clientSentAt).getTime();
+          setLatencyMs(Number.isFinite(roundTrip) && roundTrip >= 0 ? roundTrip : null);
+        });
+
+        // 연결 직후 1회 전송 후 주기적으로 연결 상태를 확인한다.
+        stopPing();
+        sendPing();
+        pingInterval = setInterval(sendPing, PING_INTERVAL_MS);
+      },
+      onDisconnect: () => {
+        stopPing();
+        setIsConnected(false);
+        setLatencyMs(null);
+      },
+      onStompError: (message) => {
+        stopPing();
+        setIsConnected(false);
+        setLatencyMs(null);
+        showToast(message, 'error');
+      },
+    });
+
+    clientRef.current = client;
+    client.activate();
+
+    return () => {
+      stopPing();
+      clientRef.current = null;
+      setIsConnected(false);
+      setLatencyMs(null);
+      void client.deactivate();
+    };
+  }, [roomId]);
+
+  return useMemo<RoomSocketApi>(() => {
+    const publish = (destination: string, body?: unknown) => {
+      const client = clientRef.current;
+
+      if (!client || !client.connected) {
+        showToast('서버와 연결되어 있지 않습니다.', 'error');
+        return;
+      }
+
+      client.publish({
+        destination,
+        body: body === undefined ? '' : JSON.stringify(body),
+      });
+    };
+
+    const currentPerformanceId = () => useStageStore.getState().performanceId;
+
+    return {
+      isConnected,
+      latencyMs,
+      sendPing: () => {
+        if (roomId === null) return;
+        publish(`/app/rooms/${roomId}/ping`, { clientSentAt: new Date().toISOString() });
+      },
+      sendPrepare: (songId) => {
+        if (roomId === null) return;
+        publish(`/app/rooms/${roomId}/performance/prepare`, { songId });
+      },
+      sendPlaybackStart: () => {
+        const performanceId = currentPerformanceId();
+        if (roomId === null || performanceId === null) return;
+        publish(`/app/rooms/${roomId}/performances/${performanceId}/playback/start`);
+      },
+      sendPlaybackFinish: () => {
+        const performanceId = currentPerformanceId();
+        if (roomId === null || performanceId === null) return;
+        publish(`/app/rooms/${roomId}/performances/${performanceId}/playback/finish`);
+      },
+      sendSettings: (settings) => {
+        const performanceId = currentPerformanceId();
+        if (roomId === null || performanceId === null) return;
+        publish(`/app/rooms/${roomId}/performances/${performanceId}/settings`, settings);
+      },
+      sendCancel: () => {
+        const performanceId = currentPerformanceId();
+        if (roomId === null || performanceId === null) return;
+        publish(`/app/rooms/${roomId}/performances/${performanceId}/cancel`);
+      },
+    };
+  }, [roomId, isConnected, latencyMs]);
+}

@@ -18,10 +18,22 @@
   --color-neon-pink: var(--neon-pink);
   --color-neon-cyan: var(--neon-cyan);
   --color-neon-purple: var(--neon-purple);
-  --font-sans: var(--font-tj-joy);
+  --font-sans: var(--font-anybody);
+  --font-mono: var(--font-jetbrains-mono);
+  --animate-latency-bar: latency-bar 1.8s ease-in-out infinite;
   --animate-ticker: ticker-scroll 18s linear infinite;
   --animate-toast-in: toast-in 0.35s ease-out both;
   --animate-toast-out: toast-out 0.32s ease-in both;
+}
+
+@keyframes latency-bar {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.4);
+  }
 }
 
 @keyframes ticker-scroll {
@@ -119,5 +131,9 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .animate-latency-bar {
+    animation: none !important;
   }
 }
