@@ -28,7 +28,7 @@ public class UserPerformanceStat {
     @Column(name = "total", nullable = false)
     private Long total;
 
-    @Column(name = "avg_score", nullable = false, precision = 3, scale = 1)
+    @Column(name = "avg_score", nullable = false, precision = 4, scale = 1)
     private BigDecimal avgScore;
 
     @LastModifiedDate
