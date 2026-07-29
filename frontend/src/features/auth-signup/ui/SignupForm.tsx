@@ -76,7 +76,7 @@ export function SignupForm({
       </button>
 
       <Link
-        href="/"
+        href="/login"
         className="mx-auto mt-7 flex w-fit items-center justify-center text-xs tracking-[0.2em] text-neon-cyan hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neon-cyan"
       >
         {SIGNUP_COPY.returnToLogin}

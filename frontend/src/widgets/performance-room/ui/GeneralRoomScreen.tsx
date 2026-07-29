@@ -40,7 +40,7 @@ export function GeneralRoomScreen() {
   useEffect(() => {
     if (session === null) {
       showToast('방 정보가 없습니다. 다시 입장해 주세요.', 'error');
-      router.replace('/');
+      router.replace('/loby');
     }
   }, [session, router]);
 
@@ -69,7 +69,7 @@ export function GeneralRoomScreen() {
         if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
           showToast(error.message, 'error');
           useRoomStore.getState().leaveRoom();
-          router.replace('/');
+          router.replace('/loby');
           return;
         }
 
@@ -130,7 +130,7 @@ export function GeneralRoomScreen() {
     } finally {
       endStage();
       leaveRoomStore();
-      router.push('/');
+      router.push('/loby');
     }
   };
 
