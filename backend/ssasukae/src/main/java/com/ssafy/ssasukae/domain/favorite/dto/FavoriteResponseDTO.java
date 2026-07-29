@@ -28,4 +28,13 @@ public class FavoriteResponseDTO {
         String thumbnailUrl;
         LocalDateTime favoritedAt;
     }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class SimpleFavoriteDTO {
+        Integer count;
+        List<SongItemDTO> items;
+    }
 }
