@@ -1,8 +1,9 @@
 package com.ssafy.ssasukae.domain.performance.service;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.IntStream;
 
 import org.springframework.stereotype.Service;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardEntry;
 import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardStore;
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.rest.request.AiAnalysisFailureRequest;
@@ -41,12 +43,13 @@ public class PerformanceAnalysisService {
   private static final BigDecimal MIN_SCORE = BigDecimal.ZERO;
   private static final BigDecimal MAX_SCORE = BigDecimal.valueOf(100);
   private static final int MAX_SCORE_SCALE = 2;
-  private static final int MAX_FEEDBACK_LENGTH = 5000;
 
   private final RoomRepository roomRepository;
   private final SongRepository songRepository;
   private final UserRepository userRepository;
   private final PerformanceStore performanceStore;
+  private final PerformanceRecoveryProperties recoveryProperties;
+  private final Clock clock;
   private final PerformanceTransactionSupport transactionSupport;
   private final RoomLeaderboardStore roomLeaderboardStore;
   private final PerformanceResultRepository performanceResultRepository;
@@ -66,6 +69,7 @@ public class PerformanceAnalysisService {
     // 그러다가 앞선 요청에서 공연 분석 종료를 하고 공연을 끝내면, 여기서 두번째 요청은 그대로 종료함
     PerformanceSnapShot analyzing = getAnalyzingSnapShot(performanceId);
     validateRoomPlaying(room);
+    validateAnalysisDeadline(analyzing);
 
     /**
      * 사용자, 노래 정합성 검사
@@ -126,6 +130,7 @@ public class PerformanceAnalysisService {
         () -> {
           // 공연 삭제
           transactionSupport.deletePerformance(finished);
+          transactionSupport.deleteRecoveryDeadline(finished.performanceId());
 
           // 새로운 리더보드 이벤트 발행
           eventPublisher.publish(
@@ -150,6 +155,7 @@ public class PerformanceAnalysisService {
 
     PerformanceSnapShot analyzing = getAnalyzingSnapShot(performanceId);
     validateRoomPlaying(room);
+    validateAnalysisDeadline(analyzing);
 
     PerformanceSnapShot failed;
     try {
@@ -166,6 +172,7 @@ public class PerformanceAnalysisService {
     transactionSupport.afterCommit(
         () -> {
           transactionSupport.deletePerformance(failed);
+          transactionSupport.deleteRecoveryDeadline(failed.performanceId());
           eventPublisher.publish(
               room.getId(),
               PerformanceWebSocketEventType.PERFORMANCE_STATE_CHANGED,
@@ -200,6 +207,18 @@ public class PerformanceAnalysisService {
   private void validateRoomPlaying(Room room) {
     if (room.getStatus() != RoomStatus.PLAYING) {
       throw new CustomException(PerformanceAnalysisErrorCode.INVALID_ROOM_STATE);
+    }
+  }
+
+  private void validateAnalysisDeadline(PerformanceSnapShot analyzing) {
+    Instant deadline =
+        analyzing
+            .playbackFinishedAt()
+            .toInstant()
+            .plus(recoveryProperties.getAnalysisTimeout());
+
+    if (!Instant.now(clock).isBefore(deadline)) {
+      throw new CustomException(PerformanceAnalysisErrorCode.ANALYSIS_DEADLINE_EXPIRED);
     }
   }
 

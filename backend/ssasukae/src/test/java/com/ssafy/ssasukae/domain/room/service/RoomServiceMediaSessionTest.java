@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomJoinResponse;
@@ -44,13 +45,19 @@ class RoomServiceMediaSessionTest {
   @Mock private RoomParticipantRepository roomParticipantRepository;
   @Mock private UserRepository userRepository;
   @Mock private MediaSessionGateway mediaSessionGateway;
+  @Mock private PerformanceRecoveryService performanceRecoveryService;
 
   private RoomService roomService;
 
   @BeforeEach
   void setUp() {
     roomService =
-        new RoomService(roomRepository, roomParticipantRepository, userRepository, mediaSessionGateway);
+        new RoomService(
+            roomRepository,
+            roomParticipantRepository,
+            userRepository,
+            mediaSessionGateway,
+            performanceRecoveryService);
   }
 
   @Test
@@ -184,6 +191,21 @@ class RoomServiceMediaSessionTest {
         .isInstanceOf(CustomException.class)
         .hasMessage("방장만 수행할 수 있는 요청입니다.");
     verifyNoInteractions(mediaSessionGateway);
+  }
+
+  @Test
+  @DisplayName("참가자가 명시적으로 방을 나가면 진행 중인 가창 공연 복구를 요청한다")
+  void leaveRoomRequestsPerformanceRecovery() {
+    Room room = room(10L, "openvidu-session-1");
+    RoomParticipant participant = participant(room, 100L, ConnectionStatus.CONNECTED);
+    when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByRoomIdAndUserId(10L, 2L))
+        .thenReturn(Optional.of(participant));
+
+    roomService.leaveRoom(2L, 10L);
+
+    assertThat(participant.isActive()).isFalse();
+    verify(performanceRecoveryService).recoverPerformerExitCase(10L, 2L);
   }
 
   private User user(Long id) {
