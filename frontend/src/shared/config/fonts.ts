@@ -21,6 +21,7 @@ export const jetBrainsMono = localFont({
   src: '../assets/fonts/JetBrainsMono-Variable.ttf',
   weight: '100 800',
   style: 'normal',
+  variable: '--font-jetbrains-mono',
   display: 'swap',
 });
 
