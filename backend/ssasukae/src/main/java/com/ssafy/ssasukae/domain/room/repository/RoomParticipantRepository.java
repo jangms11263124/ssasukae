@@ -1,5 +1,6 @@
 package com.ssafy.ssasukae.domain.room.repository;
 
+import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 
@@ -40,4 +41,6 @@ public interface RoomParticipantRepository extends JpaRepository<RoomParticipant
             Long userId,
             Collection<ConnectionStatus> connectionStatuses
     );
+
+    List<RoomParticipant> findRoomParticipantsByRoom(Room room);
 }
