@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
 import com.ssafy.ssasukae.domain.room.dto.RoomSnapshotResponse;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
@@ -46,6 +47,7 @@ class RoomInfoGetTest {
   @Mock private RoomParticipantRepository roomParticipantRepository;
   @Mock private UserRepository userRepository;
   @Mock private MediaSessionGateway mediaSessionGateway;
+  @Mock private PerformanceRecoveryService performanceRecoveryService;
 
   private RoomService roomService;
 
@@ -56,7 +58,8 @@ class RoomInfoGetTest {
             roomRepository,
             roomParticipantRepository,
             userRepository,
-            mediaSessionGateway);
+            mediaSessionGateway,
+            performanceRecoveryService);
   }
 
   @Test

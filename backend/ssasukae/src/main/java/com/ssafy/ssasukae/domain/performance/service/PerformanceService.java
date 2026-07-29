@@ -8,13 +8,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSettings;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceCancelReason;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventPublisher;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventType;
-import com.ssafy.ssasukae.domain.performance.websocket.payload.PerformanceCancelledPayload;
 import com.ssafy.ssasukae.domain.performance.websocket.payload.PerformancePreparationStartedPayload;
 import com.ssafy.ssasukae.domain.performance.websocket.payload.PerformanceSettingsChangedPayload;
 import com.ssafy.ssasukae.domain.performance.websocket.payload.PerformanceSettingsPayload;
@@ -47,7 +48,10 @@ public class PerformanceService {
   private final RoomParticipantRepository roomParticipantRepository;
   private final SongRepository songRepository;
   private final PerformanceStore performanceStore;
+  private final PerformanceRecoveryDeadlineStore recoveryDeadlineStore;
+  private final PerformanceRecoveryProperties recoveryProperties;
   private final PerformanceTransactionSupport transactionSupport;
+  private final PerformanceCancellationProcessor cancellationProcessor;
   private final S3StorageService s3StorageService;
   private final PerformanceWebSocketEventPublisher eventPublisher;
 
@@ -169,6 +173,11 @@ public class PerformanceService {
     }
 
     transactionSupport.saveWithRollback(previous, changed);
+    recoveryDeadlineStore.save(
+        changed.performanceId(),
+        changed.playbackFinishedAt().toInstant().plus(recoveryProperties.getAnalysisTimeout()));
+    transactionSupport.restoreOnRollback(
+        () -> recoveryDeadlineStore.delete(changed.performanceId()));
 
     transactionSupport.afterCommit(
         () ->
@@ -232,33 +241,12 @@ public class PerformanceService {
 
     PerformanceSnapShot previous = getValidatedSnapShot(roomId, performanceId, userId);
 
-    PerformanceSnapShot cancelled;
-
     try {
-      cancelled = previous.cancel();
+      cancellationProcessor.cancel(
+          room, previous, PerformanceCancelReason.PERFORMER_REQUEST);
     } catch (IllegalStateException exception) {
       throw invalidPerformanceState(exception);
     }
-
-    transactionSupport.saveWithRollback(previous, cancelled);
-
-    room.cancelPerformance();
-
-    transactionSupport.afterCommit(
-        () -> {
-          transactionSupport.deletePerformance(cancelled);
-
-          eventPublisher.publish(
-              roomId,
-              PerformanceWebSocketEventType.PERFORMANCE_CANCELLED,
-              new PerformanceCancelledPayload(
-                  cancelled.performanceId(),
-                  cancelled.performerParticipantId(),
-                  previous.status(),
-                  cancelled.status(),
-                  RoomStatus.PREPARING,
-                  PerformanceCancelReason.PERFORMER_REQUEST));
-        });
   }
 
   private Room validatePlayingRoomAndPerformer(Long userId, Long roomId) {
