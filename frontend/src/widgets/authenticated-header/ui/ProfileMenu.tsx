@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { useAuth } from '@/entities/user';
+import { useLogoutMutation } from '@/features/auth-logout';
 import { showToast } from '@/shared/model/toastStore';
 
 function ChevronRightIcon() {
@@ -43,7 +44,8 @@ function LogoutIcon() {
 }
 
 export function ProfileMenu() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const { mutateAsync: logout } = useLogoutMutation();
   const router = useRouter();
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
@@ -81,12 +83,15 @@ export function ProfileMenu() {
 
   const handleLogout = async () => {
     setIsOpen(false);
+
     try {
       await logout();
-      router.replace('/');
     } catch {
       showToast('로그아웃에 실패했습니다', 'error');
     }
+
+    // 요청이 실패해도 onSettled에서 로컬 세션은 정리되므로 홈으로 이동시킨다
+    router.replace('/');
   };
 
   const nickname = user?.nickname ?? '사용자';
