@@ -8,6 +8,7 @@ import com.ssafy.ssasukae.domain.performanceResult.entity.PerformanceResult;
 import com.ssafy.ssasukae.domain.performanceResult.repository.PerformanceResultRepository;
 import com.ssafy.ssasukae.domain.song.entity.Song;
 import com.ssafy.ssasukae.domain.user.dto.MyPageResponse;
+import com.ssafy.ssasukae.domain.user.dto.NicknameRequest;
 import com.ssafy.ssasukae.domain.user.dto.PerformanceStatResponse;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.entity.UserPerformanceStat;
@@ -70,6 +71,7 @@ public class UserService {
                 .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
     }
 
+    @Transactional
     public MyPageResponse getMyPage(AuthenticatedUser authenticatedUser) {
         User user = userRepository.findById(authenticatedUser.userId()).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
         int favoritesCnt = favoriteRepository.countByUser(user);
@@ -116,6 +118,18 @@ public class UserService {
         return !userRepository.existsByNickname(nickname);
     }
 
+    @Transactional
+    public void changeNickname(AuthenticatedUser authenticatedUser, NicknameRequest requestBody) {
+        User user = findById(authenticatedUser.userId());
+        String request = requestBody.getNickname().trim();
+        if(request.isEmpty()) throw new CustomException(UserErrorCode.NICKNAME_REQUIRED);
+        if(!isNicknameAvailable(request)) throw new CustomException(UserErrorCode.NICKNAME_DUPLICATED);
+
+        user.updateNickname(request);
+        userRepository.save(user);
+    }
+
+    @Transactional
     public PerformanceStatResponse refreshPerformanceStat(AuthenticatedUser authenticatedUser) {
         User user = userRepository.findById(authenticatedUser.userId()).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
         UserPerformanceStat beforeStat = userPerformanceStatRepository.findByUser(user).orElseGet(() ->
