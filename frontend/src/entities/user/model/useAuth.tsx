@@ -11,7 +11,6 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { useLogoutMutation } from '@/features/auth-logout/api/useLogoutMutation';
 import { useAuthStore } from '@/shared/model/authStore';
 
 import { refreshAccessToken } from '../api/authApi';
@@ -24,14 +23,12 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   loginWithAccessToken: (accessToken: string, user?: User) => Promise<void>;
-  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const logoutMutation = useLogoutMutation();
   const [isBootstrapped, setIsBootstrapped] = useState(false);
   const accessToken = useAuthStore((state) => state.accessToken);
   const setAccessToken = useAuthStore((state) => state.setAccessToken);
@@ -108,10 +105,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient, setAccessToken],
   );
 
-  const logout = useCallback(async () => {
-    await logoutMutation.mutateAsync();
-  }, [logoutMutation]);
-
   const isLoading = !isBootstrapped || (hasSession && userQuery.isLoading);
   const user = userQuery.data ?? null;
 
@@ -121,9 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: hasSession && user !== null,
       isLoading,
       loginWithAccessToken,
-      logout,
     }),
-    [user, hasSession, isLoading, loginWithAccessToken, logout],
+    [user, hasSession, isLoading, loginWithAccessToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
