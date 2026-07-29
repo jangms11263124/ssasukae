@@ -30,6 +30,10 @@ export function usePointerPosition<T extends HTMLElement>() {
 
   const handlePointerMove = useCallback(
     (event: React.PointerEvent<T>) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        return;
+      }
+
       updatePosition(event.clientX, event.clientY);
       setIsActive(true);
     },
@@ -43,7 +47,18 @@ export function usePointerPosition<T extends HTMLElement>() {
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (media.matches) setIsActive(false);
+
+    const handlePreferenceChange = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        setIsActive(false);
+      }
+    };
+
+    media.addEventListener('change', handlePreferenceChange);
+
+    return () => {
+      media.removeEventListener('change', handlePreferenceChange);
+    };
   }, []);
 
   return {
