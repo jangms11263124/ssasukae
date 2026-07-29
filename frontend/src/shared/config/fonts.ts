@@ -1,8 +1,26 @@
 import localFont from 'next/font/local';
-import { JetBrains_Mono } from 'next/font/google';
 
-export const jetBrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
+export const anybody = localFont({
+  src: [
+    {
+      path: '../assets/fonts/Anybody-Variable.ttf',
+      weight: '100 900',
+      style: 'normal',
+    },
+    {
+      path: '../assets/fonts/Anybody-Italic-Variable.ttf',
+      weight: '100 900',
+      style: 'italic',
+    },
+  ],
+  variable: '--font-anybody',
+  display: 'swap',
+});
+
+export const jetBrainsMono = localFont({
+  src: '../assets/fonts/JetBrainsMono-Variable.ttf',
+  weight: '100 800',
+  style: 'normal',
   display: 'swap',
 });
 
