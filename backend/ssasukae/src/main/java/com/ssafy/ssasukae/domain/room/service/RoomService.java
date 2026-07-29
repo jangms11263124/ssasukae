@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomJoinResponse;
@@ -42,6 +43,7 @@ public class RoomService {
     private final RoomParticipantRepository roomParticipantRepository;
     private final UserRepository userRepository;
     private final MediaSessionGateway mediaSessionGateway;
+    private final PerformanceRecoveryService performanceRecoveryService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -193,6 +195,7 @@ public class RoomService {
         }
 
         participant.leave(LocalDateTime.now());
+        performanceRecoveryService.recoverPerformerExitCase(roomId, userId);
     }
 
     private User getUser(Long userId) {

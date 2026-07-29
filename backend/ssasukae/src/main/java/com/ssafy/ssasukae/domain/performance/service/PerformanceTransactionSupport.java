@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 
@@ -16,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PerformanceTransactionSupport {
 
   private final PerformanceStore performanceStore;
+  private final PerformanceRecoveryDeadlineStore recoveryDeadlineStore;
 
   public void saveWithRollback(PerformanceSnapShot previous, PerformanceSnapShot changed) {
     // 일단 현재 상태를 저장
@@ -30,6 +32,15 @@ public class PerformanceTransactionSupport {
       performanceStore.delete(snapShot);
     } catch (RuntimeException exception) {
       log.error("공연 Redis 스냅샷 삭제에 실패했습니다. performanceId={}", snapShot.performanceId(), exception);
+    }
+  }
+
+  // 공연 복구 정보 삭제
+  public void deleteRecoveryDeadline(Long performanceId) {
+    try {
+      recoveryDeadlineStore.delete(performanceId);
+    } catch (RuntimeException exception) {
+      log.error("공연 복구 마감 정보 삭제에 실패했습니다. performanceId={}", performanceId, exception);
     }
   }
 

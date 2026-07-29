@@ -66,6 +66,13 @@ management:
 ai:
   internal-api-key: ${AI_INTERNAL_API_KEY:}
 
+performance:
+  recovery:
+    performer-disconnect-grace: 15s
+    analysis-timeout: 2m
+    scan-delay: 1s
+    batch-size: 100
+
 jwt:
   secret: ${JWT_SECRET}
   access-token-expiration: 600000      # 10분

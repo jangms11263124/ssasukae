@@ -126,6 +126,16 @@ public class Room {
         status = RoomStatus.PREPARING;
     }
 
+    /**
+     * 비정상 종료된 공연으로 인해 방이 PLAYING에 고정되지 않도록 복구한다.
+     * 이미 PREPARING이거나 방 자체가 종료된 경우에는 중복 요청으로 보고 아무 작업도 하지 않는다.
+     */
+    public void recoverPerformance() {
+        if (status == RoomStatus.PLAYING) {
+            status = RoomStatus.PREPARING;
+        }
+    }
+
     public void delegateHost(User newHost) {
         if (status == RoomStatus.TERMINATED) {
             throw new CustomException(RoomErrorCode.ROOM_CLOSED);
