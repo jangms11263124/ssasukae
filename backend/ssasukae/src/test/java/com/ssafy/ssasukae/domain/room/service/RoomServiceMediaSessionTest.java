@@ -28,6 +28,7 @@ import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
 import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +47,7 @@ class RoomServiceMediaSessionTest {
   @Mock private UserRepository userRepository;
   @Mock private MediaSessionGateway mediaSessionGateway;
   @Mock private PerformanceRecoveryService performanceRecoveryService;
+  @Mock private WebSocketEventPublisher webSocketEventPublisher;
 
   private RoomService roomService;
 
@@ -57,7 +59,8 @@ class RoomServiceMediaSessionTest {
             roomParticipantRepository,
             userRepository,
             mediaSessionGateway,
-            performanceRecoveryService);
+            performanceRecoveryService,
+            webSocketEventPublisher);
   }
 
   @Test
