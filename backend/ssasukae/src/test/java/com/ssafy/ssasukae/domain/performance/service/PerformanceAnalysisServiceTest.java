@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -138,7 +137,7 @@ class PerformanceAnalysisServiceTest {
             song.getTitle(),
             request.finalScore());
     RoomLeaderboardEntry previous =
-        new RoomLeaderboardEntry(29L, 99L, "이전 참가자", 19L, "이전 곡", new BigDecimal("80.00"));
+        new RoomLeaderboardEntry(29L, 99L, "이전 참가자", 19L, "이전 곡", 80);
 
     when(roomLeaderboardStore.saveAndGetRanked(ROOM_ID, updated))
         .thenReturn(List.of(updated, previous));
@@ -154,7 +153,7 @@ class PerformanceAnalysisServiceTest {
     PerformanceResult result = resultCaptor.getValue();
     assertThat(result.getSong()).isSameAs(song);
     assertThat(result.getUser()).isSameAs(performer);
-    assertThat(result.getFinalScore()).isEqualByComparingTo("92.10");
+    assertThat(result.getFinalScore()).isEqualTo(92);
 
     ArgumentCaptor<PerformanceSnapShot> snapshotCaptor =
         ArgumentCaptor.forClass(PerformanceSnapShot.class);
@@ -177,9 +176,9 @@ class PerformanceAnalysisServiceTest {
                 performer.getNickname(),
                 SONG_ID,
                 song.getTitle(),
-                new BigDecimal("92.10")),
+                92),
             new LeaderboardItemPayload(
-                2, 29L, 99L, "이전 참가자", 19L, "이전 곡", new BigDecimal("80.00")));
+                2, 29L, 99L, "이전 참가자", 19L, "이전 곡", 80));
 
     InOrder order = inOrder(performanceStore, eventPublisher);
     order.verify(performanceStore).delete(finished);
@@ -188,7 +187,7 @@ class PerformanceAnalysisServiceTest {
         .publish(
             ROOM_ID,
             PerformanceWebSocketEventType.LEADERBOARD_UPDATED,
-            new LeaderboardUpdatedPayload(PERFORMANCE_ID, new BigDecimal("92.10"), items));
+            new LeaderboardUpdatedPayload(PERFORMANCE_ID, 92, items));
     order
         .verify(eventPublisher)
         .publish(
@@ -203,11 +202,11 @@ class PerformanceAnalysisServiceTest {
   void completeAnalysisRejectsInvalidScore() {
     AiAnalysisSuccessRequest invalidRequest =
         new AiAnalysisSuccessRequest(
-            new BigDecimal("101.00"),
-            new BigDecimal("91.20"),
-            new BigDecimal("94.30"),
+            101,
+            91,
+            94,
             null,
-            new BigDecimal("92.10"));
+            92);
 
     assertAnalysisError(
         PerformanceAnalysisErrorCode.INVALID_SCORE_RANGE,
@@ -369,11 +368,11 @@ class PerformanceAnalysisServiceTest {
 
   private AiAnalysisSuccessRequest scoreRequest() {
     return new AiAnalysisSuccessRequest(
-        new BigDecimal("90.40"),
-        new BigDecimal("91.20"),
-        new BigDecimal("94.30"),
-        new BigDecimal("88.50"),
-        new BigDecimal("92.10"));
+        90,
+        91,
+        94,
+        88,
+        92);
   }
 
   private void assertAnalysisError(
