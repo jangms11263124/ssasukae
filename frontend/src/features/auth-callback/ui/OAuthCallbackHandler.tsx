@@ -25,7 +25,7 @@ export function OAuthCallbackHandler() {
       try {
         await loginWithAccessToken(token);
         if (!cancelled) {
-          router.replace('/loby');
+          router.replace('/lobby');
         }
       } catch {
         if (!cancelled) {
