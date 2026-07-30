@@ -10,7 +10,6 @@ import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
 public record ActiveCardSnapshotResponse(
     Long performanceId,
     RoomCardStatus roomCardStatus,
-    Long cardAssignmentId,
     Long sourceParticipantId,
     Long targetParticipantId,
     String cardImageUrl,
@@ -27,7 +26,6 @@ public record ActiveCardSnapshotResponse(
     return new ActiveCardSnapshotResponse(
         roomCard.performanceId(),
         roomCard.status(),
-        roomCard.cardAssignmentId(),
         roomCard.sourceParticipantId(),
         roomCard.targetParticipantId(),
         assignment.cardImageUrl(),
