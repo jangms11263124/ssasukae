@@ -35,3 +35,44 @@ export interface SignupTokenClaims {
 export interface NicknameCheckResponse {
   available: boolean;
 }
+
+export type OAuthProvider = 'GOOGLE' | 'KAKAO';
+
+export interface FavoriteSongItem {
+  songId: number;
+  title: string;
+  artist: string;
+  thumbnailUrl: string | null;
+}
+
+export interface RecentPerformance {
+  performanceId: number;
+  title: string;
+  artist: string;
+  thumbnailUrl: string | null;
+  score: number;
+  /** 서버 LocalDateTime — "2026-07-22T14:59:27.965355" (오프셋 없음) */
+  performanceAt: string;
+}
+
+export interface MyPageResponse {
+  userId: number;
+  nickname: string;
+  provider: OAuthProvider;
+  email: string;
+  profileImageUrl: string | null;
+  createdAt: string;
+  favorites: {
+    count: number;
+    items: FavoriteSongItem[];
+  };
+  recentPerformances: RecentPerformance[];
+}
+
+export interface PerformanceStatResponse {
+  avgScore: number;
+  /** 이전 대비 증감. 디자인상 퍼센트로 표기한다 */
+  difference: number;
+  totalSongs: number;
+  updatedAt: string;
+}

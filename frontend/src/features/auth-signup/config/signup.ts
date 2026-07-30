@@ -23,4 +23,5 @@ export const SIGNUP_ERROR_COPY = {
   default: '회원가입에 실패했습니다. 다시 시도해 주세요.',
 } as const;
 
-export const NICKNAME_MAX_LENGTH = 20;
+// 닉네임 길이 규칙은 마이페이지 수정과 공유하므로 entities/user가 단일 출처다.
+export { NICKNAME_MAX_LENGTH } from '@/entities/user';
