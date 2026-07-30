@@ -8,7 +8,6 @@ import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
 
 public record CardEffectEndedPayload(
     Long performanceId,
-    Long cardAssignmentId,
     Long sourceParticipantId,
     Long targetParticipantId,
     CardEffectTargetType targetType,
