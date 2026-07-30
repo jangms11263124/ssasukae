@@ -18,7 +18,7 @@ public class PerformanceResponseDTO {
         String title;
         String artist;
         String thumbnailUrl;
-        BigDecimal score;
+        Integer score;
         LocalDateTime performanceAt;
     }
 }

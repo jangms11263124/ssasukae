@@ -1,6 +1,5 @@
 package com.ssafy.ssasukae.domain.performanceResult.entity;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import com.ssafy.ssasukae.domain.song.entity.Song;
@@ -17,14 +16,18 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
-import lombok.Getter;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 @Entity
 @Table(name = "performance_results")
 @EntityListeners(AuditingEntityListener.class)
-@Getter
+@Data
+@Builder
+@AllArgsConstructor
 public class PerformanceResult {
 
   protected PerformanceResult() {}
@@ -52,37 +55,55 @@ public class PerformanceResult {
    * 음정 점수
    */
   @Column(name = "pitch_score", nullable = false, precision = 5, scale = 2)
-  private BigDecimal pitchScore;
+  private Integer pitchScore;
 
   /**
    * 박자 점수
    */
   @Column(name = "rhythm_score", nullable = false, precision = 5, scale = 2)
-  private BigDecimal rhythmScore;
+  private Integer rhythmScore;
 
   /**
    * 가사 정확도 점수
    */
   @Column(name = "lyrics_score", nullable = false, precision = 5, scale = 2)
-  private BigDecimal lyricsScore;
+  private Integer lyricsScore;
 
   /**
    * 음정 또는 발성 안정성 점수
    */
   @Column(name = "stability_score", precision = 5, scale = 2)
-  private BigDecimal stabilityScore;
+  private Integer stabilityScore;
 
   /**
    * 최종 종합 점수
    */
   @Column(name = "final_score", nullable = false, precision = 5, scale = 2)
-  private BigDecimal finalScore;
+  private Integer finalScore;
 
   /**
    * 공연 결과에 대한 피드백
    */
-  @Column(name = "feedback",  nullable = true, columnDefinition = "TEXT")
-  private String feedback;
+  @Column(name = "overall",  nullable = true, columnDefinition = "TEXT")
+  private String overall;
+
+  /**
+   * 공연 결과에 대한 피드백
+   */
+  @Column(name = "strength",  nullable = true, columnDefinition = "TEXT")
+  private String strength;
+
+  /**
+   * 공연 결과에 대한 피드백
+   */
+  @Column(name = "weakness",  nullable = true, columnDefinition = "TEXT")
+  private String weakness;
+
+  /**
+   * 공연 결과에 대한 피드백
+   */
+  @Column(name = "tip",  nullable = true, columnDefinition = "TEXT")
+  private String tip;
 
   /**
    * 공연 결과 생성 일시
@@ -94,11 +115,11 @@ public class PerformanceResult {
   private PerformanceResult(
           Song song,
           User user,
-          BigDecimal pitchScore,
-          BigDecimal rhythmScore,
-          BigDecimal lyricsScore,
-          BigDecimal stabilityScore,
-          BigDecimal finalScore) {
+          Integer pitchScore,
+          Integer rhythmScore,
+          Integer lyricsScore,
+          Integer stabilityScore,
+          Integer finalScore) {
     this.song = song;
     this.user = user;
     this.pitchScore = pitchScore;
@@ -114,11 +135,11 @@ public class PerformanceResult {
   public static PerformanceResult create(
           Song song,
           User user,
-          BigDecimal pitchScore,
-          BigDecimal rhythmScore,
-          BigDecimal lyricsScore,
-          BigDecimal stabilityScore,
-          BigDecimal finalScore) {
+          Integer pitchScore,
+          Integer rhythmScore,
+          Integer lyricsScore,
+          Integer stabilityScore,
+          Integer finalScore) {
     return new PerformanceResult(
             song,
             user,

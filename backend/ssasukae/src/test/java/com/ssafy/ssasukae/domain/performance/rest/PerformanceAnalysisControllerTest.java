@@ -3,8 +3,6 @@ package com.ssafy.ssasukae.domain.performance.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.inOrder;
 
-import java.math.BigDecimal;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,11 +40,11 @@ class PerformanceAnalysisControllerTest {
   void reportScoreResultAuthenticatesBeforeProcessing() {
     AiAnalysisSuccessRequest request =
         new AiAnalysisSuccessRequest(
-            new BigDecimal("90.00"),
-            new BigDecimal("90.00"),
-            new BigDecimal("90.00"),
+            90,
+            90,
+            90,
             null,
-            new BigDecimal("90.00"));
+            90);
 
     ResponseEntity<Void> response = controller.reportAnalysisSuccess(PERFORMANCE_ID, API_KEY, request);
 
