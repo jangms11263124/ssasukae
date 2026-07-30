@@ -33,3 +33,14 @@ app:
     redirect-uri: https://ssafystar-k.site/oauth/callback
     signup-redirect-uri: https://ssafystar-k.site/signup
     failure-redirect-uri: https://ssafystar-k.site/login-error
+
+management:
+  server:
+    port: 9292
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+  endpoint:
+    health:
+      show-details: never
