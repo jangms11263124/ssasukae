@@ -2,11 +2,11 @@
 
 import type { MediaDeviceOption } from '@/entities/media-device';
 import { NeonSelect } from '@/shared/ui/select/NeonSelect';
+import { ActionButton } from '@/shared/ui/button/ActionButton';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
 import { toSelectOptions } from '../lib/toSelectOptions';
 import { useAudioOutputTest } from '../model/useAudioOutputTest';
-import { ActionButton } from './ActionButton';
 import { SpeakerIcon, VolumeIcon } from './icons';
 import { VolumeSlider } from './VolumeSlider';
 

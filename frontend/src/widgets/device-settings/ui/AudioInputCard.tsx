@@ -3,6 +3,7 @@
 import type { MediaDeviceOption } from '@/entities/media-device';
 import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
+import { ActionButton } from '@/shared/ui/button/ActionButton';
 import { NeonSelect } from '@/shared/ui/select/NeonSelect';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
@@ -13,7 +14,6 @@ import {
   useMicrophoneTest,
   type MicrophoneTestPhase,
 } from '../model/useMicrophoneTest';
-import { ActionButton } from './ActionButton';
 import { InputLevelMeter } from './InputLevelMeter';
 import { MicrophoneIcon } from './icons';
 import { RecordingProgressBar } from './RecordingProgressBar';
