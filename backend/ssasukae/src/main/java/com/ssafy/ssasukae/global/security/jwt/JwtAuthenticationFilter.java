@@ -7,6 +7,9 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import lombok.RequiredArgsConstructor;
 
+import com.ssafy.ssasukae.global.logging.LogMdcKeys;
+
+import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -37,10 +40,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = resolveToken(request);
 
-        if (token != null
-                && jwtTokenProvider.validateToken(token)
-                && !tokenBlacklistService.isBlacklisted(jwtTokenProvider.getJti(token))
-                && activeSessionService.isActiveSession(jwtTokenProvider.getUserId(token), jwtTokenProvider.getSid(token))) {
+        if (token == null) {
+            MDC.put(LogMdcKeys.ERROR_CODE, "NO_TOKEN");
+        } else if (!jwtTokenProvider.validateToken(token)) {
+            MDC.put(LogMdcKeys.ERROR_CODE, "INVALID_TOKEN");
+        } else if (tokenBlacklistService.isBlacklisted(jwtTokenProvider.getJti(token))) {
+            MDC.put(LogMdcKeys.ERROR_CODE, "TOKEN_BLACKLISTED");
+        } else if (!activeSessionService.isActiveSession(jwtTokenProvider.getUserId(token), jwtTokenProvider.getSid(token))) {
+            MDC.put(LogMdcKeys.ERROR_CODE, "SESSION_INACTIVE");
+        } else {
             AuthenticatedUser authenticatedUser = new AuthenticatedUser(
                     jwtTokenProvider.getUserId(token),
                     jwtTokenProvider.getEmail(token),

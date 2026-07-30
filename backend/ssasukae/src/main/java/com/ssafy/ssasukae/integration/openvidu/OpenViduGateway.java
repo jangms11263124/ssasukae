@@ -1,5 +1,8 @@
 package com.ssafy.ssasukae.integration.openvidu;
 
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
+
 import io.openvidu.java.client.*;
 
 import lombok.RequiredArgsConstructor;
@@ -20,7 +23,7 @@ public class OpenViduGateway implements MediaSessionGateway {
             Session session = openVidu.createSession(new SessionProperties.Builder().build());
             return session.getSessionId();
         } catch (OpenViduJavaClientException | OpenViduHttpException e) {
-            throw new IllegalStateException("OpenVidu 세션 생성에 실패했습니다.", e);
+            throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
         }
     }
 
@@ -38,7 +41,7 @@ public class OpenViduGateway implements MediaSessionGateway {
             Connection connection = session.createConnection(properties);
             return connection.getToken();
         } catch (OpenViduJavaClientException | OpenViduHttpException e) {
-            throw new IllegalStateException("OpenVidu 토큰 발급에 실패했습니다.", e);
+            throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
         }
     }
 
@@ -48,7 +51,7 @@ public class OpenViduGateway implements MediaSessionGateway {
             Session session = findActiveSession(sessionId);
             session.close();
         } catch (OpenViduJavaClientException | OpenViduHttpException e) {
-            throw new IllegalStateException("OpenVidu 세션 종료에 실패했습니다.", e);
+            throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
         }
     }
 
@@ -59,6 +62,6 @@ public class OpenViduGateway implements MediaSessionGateway {
         return openVidu.getActiveSessions().stream()
                 .filter(session -> Objects.equals(session.getSessionId(), sessionId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("OpenVidu 세션을 찾을 수 없습니다. sessionId=" + sessionId));
+                .orElseThrow(() -> new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED));
     }
 }

@@ -12,11 +12,14 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
 
 openvidu:
   url: ${OPENVIDU_URL}
   secret: ${OPENVIDU_SECRET}
+
+logging:
+  level:
+    org.hibernate.SQL: off # N+1 등 디버깅할 때만 debug로 바꿔서 확인
 
 app:
   cors:

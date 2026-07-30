@@ -17,6 +17,10 @@ spring:
       ddl-auto: update
     show-sql: false
 
+logging:
+  level:
+    org.hibernate.SQL: off # logging.level.root를 debug로 올려도 SQL이 새지 않도록 명시적으로 차단
+
 openvidu:
   url: ${OPENVIDU_URL}
   secret: ${OPENVIDU_SECRET}

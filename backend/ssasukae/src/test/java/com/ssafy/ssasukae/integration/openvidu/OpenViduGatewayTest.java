@@ -8,6 +8,9 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
+
 import io.openvidu.java.client.Connection;
 import io.openvidu.java.client.ConnectionProperties;
 import io.openvidu.java.client.OpenVidu;
@@ -74,8 +77,8 @@ class OpenViduGatewayTest {
 
     // when & then
     assertThatThrownBy(() -> openViduGateway.createConnectionToken("openvidu-session-1", 100L))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("openvidu-session-1");
+        .isInstanceOf(CustomException.class)
+        .hasMessage(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED.getMessage());
   }
 
   @Test
@@ -100,7 +103,7 @@ class OpenViduGatewayTest {
 
     // when & then
     assertThatThrownBy(() -> openViduGateway.closeSession("openvidu-session-1"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("openvidu-session-1");
+        .isInstanceOf(CustomException.class)
+        .hasMessage(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED.getMessage());
   }
 }

@@ -30,7 +30,11 @@ public enum RoomErrorCode implements BaseErrorCode {
     PARTICIPANT_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 참가자입니다."),
     ALREADY_JOINED(HttpStatus.CONFLICT, "이미 참가 중인 방입니다."),
     ALREADY_IN_ANOTHER_ROOM(HttpStatus.CONFLICT, "이미 다른 방에 참여 중입니다."),
-    HOST_ONLY(HttpStatus.FORBIDDEN, "방장만 수행할 수 있는 요청입니다.");
+    HOST_ONLY(HttpStatus.FORBIDDEN, "방장만 수행할 수 있는 요청입니다."),
+
+    // 인프라 연동 실패
+    INVITE_CODE_GENERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "초대 코드를 생성하지 못했습니다."),
+    MEDIA_SESSION_OPERATION_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "화상 세션 처리 중 오류가 발생했습니다.");
 
     private final HttpStatus httpStatus;
     private final String message;
