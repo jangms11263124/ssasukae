@@ -2,10 +2,10 @@
 
 import { resolveDeviceId, useMediaDevices } from '@/entities/media-device';
 import { showToast } from '@/shared/model/toastStore';
+import { ActionButton } from '@/shared/ui/button/ActionButton';
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
 
 import { useDeviceSettingsDraft } from '../model/useDeviceSettingsDraft';
-import { ActionButton } from './ActionButton';
 import { AudioInputCard } from './AudioInputCard';
 import { AudioOutputCard } from './AudioOutputCard';
 import { DeviceSystemStatusBar } from './DeviceSystemStatusBar';
