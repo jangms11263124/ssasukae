@@ -4,6 +4,8 @@ import com.ssafy.ssasukae.domain.auth.dto.AuthTokenResponse;
 import com.ssafy.ssasukae.domain.auth.dto.OAuthSignupRequest;
 import com.ssafy.ssasukae.domain.auth.dto.TokenReissueResponse;
 import com.ssafy.ssasukae.domain.auth.service.AuthService;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.auth.AuthErrorCode;
 import com.ssafy.ssasukae.global.security.cookie.RefreshTokenCookieProvider;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,7 +13,6 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import lombok.RequiredArgsConstructor;
 
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -19,7 +20,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequiredArgsConstructor
@@ -48,7 +48,7 @@ public class AuthController {
             HttpServletResponse response
     ) {
         if (!StringUtils.hasText(refreshToken)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "refresh token이 없습니다.");
+            throw new CustomException(AuthErrorCode.REFRESH_TOKEN_REQUIRED);
         }
 
         try {

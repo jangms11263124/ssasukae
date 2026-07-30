@@ -1,5 +1,6 @@
 package com.ssafy.ssasukae.config;
 
+import com.ssafy.ssasukae.global.logging.AccessLogFilter;
 import com.ssafy.ssasukae.global.security.jwt.JwtAuthenticationFilter;
 import com.ssafy.ssasukae.global.security.oauth.CustomOAuth2UserService;
 import com.ssafy.ssasukae.global.security.oauth.OAuth2AuthenticationFailureHandler;
@@ -83,9 +84,15 @@ public class SecurityConfig {
                         .successHandler(oAuth2AuthenticationSuccessHandler)
                         .failureHandler(oAuth2AuthenticationFailureHandler)
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(accessLogFilter(), JwtAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public AccessLogFilter accessLogFilter() {
+        return new AccessLogFilter();
     }
 
     @Bean
