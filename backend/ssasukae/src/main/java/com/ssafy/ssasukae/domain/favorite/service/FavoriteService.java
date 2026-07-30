@@ -11,6 +11,7 @@ import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.favorite.FavoriteErrorCode;
 import com.ssafy.ssasukae.global.exception.song.SongErrorCode;
 import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
+import com.ssafy.ssasukae.integration.aws.S3StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class FavoriteService {
     private final FavoriteRepository favoriteRepository;
     private final UserRepository userRepository;
     private final SongRepository songRepository;
+    private final S3StorageService s3StorageService;
 
     public void favorite(long userId, long songId) {
         Optional<Favorite> like = favoriteRepository.findByUserAndSong(userId, songId);
@@ -72,7 +74,7 @@ public class FavoriteService {
                                     .songId(song.getId())
                                     .title(song.getTitle())
                                     .artist(song.getArtist())
-                                    .thumbnailUrl(null)
+                                    .thumbnailUrl(s3StorageService.presignedUrl(song.getCoverObjectKey()))
                                     .favoritedAt(e.getCreatedAt())
                                     .build();
                         }).toList())

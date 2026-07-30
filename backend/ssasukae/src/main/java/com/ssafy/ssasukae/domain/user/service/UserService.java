@@ -20,6 +20,7 @@ import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
 import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
 
+import com.ssafy.ssasukae.integration.aws.S3StorageService;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
@@ -40,6 +41,7 @@ public class UserService {
     private final FavoriteRepository favoriteRepository;
     private final PerformanceResultRepository performanceResultRepository;
     private final UserPerformanceStatRepository userPerformanceStatRepository;
+    private final S3StorageService s3StorageService;
 
     public Optional<User> findByProviderAndProviderId(OAuthProvider provider, String providerId) {
         return userRepository.findByProviderAndProviderId(provider, providerId);
@@ -94,7 +96,7 @@ public class UserService {
                                     .songId(song.getId())
                                     .title(song.getTitle())
                                     .artist(song.getArtist())
-                                    .thumbnailUrl(song.getCoverObjectKey())
+                                    .thumbnailUrl(s3StorageService.presignedUrl(song.getCoverObjectKey()))
                                     .favoritedAt(f.getCreatedAt()).build();
                         }).toList()).build())
                 .recentPerformances(recentPerformances.stream().map(p -> {
@@ -104,7 +106,7 @@ public class UserService {
                             .performanceId(p.getId())
                             .title(song.getTitle())
                             .artist(song.getArtist())
-                            .thumbnailUrl(song.getCoverObjectKey())
+                            .thumbnailUrl(s3StorageService.presignedUrl(song.getCoverObjectKey()))
                             .score(p.getFinalScore())
                             .performanceAt(p.getCreatedAt()).build();
                 }).toList()).build();
