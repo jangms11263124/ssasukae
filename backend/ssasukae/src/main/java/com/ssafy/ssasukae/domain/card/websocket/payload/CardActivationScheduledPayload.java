@@ -5,8 +5,8 @@ import java.time.OffsetDateTime;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectTargetType;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
 
-// 카드 사용 확정 페이로드
 public record CardActivationScheduledPayload(
+    Long performanceId,
     Long cardAssignmentId,
     Long sourceParticipantId,
     Long targetParticipantId,
@@ -15,7 +15,12 @@ public record CardActivationScheduledPayload(
     String cardCode,
     String cardName,
     String description,
+    String cardImageUrl,
     CardEffectType effectType,
     Integer effectValue,
     Integer durationSeconds,
+    OffsetDateTime serverNow,
+    Long pausedPlaybackPositionMs,
+    Integer countdownSeconds,
+    OffsetDateTime approvedAt,
     OffsetDateTime activateAt) {}

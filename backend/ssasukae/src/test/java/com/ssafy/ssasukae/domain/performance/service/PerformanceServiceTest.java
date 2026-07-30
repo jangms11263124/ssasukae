@@ -28,11 +28,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
+import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSettings;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
-import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
-import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceCancelReason;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventPublisher;
@@ -95,6 +96,8 @@ class PerformanceServiceTest {
 
   @Mock private PerformanceWebSocketEventPublisher eventPublisher;
 
+  @Mock private CardService cardService;
+
   private PerformanceService performanceService;
 
   @BeforeEach
@@ -102,7 +105,10 @@ class PerformanceServiceTest {
     PerformanceTransactionSupport transactionSupport =
         new PerformanceTransactionSupport(performanceStore, recoveryDeadlineStore);
     PerformanceCancellationProcessor cancellationProcessor =
-        new PerformanceCancellationProcessor(transactionSupport, eventPublisher);
+        new PerformanceCancellationProcessor(transactionSupport, eventPublisher, cardService);
+    org.mockito.Mockito.lenient()
+        .when(cardService.closeForPerformance(any(), any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     performanceService =
         new PerformanceService(
@@ -115,7 +121,8 @@ class PerformanceServiceTest {
             transactionSupport,
             cancellationProcessor,
             s3StorageService,
-            eventPublisher);
+            eventPublisher,
+            cardService);
   }
 
   @AfterEach
@@ -454,9 +461,7 @@ class PerformanceServiceTest {
     assertThat(changed.playbackFinishedAt()).isNotNull().isAfterOrEqualTo(STARTED_AT);
 
     verify(recoveryDeadlineStore)
-        .save(
-            PERFORMANCE_ID,
-            changed.playbackFinishedAt().toInstant().plusSeconds(120));
+        .save(PERFORMANCE_ID, changed.playbackFinishedAt().toInstant().plusSeconds(120));
 
     verifyNoInteractions(eventPublisher);
 

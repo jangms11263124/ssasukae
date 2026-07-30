@@ -4,10 +4,13 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Objects;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectEndReason;
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSettings;
@@ -36,8 +39,6 @@ import com.ssafy.ssasukae.global.exception.websocket.WebSocketBusinessException;
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketErrorCode;
 import com.ssafy.ssasukae.integration.aws.S3StorageService;
 
-import lombok.RequiredArgsConstructor;
-
 @Service
 @RequiredArgsConstructor
 public class PerformanceService {
@@ -54,6 +55,7 @@ public class PerformanceService {
   private final PerformanceCancellationProcessor cancellationProcessor;
   private final S3StorageService s3StorageService;
   private final PerformanceWebSocketEventPublisher eventPublisher;
+  private final CardService cardService;
 
   /** 공연 준비를 시작한다. */
   @Transactional
@@ -92,6 +94,7 @@ public class PerformanceService {
             performer.getId(),
             userId,
             song.getId(),
+            song.getDuration() == null ? 0L : song.getDuration() * 1_000L,
             now());
     // snapshot대로 redis에 저장
     if (!performanceStore.create(snapShot)) {
@@ -147,14 +150,14 @@ public class PerformanceService {
     transactionSupport.saveWithRollback(previous, changed);
 
     transactionSupport.afterCommit(
-        () ->
-            eventPublisher.publish(
-                roomId,
-                PerformanceWebSocketEventType.PLAYBACK_STARTED,
-                new PlaybackStartedPayload(
-                    changed.performanceId(),
-                    changed.performerParticipantId(),
-                    changed.startedAt())));
+        () -> {
+          eventPublisher.publish(
+              roomId,
+              PerformanceWebSocketEventType.PLAYBACK_STARTED,
+              new PlaybackStartedPayload(
+                  changed.performanceId(), changed.performerParticipantId(), changed.startedAt()));
+          cardService.assignForPlayback(changed);
+        });
   }
 
   /** 실제 음원 재생을 종료한다. */
@@ -163,6 +166,7 @@ public class PerformanceService {
     validatePlayingRoomAndPerformer(userId, roomId);
 
     PerformanceSnapShot previous = getValidatedSnapShot(roomId, performanceId, userId);
+    previous = cardService.closeForPerformance(previous, CardEffectEndReason.PERFORMANCE_ENDED);
 
     PerformanceSnapShot changed;
 
@@ -242,8 +246,7 @@ public class PerformanceService {
     PerformanceSnapShot previous = getValidatedSnapShot(roomId, performanceId, userId);
 
     try {
-      cancellationProcessor.cancel(
-          room, previous, PerformanceCancelReason.PERFORMER_REQUEST);
+      cancellationProcessor.cancel(room, previous, PerformanceCancelReason.PERFORMER_REQUEST);
     } catch (IllegalStateException exception) {
       throw invalidPerformanceState(exception);
     }

@@ -44,6 +44,30 @@ public enum WebSocketErrorCode {
     PERFORMER_PERMISSION_REQUIRED("현재 공연자만 요청할 수 있습니다."),
 
     /*
+     * 카드
+     */
+    INVALID_ROOM_MODE("BATTLE 모드에서만 카드를 사용할 수 있습니다."),
+    NO_ACTIVE_PERFORMANCE("진행 중인 공연이 없습니다."),
+    PERFORMANCE_MISMATCH("요청한 공연과 현재 공연이 일치하지 않습니다."),
+    NO_ACTIVE_PERFORMER("카드 효과를 적용할 공연자가 없습니다."),
+    PLAYBACK_NOT_RUNNING("음원 재생 중에만 카드를 사용할 수 있습니다."),
+    INSUFFICIENT_PLAYBACK_TIME("음원 종료가 임박하여 카드를 사용할 수 없습니다."),
+    PARTICIPANT_NOT_ACTIVE("현재 카드를 사용할 수 없는 참가자 상태입니다."),
+    PARTICIPANT_OFFLINE("현재 연결 상태에서는 카드를 사용할 수 없습니다."),
+    PERFORMER_CANNOT_USE_CARD("공연자는 카드를 사용할 수 없습니다."),
+    CARD_NOT_FOUND("존재하지 않는 카드입니다."),
+    CARD_ASSIGNMENT_NOT_FOUND("존재하지 않는 카드 할당입니다."),
+    CARD_NOT_ASSIGNED("배정받지 않은 카드입니다."),
+    CARD_ALREADY_USED("이미 사용한 카드입니다."),
+    CARD_ALREADY_PENDING("해당 카드는 이미 발동 대기 중입니다."),
+    INVALID_CARD_STATE("현재 사용할 수 없는 카드 상태입니다."),
+    CARD_CONFIGURATION_INVALID("카드 효과 설정이 올바르지 않습니다."),
+    CARD_ACTIVATION_PENDING("다른 카드가 이미 발동 대기 중입니다."),
+    CARD_EFFECT_ALREADY_ACTIVE("다른 카드 효과가 적용 중입니다."),
+    CARD_STATE_CONFLICT("카드 상태가 일치하지 않습니다."),
+    INVALID_CARD_TARGET("카드 효과 대상을 결정할 수 없습니다."),
+
+    /*
      * 서버 내부 오류
      */
     INTERNAL_SERVER_ERROR("서버 내부 오류가 발생했습니다.");
