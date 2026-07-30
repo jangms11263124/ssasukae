@@ -25,6 +25,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import com.ssafy.ssasukae.domain.card.service.CardService;
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
@@ -59,6 +60,7 @@ class PerformanceRecoveryServiceTest {
   @Mock private PerformanceStore performanceStore;
   @Mock private PerformanceRecoveryDeadlineStore deadlineStore;
   @Mock private PerformanceWebSocketEventPublisher eventPublisher;
+  @Mock private CardService cardService;
 
   private PerformanceRecoveryProperties properties;
   private PerformanceRecoveryService service;
@@ -69,7 +71,12 @@ class PerformanceRecoveryServiceTest {
     PerformanceTransactionSupport transactionSupport =
         new PerformanceTransactionSupport(performanceStore, deadlineStore);
     PerformanceCancellationProcessor cancellationProcessor =
-        new PerformanceCancellationProcessor(transactionSupport, eventPublisher);
+        new PerformanceCancellationProcessor(transactionSupport, eventPublisher, cardService);
+    org.mockito.Mockito.lenient()
+        .when(
+            cardService.closeForPerformance(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(invocation -> invocation.getArgument(0));
 
     service =
         new PerformanceRecoveryService(
@@ -166,8 +173,7 @@ class PerformanceRecoveryServiceTest {
 
     service.recoverPerformerExitCase(ROOM_ID, USER_ID);
 
-    ArgumentCaptor<PerformanceSnapShot> captor =
-        ArgumentCaptor.forClass(PerformanceSnapShot.class);
+    ArgumentCaptor<PerformanceSnapShot> captor = ArgumentCaptor.forClass(PerformanceSnapShot.class);
     verify(performanceStore).save(captor.capture());
     assertThat(captor.getValue().status()).isEqualTo(PerformanceStatus.CANCELLED);
     assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);

@@ -4,7 +4,7 @@ package com.ssafy.ssasukae.domain.card.websocket.type;
 public enum CardEffectEndReason {
   DURATION_EXPIRED,
   PERFORMANCE_ENDED,
+  PERFORMANCE_CANCELLED,
   ROOM_TERMINATED,
-  TARGET_UNAVAILABLE,
   SYSTEM_CANCELLED
 }

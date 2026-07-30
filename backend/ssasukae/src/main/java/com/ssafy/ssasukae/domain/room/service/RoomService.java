@@ -2,8 +2,10 @@ package com.ssafy.ssasukae.domain.room.service;
 
 import java.security.Principal;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.Collections;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
 
@@ -20,7 +22,13 @@ import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
+import com.ssafy.ssasukae.domain.room.dto.ActiveCardSnapshotResponse;
+import com.ssafy.ssasukae.domain.room.dto.MyCardSnapshotResponse;
+import com.ssafy.ssasukae.domain.room.dto.PlaybackSnapshotResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomJoinResponse;
@@ -62,6 +70,9 @@ public class RoomService {
     private final PerformanceRecoveryService performanceRecoveryService;
     private final SecureRandom secureRandom = new SecureRandom();
     private final WebSocketEventPublisher webSocketEventPublisher;
+    private final CardService cardService;
+    private final PerformanceStore performanceStore;
+    private final Clock clock;
 
     @Transactional
     public RoomCreateResponse createRoom(Long hostUserId, RoomCreateRequest request) {
@@ -161,7 +172,45 @@ public class RoomService {
                         ACTIVE_STATUSES
                 );
 
-        return RoomSnapshotResponse.from(room, activeParticipants);
+        OffsetDateTime serverNow = clock == null
+                ? OffsetDateTime.now()
+                : OffsetDateTime.now(clock)
+                        .atZoneSameInstant(ZoneId.of("Asia/Seoul"))
+                        .toOffsetDateTime();
+        PerformanceSnapShot performance = performanceStore == null
+                ? null
+                : performanceStore.findActiveByRoomId(roomId).orElse(null);
+        PlaybackSnapshotResponse playback = performance == null
+                ? null
+                : PlaybackSnapshotResponse.from(performance, serverNow);
+        MyCardSnapshotResponse myCard =
+                performance == null || cardService == null
+                        ? null
+                        : cardService
+                                .findAssignment(
+                                        roomId, performance.performanceId(), requester.getId())
+                                .map(MyCardSnapshotResponse::from)
+                                .orElse(null);
+        ActiveCardSnapshotResponse activeCard = performance == null || cardService == null
+                ? null
+                : cardService
+                        .findActiveCard(roomId)
+                        .filter(card -> performance.performanceId().equals(card.performanceId()))
+                        .flatMap(
+                                card ->
+                                        cardService
+                                                .findAssignment(
+                                                        roomId,
+                                                        performance.performanceId(),
+                                                        card.sourceParticipantId())
+                                                .map(
+                                                        assignment ->
+                                                                ActiveCardSnapshotResponse.from(
+                                                                        card, assignment)))
+                        .orElse(null);
+
+        return RoomSnapshotResponse.from(
+                room, activeParticipants, serverNow, playback, myCard, activeCard);
     }
 
     @Transactional
@@ -193,6 +242,9 @@ public class RoomService {
 
         LocalDateTime now = LocalDateTime.now();
         room.terminate(now);
+        if (cardService != null) {
+            cardService.closeRoom(roomId);
+        }
 
         List<RoomParticipant> activeParticipants =
                 roomParticipantRepository.findAllByRoomIdAndConnectionStatusIn(roomId, ACTIVE_STATUSES);

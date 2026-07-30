@@ -10,8 +10,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
+import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateResponse;
@@ -48,8 +53,12 @@ class RoomServiceMediaSessionTest {
   @Mock private MediaSessionGateway mediaSessionGateway;
   @Mock private PerformanceRecoveryService performanceRecoveryService;
   @Mock private WebSocketEventPublisher webSocketEventPublisher;
+  @Mock private CardService cardService;
+  @Mock private PerformanceStore performanceStore;
 
   private RoomService roomService;
+  private final Clock clock =
+      Clock.fixed(Instant.parse("2026-07-30T00:00:00Z"), ZoneOffset.UTC);
 
   @BeforeEach
   void setUp() {
@@ -60,7 +69,10 @@ class RoomServiceMediaSessionTest {
             userRepository,
             mediaSessionGateway,
             performanceRecoveryService,
-            webSocketEventPublisher);
+            webSocketEventPublisher,
+            cardService,
+            performanceStore,
+            clock);
   }
 
   @Test

@@ -7,7 +7,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
 
@@ -27,6 +30,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
@@ -64,9 +69,13 @@ class RoomChatServiceTest {
   @Mock private MediaSessionGateway mediaSessionGateway;
   @Mock private PerformanceRecoveryService performanceRecoveryService;
   @Mock private WebSocketEventPublisher webSocketEventPublisher;
+  @Mock private CardService cardService;
+  @Mock private PerformanceStore performanceStore;
 
   private RoomService roomService;
   private AuthenticatedUser authenticatedUser;
+  private final Clock clock =
+      Clock.fixed(Instant.parse("2026-07-29T09:00:00Z"), ZoneOffset.UTC);
 
   @BeforeAll
   static void setUpValidator() {
@@ -88,7 +97,10 @@ class RoomChatServiceTest {
             userRepository,
             mediaSessionGateway,
             performanceRecoveryService,
-            webSocketEventPublisher);
+            webSocketEventPublisher,
+            cardService,
+            performanceStore,
+            clock);
     authenticatedUser = new AuthenticatedUser(USER_ID, "user@test.com", "USER");
   }
 

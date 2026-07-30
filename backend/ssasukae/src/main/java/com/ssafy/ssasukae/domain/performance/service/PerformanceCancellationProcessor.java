@@ -2,6 +2,8 @@ package com.ssafy.ssasukae.domain.performance.service;
 
 import org.springframework.stereotype.Component;
 
+import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectEndReason;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceCancelReason;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventPublisher;
@@ -17,12 +19,13 @@ public class PerformanceCancellationProcessor {
 
   private final PerformanceTransactionSupport transactionSupport;
   private final PerformanceWebSocketEventPublisher eventPublisher;
+  private final CardService cardService;
 
-  public void cancel(
-      Room room, PerformanceSnapShot active, PerformanceCancelReason reason) {
-    PerformanceSnapShot cancelled = active.cancel();
+  public void cancel(Room room, PerformanceSnapShot active, PerformanceCancelReason reason) {
+    PerformanceSnapShot restored = cardService.closeForPerformance(active, CardEffectEndReason.PERFORMANCE_CANCELLED);
+    PerformanceSnapShot cancelled = restored.cancel();
 
-    transactionSupport.saveWithRollback(active, cancelled);
+    transactionSupport.saveWithRollback(restored, cancelled);
     room.recoverPerformance();
 
     transactionSupport.afterCommit(
