@@ -1,9 +1,8 @@
-package com.ssafy.ssasukae.domain.performance.service;
+package com.ssafy.ssasukae.domain.performanceResult.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -31,20 +30,21 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardEntry;
-import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardStore;
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
+import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardEntry;
+import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardStore;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
-import com.ssafy.ssasukae.domain.performance.rest.request.AiAnalysisFailureRequest;
-import com.ssafy.ssasukae.domain.performance.rest.request.AiAnalysisSuccessRequest;
+import com.ssafy.ssasukae.domain.performance.service.PerformanceTransactionSupport;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventPublisher;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventType;
 import com.ssafy.ssasukae.domain.performance.websocket.payload.LeaderboardItemPayload;
 import com.ssafy.ssasukae.domain.performance.websocket.payload.LeaderboardUpdatedPayload;
 import com.ssafy.ssasukae.domain.performance.websocket.payload.PerformanceStateChangedPayload;
+import com.ssafy.ssasukae.domain.performanceResult.dto.PerformanceResultRequestDTO;
+import com.ssafy.ssasukae.domain.performanceResult.dto.PerformanceResultResponseDTO;
 import com.ssafy.ssasukae.domain.performanceResult.entity.PerformanceResult;
 import com.ssafy.ssasukae.domain.performanceResult.repository.PerformanceResultRepository;
 import com.ssafy.ssasukae.domain.room.entity.Room;
@@ -61,13 +61,14 @@ import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.performanceAnalysis.PerformanceAnalysisErrorCode;
 
 @ExtendWith(MockitoExtension.class)
-class PerformanceAnalysisServiceTest {
+class PerformanceResultServiceTest {
 
   private static final Long USER_ID = 1L;
   private static final Long ROOM_ID = 10L;
   private static final Long PARTICIPANT_ID = 100L;
   private static final Long SONG_ID = 20L;
   private static final Long PERFORMANCE_ID = 30L;
+  private static final Long RESULT_ID = 40L;
 
   private static final OffsetDateTime PREPARED_AT =
       OffsetDateTime.of(2026, 7, 28, 10, 0, 0, 0, ZoneOffset.ofHours(9));
@@ -75,33 +76,33 @@ class PerformanceAnalysisServiceTest {
   private static final OffsetDateTime FINISHED_AT = STARTED_AT.plusMinutes(3);
   private static final Instant ANALYSIS_DEADLINE = FINISHED_AT.toInstant().plusSeconds(120);
 
-  @Mock private RoomRepository roomRepository;
-  @Mock private SongRepository songRepository;
   @Mock private UserRepository userRepository;
-  @Mock private PerformanceStore performanceStore;
-  @Mock private PerformanceRecoveryDeadlineStore recoveryDeadlineStore;
-  @Mock private RoomLeaderboardStore roomLeaderboardStore;
+  @Mock private SongRepository songRepository;
   @Mock private PerformanceResultRepository performanceResultRepository;
+  @Mock private RoomRepository roomRepository;
+  @Mock private PerformanceStore performanceStore;
+  @Mock private RoomLeaderboardStore roomLeaderboardStore;
+  @Mock private PerformanceRecoveryDeadlineStore recoveryDeadlineStore;
   @Mock private PerformanceWebSocketEventPublisher eventPublisher;
 
-  private PerformanceAnalysisService service;
+  private PerformanceResultService service;
 
   @BeforeEach
   void setUp() {
     service = createServiceAt(ANALYSIS_DEADLINE.minusSeconds(1));
   }
 
-  private PerformanceAnalysisService createServiceAt(Instant currentTime) {
-    return new PerformanceAnalysisService(
-        roomRepository,
-        songRepository,
+  private PerformanceResultService createServiceAt(Instant currentTime) {
+    return new PerformanceResultService(
         userRepository,
+        songRepository,
+        performanceResultRepository,
+        roomRepository,
         performanceStore,
+        roomLeaderboardStore,
         new PerformanceRecoveryProperties(),
         Clock.fixed(currentTime, ZoneOffset.UTC),
         new PerformanceTransactionSupport(performanceStore, recoveryDeadlineStore),
-        roomLeaderboardStore,
-        performanceResultRepository,
         eventPublisher);
   }
 
@@ -113,56 +114,51 @@ class PerformanceAnalysisServiceTest {
   }
 
   @Test
-  @DisplayName("AI 최종 결과를 저장하고 리더보드를 갱신한 뒤 공연과 방을 종료한다")
-  void completeAnalysisStoresResultAndFinishesPerformance() {
+  @DisplayName("결과 저장과 리더보드 갱신 후 공연을 종료하고 이벤트를 발행한다")
+  void getScoreFinishesPerformanceAndPublishesEventsAfterCommit() {
     Room room = playingRoom();
-    User performer = user();
-    Song song = song();
     PerformanceSnapShot analyzing = analyzingSnapshot();
-    AiAnalysisSuccessRequest request = scoreRequest();
-
-    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
-    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
-    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(performer));
-    when(songRepository.findById(SONG_ID)).thenReturn(Optional.of(song));
-    when(performanceResultRepository.save(any(PerformanceResult.class)))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-
+    PerformanceResultRequestDTO.ScoreDTO request = scoreRequest();
+    User user = user();
+    Song song = song();
+    PerformanceResult saved = savedResult(user, song);
     RoomLeaderboardEntry updated =
         new RoomLeaderboardEntry(
             PERFORMANCE_ID,
             PARTICIPANT_ID,
-            performer.getNickname(),
+            user.getNickname(),
             SONG_ID,
             song.getTitle(),
-            request.finalScore());
-    RoomLeaderboardEntry previous =
-        new RoomLeaderboardEntry(29L, 99L, "이전 참가자", 19L, "이전 곡", 80);
+            request.getFinalScore());
+    RoomLeaderboardEntry previous = new RoomLeaderboardEntry(29L, 99L, "이전 참가자", 19L, "이전 곡", 80);
 
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
+    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+    when(songRepository.findById(SONG_ID)).thenReturn(Optional.of(song));
+    when(performanceResultRepository.save(any(PerformanceResult.class))).thenReturn(saved);
+    when(roomLeaderboardStore.find(ROOM_ID, PERFORMANCE_ID)).thenReturn(Optional.empty());
     when(roomLeaderboardStore.saveAndGetRanked(ROOM_ID, updated))
         .thenReturn(List.of(updated, previous));
 
     beginTransaction();
 
-    service.completeAnalysis(PERFORMANCE_ID, request);
+    PerformanceResultResponseDTO.PerformanceIdDTO response =
+        service.getScore(PERFORMANCE_ID, request);
+
+    assertThat(response.getPerformanceId()).isEqualTo(RESULT_ID);
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
 
     ArgumentCaptor<PerformanceResult> resultCaptor =
         ArgumentCaptor.forClass(PerformanceResult.class);
     verify(performanceResultRepository).save(resultCaptor.capture());
-
-    PerformanceResult result = resultCaptor.getValue();
-    assertThat(result.getSong()).isSameAs(song);
-    assertThat(result.getUser()).isSameAs(performer);
-    assertThat(result.getFinalScore()).isEqualTo(92);
+    assertThat(resultCaptor.getValue().getFinalScore()).isEqualTo(92);
 
     ArgumentCaptor<PerformanceSnapShot> snapshotCaptor =
         ArgumentCaptor.forClass(PerformanceSnapShot.class);
     verify(performanceStore).save(snapshotCaptor.capture());
     PerformanceSnapShot finished = snapshotCaptor.getValue();
-
     assertThat(finished.status()).isEqualTo(PerformanceStatus.FINISHED);
-    assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
-    verify(performanceStore, never()).delete(any(PerformanceSnapShot.class));
     verifyNoInteractions(eventPublisher);
 
     commitTransaction();
@@ -173,15 +169,14 @@ class PerformanceAnalysisServiceTest {
                 1,
                 PERFORMANCE_ID,
                 PARTICIPANT_ID,
-                performer.getNickname(),
+                user.getNickname(),
                 SONG_ID,
                 song.getTitle(),
                 92),
-            new LeaderboardItemPayload(
-                2, 29L, 99L, "이전 참가자", 19L, "이전 곡", 80));
-
-    InOrder order = inOrder(performanceStore, eventPublisher);
+            new LeaderboardItemPayload(2, 29L, 99L, "이전 참가자", 19L, "이전 곡", 80));
+    InOrder order = inOrder(performanceStore, recoveryDeadlineStore, eventPublisher);
     order.verify(performanceStore).delete(finished);
+    order.verify(recoveryDeadlineStore).delete(PERFORMANCE_ID);
     order
         .verify(eventPublisher)
         .publish(
@@ -198,70 +193,42 @@ class PerformanceAnalysisServiceTest {
   }
 
   @Test
-  @DisplayName("점수 범위를 벗어난 최종 결과를 거부한다")
-  void completeAnalysisRejectsInvalidScore() {
-    AiAnalysisSuccessRequest invalidRequest =
-        new AiAnalysisSuccessRequest(
-            101,
-            91,
-            94,
-            null,
-            92);
-
-    assertAnalysisError(
-        PerformanceAnalysisErrorCode.INVALID_SCORE_RANGE,
-        () -> service.completeAnalysis(PERFORMANCE_ID, invalidRequest));
-
-    verifyNoInteractions(
-        roomRepository,
-        songRepository,
-        userRepository,
-        performanceStore,
-        roomLeaderboardStore,
-        performanceResultRepository,
-        eventPublisher);
-  }
-
-  @Test
-  @DisplayName("AI 분석 실패 시 결과와 리더보드 없이 방을 PREPARING으로 복구한다")
-  void failAnalysisRestoresRoomWithoutResult() {
+  @DisplayName("요청 사용자나 곡이 공연 정보와 다르면 결과를 반영하지 않는다")
+  void getScoreRejectsMismatchedPerformanceContext() {
     Room room = playingRoom();
     PerformanceSnapShot analyzing = analyzingSnapshot();
-    AiAnalysisFailureRequest request = new AiAnalysisFailureRequest("분석 서버 처리 실패");
+    PerformanceResultRequestDTO.ScoreDTO request =
+        PerformanceResultRequestDTO.ScoreDTO.builder()
+            .userId(999L)
+            .songId(SONG_ID)
+            .pitchScore(90)
+            .rhythmScore(91)
+            .lyricsScore(94)
+            .stabilityScore(88)
+            .finalScore(92)
+            .build();
 
     when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
     when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
 
-    beginTransaction();
+    assertThatThrownBy(() -> service.getScore(PERFORMANCE_ID, request))
+        .isInstanceOfSatisfying(
+            CustomException.class,
+            exception ->
+                assertThat(exception.getErrorCode())
+                    .isEqualTo(PerformanceAnalysisErrorCode.INVALID_REQUEST));
 
-    service.failAnalysis(PERFORMANCE_ID, request);
-
-    ArgumentCaptor<PerformanceSnapShot> snapshotCaptor =
-        ArgumentCaptor.forClass(PerformanceSnapShot.class);
-    verify(performanceStore).save(snapshotCaptor.capture());
-    PerformanceSnapShot failed = snapshotCaptor.getValue();
-
-    assertThat(failed.status()).isEqualTo(PerformanceStatus.ANALYSIS_FAILED);
-    assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
-    verifyNoInteractions(performanceResultRepository, roomLeaderboardStore);
-    verifyNoInteractions(eventPublisher);
-
-    commitTransaction();
-
-    InOrder order = inOrder(performanceStore, eventPublisher);
-    order.verify(performanceStore).delete(failed);
-    order
-        .verify(eventPublisher)
-        .publish(
-            ROOM_ID,
-            PerformanceWebSocketEventType.PERFORMANCE_STATE_CHANGED,
-            new PerformanceStateChangedPayload(
-                PERFORMANCE_ID, PerformanceStatus.ANALYZING, PerformanceStatus.ANALYSIS_FAILED));
+    verifyNoInteractions(
+        userRepository,
+        songRepository,
+        performanceResultRepository,
+        roomLeaderboardStore,
+        eventPublisher);
   }
 
   @Test
-  @DisplayName("분석 마감 시각에 도착한 AI 성공 결과는 반영하지 않는다")
-  void completeAnalysisRejectsResultAtDeadline() {
+  @DisplayName("분석 마감 시각 이후 도착한 결과를 반영하지 않는다")
+  void getScoreRejectsResultAtDeadline() {
     Room room = playingRoom();
     PerformanceSnapShot analyzing = analyzingSnapshot();
     service = createServiceAt(ANALYSIS_DEADLINE);
@@ -269,95 +236,14 @@ class PerformanceAnalysisServiceTest {
     when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
     when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
 
-    assertAnalysisError(
-        PerformanceAnalysisErrorCode.ANALYSIS_DEADLINE_EXPIRED,
-        () -> service.completeAnalysis(PERFORMANCE_ID, scoreRequest()));
-
-    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
-    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
-    verifyNoInteractions(
-        userRepository,
-        songRepository,
-        performanceResultRepository,
-        roomLeaderboardStore,
-        eventPublisher);
-  }
-
-  @Test
-  @DisplayName("분석 마감 시각 이후 도착한 AI 실패 결과는 반영하지 않는다")
-  void failAnalysisRejectsResultAfterDeadline() {
-    Room room = playingRoom();
-    PerformanceSnapShot analyzing = analyzingSnapshot();
-    service = createServiceAt(ANALYSIS_DEADLINE.plusSeconds(1));
-
-    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
-    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
-
-    assertAnalysisError(
-        PerformanceAnalysisErrorCode.ANALYSIS_DEADLINE_EXPIRED,
-        () ->
-            service.failAnalysis(
-                PERFORMANCE_ID, new AiAnalysisFailureRequest("분석 서버 처리 실패")));
-
-    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
-    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
-    verifyNoInteractions(
-        performanceResultRepository,
-        roomLeaderboardStore,
-        eventPublisher);
-  }
-
-  @Test
-  @DisplayName("DB 트랜잭션이 롤백되면 리더보드와 공연 스냅샷을 복구한다")
-  void completeAnalysisRestoresRedisOnRollback() {
-    Room room = playingRoom();
-    User performer = user();
-    Song song = song();
-    PerformanceSnapShot analyzing = analyzingSnapshot();
-    AiAnalysisSuccessRequest request = scoreRequest();
-
-    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
-    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
-    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(performer));
-    when(songRepository.findById(SONG_ID)).thenReturn(Optional.of(song));
-    when(performanceResultRepository.save(any(PerformanceResult.class)))
-        .thenAnswer(invocation -> invocation.getArgument(0));
-    when(roomLeaderboardStore.saveAndGetRanked(eq(ROOM_ID), any(RoomLeaderboardEntry.class)))
-        .thenAnswer(
-            invocation -> {
-              RoomLeaderboardEntry entry = invocation.getArgument(1, RoomLeaderboardEntry.class);
-              return List.of(entry);
-            });
-
-    beginTransaction();
-
-    service.completeAnalysis(PERFORMANCE_ID, request);
-    rollbackTransaction();
-
-    verify(roomLeaderboardStore).delete(ROOM_ID, PERFORMANCE_ID);
-    verify(performanceStore).save(analyzing);
-    verifyNoInteractions(eventPublisher);
-  }
-
-  @Test
-  @DisplayName("ANALYZING 상태가 아닌 공연의 최종 결과는 거부한다")
-  void completeAnalysisRejectsInvalidPerformanceState() {
-    Room room = playingRoom();
-    PerformanceSnapShot playing =
-        PerformanceSnapShot.prepare(
-                PERFORMANCE_ID, ROOM_ID, PARTICIPANT_ID, USER_ID, SONG_ID, PREPARED_AT)
-            .startPlayback(STARTED_AT);
-
-    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(playing));
-    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
-
-    assertThatThrownBy(() -> service.completeAnalysis(PERFORMANCE_ID, scoreRequest()))
+    assertThatThrownBy(() -> service.getScore(PERFORMANCE_ID, scoreRequest()))
         .isInstanceOfSatisfying(
             CustomException.class,
             exception ->
                 assertThat(exception.getErrorCode())
-                    .isEqualTo(PerformanceAnalysisErrorCode.INVALID_PERFORMANCE_STATE));
+                    .isEqualTo(PerformanceAnalysisErrorCode.ANALYSIS_DEADLINE_EXPIRED));
 
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
     verifyNoInteractions(
         userRepository,
         songRepository,
@@ -366,21 +252,62 @@ class PerformanceAnalysisServiceTest {
         eventPublisher);
   }
 
-  private AiAnalysisSuccessRequest scoreRequest() {
-    return new AiAnalysisSuccessRequest(
-        90,
-        91,
-        94,
-        88,
-        92);
+  @Test
+  @DisplayName("트랜잭션 롤백 시 리더보드와 공연 스냅샷을 복구한다")
+  void getScoreRestoresRedisStateOnRollback() {
+    Room room = playingRoom();
+    PerformanceSnapShot analyzing = analyzingSnapshot();
+    PerformanceResultRequestDTO.ScoreDTO request = scoreRequest();
+    User user = user();
+    Song song = song();
+    PerformanceResult saved = savedResult(user, song);
+    RoomLeaderboardEntry previous =
+        new RoomLeaderboardEntry(
+            PERFORMANCE_ID, PARTICIPANT_ID, user.getNickname(), SONG_ID, song.getTitle(), 70);
+
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
+    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+    when(songRepository.findById(SONG_ID)).thenReturn(Optional.of(song));
+    when(performanceResultRepository.save(any(PerformanceResult.class))).thenReturn(saved);
+    when(roomLeaderboardStore.find(ROOM_ID, PERFORMANCE_ID)).thenReturn(Optional.of(previous));
+    when(roomLeaderboardStore.saveAndGetRanked(ROOM_ID, previous)).thenReturn(List.of(previous));
+    when(roomLeaderboardStore.saveAndGetRanked(
+            org.mockito.ArgumentMatchers.eq(ROOM_ID),
+            org.mockito.ArgumentMatchers.argThat(entry -> entry.finalScore() == 92)))
+        .thenReturn(List.of());
+
+    beginTransaction();
+
+    service.getScore(PERFORMANCE_ID, request);
+    rollbackTransaction();
+
+    InOrder order = inOrder(roomLeaderboardStore);
+    order
+        .verify(roomLeaderboardStore)
+        .saveAndGetRanked(
+            org.mockito.ArgumentMatchers.eq(ROOM_ID),
+            org.mockito.ArgumentMatchers.argThat(entry -> entry.finalScore() == 92));
+    order.verify(roomLeaderboardStore).saveAndGetRanked(ROOM_ID, previous);
+    verify(roomLeaderboardStore, never()).delete(ROOM_ID, PERFORMANCE_ID);
+    verify(performanceStore).save(analyzing);
+    verifyNoInteractions(eventPublisher);
   }
 
-  private void assertAnalysisError(
-      PerformanceAnalysisErrorCode expectedErrorCode, Runnable action) {
-    assertThatThrownBy(action::run)
-        .isInstanceOfSatisfying(
-            CustomException.class,
-            exception -> assertThat(exception.getErrorCode()).isEqualTo(expectedErrorCode));
+  private PerformanceResultRequestDTO.ScoreDTO scoreRequest() {
+    return PerformanceResultRequestDTO.ScoreDTO.builder()
+        .userId(USER_ID)
+        .songId(SONG_ID)
+        .pitchScore(90)
+        .rhythmScore(91)
+        .lyricsScore(94)
+        .stabilityScore(88)
+        .finalScore(92)
+        .overall("전체 평가")
+        .strength("강점")
+        .weakness("약점")
+        .tips("팁")
+        .build();
   }
 
   private PerformanceSnapShot analyzingSnapshot() {
@@ -402,6 +329,21 @@ class PerformanceAnalysisServiceTest {
     ReflectionTestUtils.setField(room, "id", ROOM_ID);
     room.startPerformance();
     return room;
+  }
+
+  private PerformanceResult savedResult(User user, Song song) {
+    PerformanceResult result =
+        PerformanceResult.builder()
+            .user(user)
+            .song(song)
+            .pitchScore(90)
+            .rhythmScore(91)
+            .lyricsScore(94)
+            .stabilityScore(88)
+            .finalScore(92)
+            .build();
+    ReflectionTestUtils.setField(result, "id", RESULT_ID);
+    return result;
   }
 
   private Song song() {
