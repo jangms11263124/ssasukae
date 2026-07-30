@@ -1,5 +1,5 @@
 import { MainHome } from '@/widgets/main-home';
 
-export default function LobyPage() {
+export default function LobbyPage() {
   return <MainHome />;
 }

@@ -9,7 +9,7 @@ import { BrandLogo } from '@/shared/ui/brand/BrandLogo';
 import { ProfileMenu } from './ProfileMenu';
 
 const NAV_ITEMS = [
-  { href: '/loby', label: 'HOME' },
+  { href: '/lobby', label: 'HOME' },
   { href: '/like', label: 'LIKE' },
   { href: '/ai-feedback', label: 'AI_FEEDBACK' },
   { href: '/settings', label: 'SETTINGS' },
@@ -34,7 +34,7 @@ export function AuthenticatedHeader({ className }: AuthenticatedHeaderProps) {
       )}
     >
       <div className="mx-auto flex h-20 max-w-[1500px] items-center justify-between px-6 sm:px-10">
-        <Link href="/loby" aria-label="메인 로비로 이동" className="shrink-0">
+        <Link href="/lobby" aria-label="메인 로비로 이동" className="shrink-0">
           <BrandLogo className="h-11 w-auto" />
         </Link>
 

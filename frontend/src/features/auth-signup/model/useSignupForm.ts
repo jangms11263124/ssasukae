@@ -97,7 +97,7 @@ export function useSignupForm({
       });
 
       await loginWithAccessToken(response.accessToken, response.user);
-      router.replace('/loby');
+      router.replace('/lobby');
     } catch (error) {
       setSubmitError(getSignupErrorMessage(error));
     }

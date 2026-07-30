@@ -7,13 +7,13 @@ import { getRoomSnapshot, terminateRoom, useRoomStore } from '@/entities/room';
 import { useAuth } from '@/entities/user';
 import { ApiError } from '@/shared/api/client';
 import { showToast } from '@/shared/model/toastStore';
-import { AuthenticatedHeader } from '@/widgets/authenticated-header';
 
 import { RoomSocketProvider } from '../model/RoomSocketContext';
 import { useRoomSocket } from '../model/useRoomSocket';
 import { useStageStore } from '../model/stageStore';
 import { AudioEnginePanel } from './audio-engine/AudioEnginePanel';
 import { CenterStage } from './center-stage/CenterStage';
+import { RoomHelpFloatingButton } from './help/RoomHelpFloatingButton';
 import { MediaControlDock } from './media-controls/MediaControlDock';
 import { NowPlayingCard } from './now-playing/NowPlayingCard';
 import { ParticipantVideoGrid } from './participant-video/ParticipantVideoGrid';
@@ -40,7 +40,7 @@ export function GeneralRoomScreen() {
   useEffect(() => {
     if (session === null) {
       showToast('방 정보가 없습니다. 다시 입장해 주세요.', 'error');
-      router.replace('/loby');
+      router.replace('/lobby');
     }
   }, [session, router]);
 
@@ -69,7 +69,7 @@ export function GeneralRoomScreen() {
         if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
           showToast(error.message, 'error');
           useRoomStore.getState().leaveRoom();
-          router.replace('/loby');
+          router.replace('/lobby');
           return;
         }
 
@@ -130,18 +130,16 @@ export function GeneralRoomScreen() {
     } finally {
       endStage();
       leaveRoomStore();
-      router.push('/loby');
+      router.push('/lobby');
     }
   };
 
   return (
     <RoomSocketProvider value={socket}>
       <div className="min-h-dvh bg-[#0b0b0d] text-zinc-100">
-        <AuthenticatedHeader />
-
-        <main className="mx-auto grid min-h-[calc(100dvh-8rem)] max-w-[1500px] grid-cols-1 gap-4 px-6 py-12 lg:grid-cols-[270px_minmax(0,1fr)_300px]">
+        <main className="mx-auto grid min-h-[calc(100dvh-3rem)] max-w-[1500px] grid-cols-1 gap-4 px-6 py-12 lg:grid-cols-[270px_minmax(0,1fr)_300px]">
           <RoomLeftSection
-            className="h-[calc(100dvh-11rem)] min-h-[720px]"
+            className="h-[calc(100dvh-6rem)] min-h-[720px]"
             room={room}
             participants={stagedParticipants}
             currentUserId={currentUserId}
@@ -184,6 +182,8 @@ export function GeneralRoomScreen() {
           </span>
           <span>INVITE_CODE: {session.inviteCode}</span>
         </footer>
+
+        <RoomHelpFloatingButton />
       </div>
     </RoomSocketProvider>
   );
