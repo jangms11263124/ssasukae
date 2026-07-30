@@ -42,7 +42,7 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/me/reperformance")
+    @PatchMapping("/me/reperformance")
     public ResponseEntity<PerformanceStatResponse> refreshPerformanceStat(@AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
         PerformanceStatResponse data = userService.refreshPerformanceStat(authenticatedUser);
         return ResponseEntity.ok(data);
