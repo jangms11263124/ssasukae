@@ -9,10 +9,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
+import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,19 +55,27 @@ class RoomInfoGetTest {
   @Mock private MediaSessionGateway mediaSessionGateway;
   @Mock private PerformanceRecoveryService performanceRecoveryService;
   @Mock private WebSocketEventPublisher webSocketEventPublisher;
+  @Mock private CardService cardService;
+  @Mock private PerformanceStore performanceStore;
 
   private RoomService roomService;
-
+  private final Clock clock =
+          Clock.fixed(
+                  Instant.parse("2026-07-30T00:00:00Z"),
+                  ZoneOffset.UTC);
   @BeforeEach
   void setUp() {
     roomService =
-        new RoomService(
-            roomRepository,
-            roomParticipantRepository,
-            userRepository,
-            mediaSessionGateway,
-            performanceRecoveryService,
-            webSocketEventPublisher);
+            new RoomService(
+                    roomRepository,
+                    roomParticipantRepository,
+                    userRepository,
+                    mediaSessionGateway,
+                    performanceRecoveryService,
+                    webSocketEventPublisher,
+                    cardService,
+                    performanceStore,
+                    clock);
   }
 
   @Test
