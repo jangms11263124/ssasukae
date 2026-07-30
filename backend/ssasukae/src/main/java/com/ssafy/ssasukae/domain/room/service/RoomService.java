@@ -8,14 +8,14 @@ import java.util.Comparator;
 import java.util.List;
 
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
-import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantJoinedPayload;
-import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantLeftPayload;
-import com.ssafy.ssasukae.domain.room.websocket.payload.RoomHostChangedPayload;
-import com.ssafy.ssasukae.domain.room.websocket.payload.RoomParticipantChatPayload;
+import com.ssafy.ssasukae.domain.room.websocket.RoomWebSocketEventType;
+import com.ssafy.ssasukae.domain.room.websocket.payload.*;
+import com.ssafy.ssasukae.domain.room.websocket.request.HostChangeRequest;
 import com.ssafy.ssasukae.domain.room.websocket.request.ParticipantChatRequest;
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketErrorCode;
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketException;
 import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
+import com.ssafy.ssasukae.global.websocket.message.WebSocketEventType;
 import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -198,6 +198,7 @@ public class RoomService {
         activeParticipants.forEach(participant -> participant.leave(now));
 
         mediaSessionGateway.closeSession(room.getOpenViduSessionId());
+        webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(ROOM_TERMINATED, roomId, new RoomTerminatedPayload(LocalDateTime.now())));
     }
 
     @Transactional
@@ -286,5 +287,35 @@ public class RoomService {
         if(!sender.isActive()) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
 
         webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_CHAT, room.getId(), new RoomParticipantChatPayload(sender.getId(), request.message().trim(), LocalDateTime.now())));
+    }
+
+    @Transactional
+    public void hostChange(Long roomId, HostChangeRequest request, Principal principal) {
+        User user = getUser(Long.valueOf(principal.getName()));
+        Room room = roomRepository.findById(roomId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+        if(room.getStatus() == RoomStatus.TERMINATED) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
+        if(!room.isHost(user.getId())) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
+        RoomParticipant sender = roomParticipantRepository.findByRoomIdAndUserId(room.getId(), user.getId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED));
+        if(!sender.isActive()) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
+        RoomParticipant receiver = roomParticipantRepository.findById(request.participantId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+        if(!receiver.isActive()) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
+
+        room.delegateHost(receiver.getUser());
+        webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(ROOM_HOST_CHANGED, room.getId(), new RoomHostChangedPayload(receiver.getId())));
+    }
+
+    @Transactional
+    public void kickParticipant(Long roomId, Long participantId, Long userId) {
+        User user = getUser(userId);
+        Room room = roomRepository.findById(roomId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+        if(room.getStatus() == RoomStatus.TERMINATED) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
+        if(!room.isHost(user.getId())) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
+        RoomParticipant sender = roomParticipantRepository.findByRoomIdAndUserId(room.getId(), user.getId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED));
+        if(!sender.isActive()) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
+        RoomParticipant receiver = roomParticipantRepository.findById(participantId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+        if(!receiver.isActive()) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
+
+        receiver.kick(LocalDateTime.now());
+        webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_KICKED, room.getId(), new ParticipantKickedPayload(participantId)));
     }
 }
