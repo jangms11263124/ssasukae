@@ -159,10 +159,13 @@ public class UserService {
     }
 
     private BigDecimal average(List<PerformanceResult> items) {
-        if(items.isEmpty()) return BigDecimal.ZERO;
+        if (items.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
 
         BigDecimal sum = items.stream()
                 .map(PerformanceResult::getFinalScore)
+                .map(BigDecimal::valueOf)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return sum.divide(

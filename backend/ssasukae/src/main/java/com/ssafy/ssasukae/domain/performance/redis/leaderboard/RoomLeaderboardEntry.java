@@ -9,7 +9,7 @@ public record RoomLeaderboardEntry(
     String nickname,
     Long songId,
     String songTitle,
-    BigDecimal finalScore) {
+    Integer finalScore) {
 
   public RoomLeaderboardEntry {
     requirePositive(performanceId, "performanceId");

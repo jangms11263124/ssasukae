@@ -1,6 +1,5 @@
 package com.ssafy.ssasukae.domain.performance.service;
 
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -40,9 +39,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class PerformanceAnalysisService {
 
-  private static final BigDecimal MIN_SCORE = BigDecimal.ZERO;
-  private static final BigDecimal MAX_SCORE = BigDecimal.valueOf(100);
-  private static final int MAX_SCORE_SCALE = 2;
+  private static final int MIN_SCORE = 0;
+  private static final int MAX_SCORE = 100;
 
   private final RoomRepository roomRepository;
   private final SongRepository songRepository;
@@ -250,11 +248,8 @@ public class PerformanceAnalysisService {
     }
   }
 
-  private void validateScore(BigDecimal score) {
-    if (score == null
-        || score.compareTo(MIN_SCORE) < 0
-        || score.compareTo(MAX_SCORE) > 0
-        || score.stripTrailingZeros().scale() > MAX_SCORE_SCALE) {
+  private void validateScore(Integer score) {
+    if (score == null || score < MIN_SCORE || score > MAX_SCORE) {
       throw new CustomException(PerformanceAnalysisErrorCode.INVALID_SCORE_RANGE);
     }
   }

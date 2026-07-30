@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,9 +46,9 @@ class RedisRoomLeaderboardStoreTest {
   @Test
   @DisplayName("공연별 점수를 저장하고 finalScore 내림차순으로 리더보드를 반환한다")
   void saveAndGetRankedOrdersByFinalScore() throws Exception {
-    RoomLeaderboardEntry first = entry(31L, "참가자 1", new BigDecimal("91.20"));
-    RoomLeaderboardEntry second = entry(32L, "참가자 2", new BigDecimal("85.40"));
-    RoomLeaderboardEntry updated = entry(33L, "참가자 3", new BigDecimal("94.10"));
+    RoomLeaderboardEntry first = entry(31L, "참가자 1", 91);
+    RoomLeaderboardEntry second = entry(32L, "참가자 2", 85);
+    RoomLeaderboardEntry updated = entry(33L, "참가자 3", 94);
 
     Map<Object, Object> values = new LinkedHashMap<>();
     values.put(first.performanceId().toString(), objectMapper.writeValueAsString(first));
@@ -72,8 +71,8 @@ class RedisRoomLeaderboardStoreTest {
   @Test
   @DisplayName("동점이면 performanceId가 작은 공연을 먼저 반환한다")
   void saveAndGetRankedOrdersTiesByPerformanceId() throws Exception {
-    RoomLeaderboardEntry later = entry(42L, "참가자 2", new BigDecimal("90.00"));
-    RoomLeaderboardEntry earlier = entry(41L, "참가자 1", new BigDecimal("90.00"));
+    RoomLeaderboardEntry later = entry(42L, "참가자 2", 90);
+    RoomLeaderboardEntry earlier = entry(41L, "참가자 1", 90);
 
     Map<Object, Object> values =
         Map.of(
@@ -92,7 +91,7 @@ class RedisRoomLeaderboardStoreTest {
   @Test
   @DisplayName("리더보드 조회 중 실패하면 이번에 추가한 항목을 제거한다")
   void saveAndGetRankedDeletesAddedEntryWhenReadFails() {
-    RoomLeaderboardEntry updated = entry(33L, "참가자 3", new BigDecimal("94.10"));
+    RoomLeaderboardEntry updated = entry(33L, "참가자 3", 94);
 
     when(hashOperations.entries(REDIS_KEY)).thenThrow(new IllegalStateException("Redis 조회 실패"));
 
@@ -105,7 +104,7 @@ class RedisRoomLeaderboardStoreTest {
   @Test
   @DisplayName("공연 ID로 저장된 리더보드 항목을 조회한다")
   void findReturnsStoredEntry() throws Exception {
-    RoomLeaderboardEntry entry = entry(31L, "참가자 1", new BigDecimal("91.20"));
+    RoomLeaderboardEntry entry = entry(31L, "참가자 1", 91);
 
     when(hashOperations.get(REDIS_KEY, entry.performanceId().toString()))
         .thenReturn(objectMapper.writeValueAsString(entry));
@@ -115,7 +114,7 @@ class RedisRoomLeaderboardStoreTest {
     assertThat(found).contains(entry);
   }
 
-  private RoomLeaderboardEntry entry(Long performanceId, String nickname, BigDecimal finalScore) {
+  private RoomLeaderboardEntry entry(Long performanceId, String nickname, Integer finalScore) {
     return new RoomLeaderboardEntry(
         performanceId,
         performanceId + 100,
