@@ -13,6 +13,8 @@ public enum RoomWebSocketEventType implements WebSocketEventType {
   PARTICIPANT_KICKED,
   // 참가자 연결 상태 변경
   PARTICIPANT_CONNECTION_STATUS_CHANGED,
+  // 방 종료
+  ROOM_TERMINATED,
   // 참가자 채팅
   PARTICIPANT_CHAT;
 
