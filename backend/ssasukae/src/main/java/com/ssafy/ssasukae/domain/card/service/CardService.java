@@ -5,7 +5,9 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -20,6 +22,7 @@ import com.ssafy.ssasukae.domain.card.redis.CardStateStore;
 import com.ssafy.ssasukae.domain.card.redis.RoomCardSnapshot;
 import com.ssafy.ssasukae.domain.card.redis.RoomCardStatus;
 import com.ssafy.ssasukae.domain.card.repository.CardRepository;
+import com.ssafy.ssasukae.domain.card.type.CardTier;
 import com.ssafy.ssasukae.domain.card.websocket.CardWebSocketEventPublisher;
 import com.ssafy.ssasukae.domain.card.websocket.CardWebSocketEventType;
 import com.ssafy.ssasukae.domain.card.websocket.payload.CardActivationCancelledPayload;
@@ -135,12 +138,10 @@ public class CardService {
 
   // 카드 활성화
   @Transactional
-  public synchronized void activate(
-      Long userId, Long roomId, Long performanceId, Long cardAssignmentId) {
+  public synchronized void activate(Long userId, Long roomId, Long performanceId) {
     validatePositive(userId, "userId");
     validatePositive(roomId, "roomId");
     validatePositive(performanceId, "performanceId");
-    validatePositive(cardAssignmentId, "cardAssignmentId");
 
     // 존재하는 방인가
     Room room =
@@ -192,7 +193,7 @@ public class CardService {
         cardStateStore
             .findAssignment(roomId, performanceId, participant.getId())
             .orElseThrow(() -> business(WebSocketErrorCode.CARD_ASSIGNMENT_NOT_FOUND));
-    validateAssignment(assignment, cardAssignmentId);
+    validateAssignment(assignment);
 
     // 마이크 난입이면, 효과를 카드 사용자 본인한테 적용시켜야함
     Long targetParticipantId =
@@ -215,7 +216,6 @@ public class CardService {
             roomId,
             performanceId,
             RoomCardStatus.PENDING,
-            cardAssignmentId,
             participant.getId(),
             targetParticipantId,
             assignment.cardId(),
@@ -248,8 +248,7 @@ public class CardService {
         CardWebSocketEventType.CARD_ACTIVATION_SCHEDULED,
         scheduledPayload(pendingRoomCard, approvedAt));
     taskScheduler.schedule(
-        () -> startEffect(roomId, performanceId, participant.getId(), cardAssignmentId),
-        activateAt.toInstant());
+        () -> startEffect(roomId, performanceId, participant.getId()), activateAt.toInstant());
   }
 
   public synchronized PerformanceSnapShot closeForPerformance(
@@ -300,18 +299,15 @@ public class CardService {
     return cardStateStore.findRoomCard(roomId);
   }
 
-  private synchronized void startEffect(
-      Long roomId, Long performanceId, Long participantId, Long cardAssignmentId) {
-    doStartEffect(roomId, performanceId, participantId, cardAssignmentId);
+  private synchronized void startEffect(Long roomId, Long performanceId, Long participantId) {
+    doStartEffect(roomId, performanceId, participantId);
   }
 
-  private void doStartEffect(
-      Long roomId, Long performanceId, Long participantId, Long cardAssignmentId) {
+  private void doStartEffect(Long roomId, Long performanceId, Long participantId) {
     RoomCardSnapshot pending = cardStateStore.findRoomCard(roomId).orElse(null);
     if (pending == null
         || pending.status() != RoomCardStatus.PENDING
         || !pending.performanceId().equals(performanceId)
-        || !pending.cardAssignmentId().equals(cardAssignmentId)
         || !pending.sourceParticipantId().equals(participantId)) {
       return;
     }
@@ -360,7 +356,6 @@ public class CardService {
         CardWebSocketEventType.CARD_EFFECT_STARTED,
         new CardEffectStartedPayload(
             active.performanceId(),
-            active.cardAssignmentId(),
             active.sourceParticipantId(),
             active.targetParticipantId(),
             active.targetType(),
@@ -376,19 +371,20 @@ public class CardService {
             active.endsAt()));
     // 효과 종료 이펙트 메서드 예약
     taskScheduler.schedule(
-        () -> finishEffect(roomId, performanceId, cardAssignmentId), endsAt.toInstant());
+        () -> finishEffect(roomId, performanceId, participantId), endsAt.toInstant());
   }
 
-  private synchronized void finishEffect(Long roomId, Long performanceId, Long cardAssignmentId) {
-    doFinishEffect(roomId, performanceId, cardAssignmentId);
+  private synchronized void finishEffect(
+      Long roomId, Long performanceId, Long sourceParticipantId) {
+    doFinishEffect(roomId, performanceId, sourceParticipantId);
   }
 
-  private void doFinishEffect(Long roomId, Long performanceId, Long cardAssignmentId) {
+  private void doFinishEffect(Long roomId, Long performanceId, Long sourceParticipantId) {
     RoomCardSnapshot roomCard = cardStateStore.findRoomCard(roomId).orElse(null);
     if (roomCard == null
         || roomCard.status() != RoomCardStatus.ACTIVE
         || !roomCard.performanceId().equals(performanceId)
-        || !roomCard.cardAssignmentId().equals(cardAssignmentId)) {
+        || !roomCard.sourceParticipantId().equals(sourceParticipantId)) {
       return;
     }
     cardStateStore.deleteRoomCard(roomId);
@@ -411,7 +407,7 @@ public class CardService {
     if (current == null
         || current.status() != RoomCardStatus.PENDING
         || !current.performanceId().equals(roomCard.performanceId())
-        || !current.cardAssignmentId().equals(roomCard.cardAssignmentId())) {
+        || !current.sourceParticipantId().equals(roomCard.sourceParticipantId())) {
       return;
     }
     cardStateStore.deleteRoomCard(roomCard.roomId());
@@ -428,16 +424,28 @@ public class CardService {
   }
 
   private Card draw(List<Card> cards) {
-    long totalWeight = cards.stream().mapToLong(Card::getDrawWeight).sum();
+    Map<CardTier, List<Card>> cardsByTier = new EnumMap<>(CardTier.class);
+    for (Card card : cards) {
+      cardsByTier.computeIfAbsent(card.getTier(), ignored -> new ArrayList<>()).add(card);
+    }
+
+    long totalWeight = cardsByTier.keySet().stream().mapToLong(CardTier::drawWeight).sum();
     long selected = random.nextLong(totalWeight);
     long cumulative = 0;
-    for (Card card : cards) {
-      cumulative += card.getDrawWeight();
+    CardTier selectedTier = null;
+    for (CardTier tier : CardTier.values()) {
+      if (!cardsByTier.containsKey(tier)) {
+        continue;
+      }
+      cumulative += tier.drawWeight();
       if (selected < cumulative) {
-        return card;
+        selectedTier = tier;
+        break;
       }
     }
-    return cards.get(cards.size() - 1);
+
+    List<Card> selectedTierCards = cardsByTier.get(selectedTier);
+    return selectedTierCards.get(random.nextInt(selectedTierCards.size()));
   }
 
   private CardAssignmentSnapshot toAssignment(
@@ -490,7 +498,6 @@ public class CardService {
       RoomCardSnapshot roomCard, OffsetDateTime serverNow) {
     return new CardActivationScheduledPayload(
         roomCard.performanceId(),
-        roomCard.cardAssignmentId(),
         roomCard.sourceParticipantId(),
         roomCard.targetParticipantId(),
         roomCard.targetType(),
@@ -516,7 +523,6 @@ public class CardService {
         CardWebSocketEventType.CARD_ACTIVATION_CANCELLED,
         new CardActivationCancelledPayload(
             roomCard.performanceId(),
-            roomCard.cardAssignmentId(),
             roomCard.sourceParticipantId(),
             roomCard.targetParticipantId(),
             roomCard.cardId(),
@@ -536,7 +542,6 @@ public class CardService {
         CardWebSocketEventType.CARD_EFFECT_ENDED,
         new CardEffectEndedPayload(
             roomCard.performanceId(),
-            roomCard.cardAssignmentId(),
             roomCard.sourceParticipantId(),
             roomCard.targetParticipantId(),
             roomCard.targetType(),
@@ -616,7 +621,7 @@ public class CardService {
     };
   }
 
-  private void validateAssignment(CardAssignmentSnapshot assignment, Long requestedAssignmentId) {
+  private void validateAssignment(CardAssignmentSnapshot assignment) {
     if (assignment.status() == CardAssignmentStatus.USED) {
       throw business(WebSocketErrorCode.CARD_ALREADY_USED);
     }

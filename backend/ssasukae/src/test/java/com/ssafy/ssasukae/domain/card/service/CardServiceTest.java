@@ -55,7 +55,6 @@ class CardServiceTest {
   private static final Long PERFORMANCE_ID = 1006L;
   private static final Long PARTICIPANT_ID = 15L;
   private static final Long PERFORMER_ID = 11L;
-  private static final Long ASSIGNMENT_ID = 52L;
   private static final Instant NOW = Instant.parse("2026-07-29T11:00:00Z");
 
   @Mock private RoomRepository roomRepository;
@@ -125,7 +124,7 @@ class CardServiceTest {
 
   @Test
   void activationSavesTheRoomCardAndPausesPlayback() {
-    cardService.activate(USER_ID, ROOM_ID, PERFORMANCE_ID, ASSIGNMENT_ID);
+    cardService.activate(USER_ID, ROOM_ID, PERFORMANCE_ID);
 
     ArgumentCaptor<PerformanceSnapShot> performanceCaptor =
         ArgumentCaptor.forClass(PerformanceSnapShot.class);
@@ -144,7 +143,7 @@ class CardServiceTest {
 
   @Test
   void scheduledActivationMarksTheAssignmentUsedAndStartsTheEffect() {
-    cardService.activate(USER_ID, ROOM_ID, PERFORMANCE_ID, ASSIGNMENT_ID);
+    cardService.activate(USER_ID, ROOM_ID, PERFORMANCE_ID);
 
     ArgumentCaptor<PerformanceSnapShot> pausedCaptor =
         ArgumentCaptor.forClass(PerformanceSnapShot.class);
@@ -190,7 +189,6 @@ class CardServiceTest {
             ROOM_ID,
             PERFORMANCE_ID,
             RoomCardStatus.ACTIVE,
-            999L,
             16L,
             PERFORMER_ID,
             3L,
@@ -210,7 +208,7 @@ class CardServiceTest {
             OffsetDateTime.parse("2026-07-29T20:00:08+09:00"));
     when(cardStateStore.findRoomCard(ROOM_ID)).thenReturn(Optional.of(activeRoomCard));
 
-    assertThatThrownBy(() -> cardService.activate(USER_ID, ROOM_ID, PERFORMANCE_ID, ASSIGNMENT_ID))
+    assertThatThrownBy(() -> cardService.activate(USER_ID, ROOM_ID, PERFORMANCE_ID))
         .isInstanceOfSatisfying(
             WebSocketBusinessException.class,
             exception ->

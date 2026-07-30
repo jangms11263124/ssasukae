@@ -7,11 +7,15 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import com.ssafy.ssasukae.domain.card.type.CardTier;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectTargetType;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.card.CardErrorCode;
 
 import lombok.Getter;
 
@@ -47,7 +51,7 @@ public class Card {
   private Integer effectValue;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "tier", length = 1)
+  @Column(name = "tier", nullable = false, length = 1)
   private CardTier tier;
 
   @Column(name = "duration_seconds", nullable = false)
@@ -63,18 +67,15 @@ public class Card {
       String cardImageUrl,
       CardEffectType effectType,
       Integer effectValue,
-      CardTier tier,
-      Integer durationSeconds,
-      Integer drawWeight) {
+      Integer durationSeconds) {
     this.code = code;
     this.name = name;
     this.description = description;
     this.cardImageUrl = cardImageUrl;
     this.effectType = effectType;
     this.effectValue = effectValue;
-    this.tier = tier;
     this.durationSeconds = durationSeconds;
-    this.drawWeight = drawWeight == null ? 1 : drawWeight;
+    synchronizeTierAndDrawWeight();
     validateConfiguration();
   }
 
@@ -85,19 +86,9 @@ public class Card {
       String cardImageUrl,
       CardEffectType effectType,
       Integer effectValue,
-      CardTier tier,
-      Integer durationSeconds,
-      Integer drawWeight) {
+      Integer durationSeconds) {
     return new Card(
-        code,
-        name,
-        description,
-        cardImageUrl,
-        effectType,
-        effectValue,
-        tier,
-        durationSeconds,
-        drawWeight);
+        code, name, description, cardImageUrl, effectType, effectValue, durationSeconds);
   }
 
   public CardEffectTargetType getTargetType() {
@@ -107,34 +98,49 @@ public class Card {
   }
 
   public boolean isDrawable() {
-    try {
-      validateConfiguration();
-      return id != null && id > 0;
-    } catch (IllegalArgumentException exception) {
-      return false;
-    }
+    return id != null && id > 0 && configurationErrorMessage() == null;
   }
 
   public void validateConfiguration() {
+    String errorMessage = configurationErrorMessage();
+    if (errorMessage != null) {
+      throw new CustomException(CardErrorCode.CARD_CONFIGURATION_INVALID);
+    }
+  }
+
+  @PrePersist
+  @PreUpdate
+  private void synchronizeTierAndDrawWeight() {
+    CardTier calculatedTier = CardTier.fromDurationSeconds(durationSeconds);
+    if (calculatedTier == null) {
+      throw new CustomException(CardErrorCode.CARD_CONFIGURATION_INVALID);
+    }
+    this.tier = calculatedTier;
+    this.drawWeight = calculatedTier.drawWeight();
+  }
+
+  private String configurationErrorMessage() {
     if (cardImageUrl == null || cardImageUrl.isBlank()) {
-      throw new IllegalArgumentException("카드 이미지 URL은 필수입니다.");
+      return "카드 이미지 URL은 필수입니다.";
     }
     if (code == null || code.isBlank() || effectType == null) {
-      throw new IllegalArgumentException("카드 코드와 효과 종류는 필수입니다.");
+      return "카드 코드와 효과 종류는 필수입니다.";
     }
-    if (durationSeconds == null || durationSeconds <= 0) {
-      throw new IllegalArgumentException("카드 지속 시간은 양수여야 합니다.");
+    CardTier calculatedTier = CardTier.fromDurationSeconds(durationSeconds);
+    if (calculatedTier == null) {
+      return "카드 지속 시간은 10초, 15초, 20초 중 하나여야 합니다.";
     }
-    if (drawWeight == null || drawWeight <= 0) {
-      throw new IllegalArgumentException("카드 추첨 가중치는 양수여야 합니다.");
+    if (tier != calculatedTier || drawWeight == null || drawWeight != calculatedTier.drawWeight()) {
+      return "카드 티어와 추첨 가중치가 지속 시간 기준과 일치해야 합니다.";
     }
     if ((effectType == CardEffectType.MR_KEY_CHANGE || effectType == CardEffectType.MR_TEMPO_CHANGE)
         && (effectValue == null || effectValue < -6 || effectValue > 6)) {
-      throw new IllegalArgumentException("키·템포 카드 효과 값은 -6부터 6 사이여야 합니다.");
+      return "키·템포 카드 효과 값은 -6부터 6 사이여야 합니다.";
     }
     if ((effectType == CardEffectType.MIC_OPEN || effectType == CardEffectType.LYRICS_HIDE)
         && effectValue != null) {
-      throw new IllegalArgumentException("이 카드 효과에는 수치가 없어야 합니다.");
+      return "이 카드 효과에는 수치가 없어야 합니다.";
     }
+    return null;
   }
 }
