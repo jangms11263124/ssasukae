@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 public class PerformanceResponseDTO {
     @Data
@@ -18,5 +19,6 @@ public class PerformanceResponseDTO {
         String artist;
         String thumbnailUrl;
         BigDecimal score;
+        LocalDateTime performanceAt;
     }
 }
