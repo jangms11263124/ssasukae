@@ -54,6 +54,10 @@ spring:
 server:
   forward-headers-strategy: framework
 
+logging:
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{traceId}] %logger{36} - %msg%n"
+
 management:
   endpoints:
     web:

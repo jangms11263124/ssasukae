@@ -39,7 +39,7 @@ public class SongService {
             case "ALL" -> searchAll(normalizedQuery, cursor, size);
             case "RECOMMEND" -> searchRecommend(normalizedQuery, cursor, size);
             case "POPULAR" -> searchPopular(normalizedQuery, cursor, size);
-            default -> throw new IllegalArgumentException("지원하지 않는 검색 필터입니다: " + filter);
+            default -> throw new CustomException(SongErrorCode.UNSUPPORTED_SEARCH_FILTER);
         };
 
         boolean hasNext = fetchedSongs.size() > size;

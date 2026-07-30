@@ -34,6 +34,7 @@ import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
+import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 
 import lombok.RequiredArgsConstructor;
@@ -246,7 +247,7 @@ public class RoomService {
 
     private User getUser(Long userId) {
         return userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다. id=" + userId));
+                .orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
     }
 
     private void validateNoActiveRoom(Long userId) {
@@ -264,7 +265,7 @@ public class RoomService {
             }
         }
 
-        throw new IllegalStateException("초대 코드를 생성하지 못했습니다.");
+        throw new CustomException(RoomErrorCode.INVITE_CODE_GENERATION_FAILED);
     }
 
     private String randomInviteCode() {

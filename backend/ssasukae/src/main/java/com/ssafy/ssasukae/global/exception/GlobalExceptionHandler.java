@@ -1,7 +1,10 @@
 package com.ssafy.ssasukae.global.exception;
 
+import com.ssafy.ssasukae.global.logging.LogMdcKeys;
+
 import io.jsonwebtoken.JwtException;
 
+import org.slf4j.MDC;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +17,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ErrorResponse> handleCustomException(CustomException e) {
         BaseErrorCode errorCode = e.getErrorCode();
+        MDC.put(LogMdcKeys.ERROR_CODE, errorCode.name());
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(ErrorResponse.of(
@@ -25,6 +29,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(JwtException.class)
     public ResponseEntity<ErrorResponse> handleJwtException(JwtException e) {
+        MDC.put(LogMdcKeys.ERROR_CODE, "INVALID_TOKEN");
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of(HttpStatus.BAD_REQUEST.value(), "INVALID_TOKEN", "유효하지 않은 토큰입니다."));
@@ -32,6 +37,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrityViolationException(DataIntegrityViolationException e) {
+        MDC.put(LogMdcKeys.ERROR_CODE, "INTERNAL_SERVER_ERROR");
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of(HttpStatus.INTERNAL_SERVER_ERROR.value(), "INTERNAL_SERVER_ERROR", "서버 오류가 발생했습니다."));
