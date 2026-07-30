@@ -10,7 +10,7 @@ interface GuestOnlyGuardProps {
   redirectTo?: string;
 }
 
-export function GuestOnlyGuard({ children, redirectTo = '/loby' }: GuestOnlyGuardProps) {
+export function GuestOnlyGuard({ children, redirectTo = '/lobby' }: GuestOnlyGuardProps) {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
 
