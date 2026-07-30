@@ -105,7 +105,8 @@ public class UserService {
                             .title(song.getTitle())
                             .artist(song.getArtist())
                             .thumbnailUrl(song.getCoverObjectKey())
-                            .score(p.getFinalScore()).build();
+                            .score(p.getFinalScore())
+                            .performanceAt(p.getCreatedAt()).build();
                 }).toList()).build();
     }
 
