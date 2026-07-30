@@ -6,7 +6,6 @@ import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectEndReason;
 
 public record CardActivationCancelledPayload(
     Long performanceId,
-    Long cardAssignmentId,
     Long sourceParticipantId,
     Long targetParticipantId,
     Long cardId,

@@ -19,13 +19,12 @@ public class CardWebSocketController {
   }
 
   // 카드 발동 명령
-  @MessageMapping("/rooms/{roomId}/performances/{performanceId}/cards/{cardAssignmentId}/activate")
+  @MessageMapping("/rooms/{roomId}/performances/{performanceId}/cards/activate")
   public void activate(
       @DestinationVariable Long roomId,
       @DestinationVariable Long performanceId,
-      @DestinationVariable Long cardAssignmentId,
       Principal principal) {
-    cardService.activate(resolveUserId(principal), roomId, performanceId, cardAssignmentId);
+    cardService.activate(resolveUserId(principal), roomId, performanceId);
   }
 
   private Long resolveUserId(Principal principal) {
