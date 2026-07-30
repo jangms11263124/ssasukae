@@ -1,5 +1,6 @@
 package com.ssafy.ssasukae.domain.room.dto;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import com.ssafy.ssasukae.domain.room.entity.Room;
@@ -13,16 +14,33 @@ public record RoomSnapshotResponse(
     RoomStatus status,
     Long hostUserId,
     Integer maxParticipants,
-    List<RoomParticipantResponse> participants) {
+    OffsetDateTime serverNow,
+    List<RoomParticipantResponse> participants,
+    PlaybackSnapshotResponse playback,
+    MyCardSnapshotResponse myCard,
+    ActiveCardSnapshotResponse activeCard) {
+
+  public static RoomSnapshotResponse from(Room room, List<RoomParticipant> participants) {
+    return from(room, participants, OffsetDateTime.now(), null, null, null);
+  }
 
   public static RoomSnapshotResponse from(
-      Room room, List<RoomParticipant> participants) {
+      Room room,
+      List<RoomParticipant> participants,
+      OffsetDateTime serverNow,
+      PlaybackSnapshotResponse playback,
+      MyCardSnapshotResponse myCard,
+      ActiveCardSnapshotResponse activeCard) {
     return new RoomSnapshotResponse(
         room.getName(),
         room.getMode(),
         room.getStatus(),
         room.getHost().getId(),
         room.getMaxParticipants(),
-        participants.stream().map(RoomParticipantResponse::from).toList());
+        serverNow,
+        participants.stream().map(RoomParticipantResponse::from).toList(),
+        playback,
+        myCard,
+        activeCard);
   }
 }
