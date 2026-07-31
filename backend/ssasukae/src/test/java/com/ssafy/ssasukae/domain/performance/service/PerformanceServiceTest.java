@@ -105,7 +105,7 @@ class PerformanceServiceTest {
     PerformanceTransactionSupport transactionSupport =
         new PerformanceTransactionSupport(performanceStore, recoveryDeadlineStore);
     PerformanceCancellationProcessor cancellationProcessor =
-        new PerformanceCancellationProcessor(transactionSupport, eventPublisher, cardService);
+        new PerformanceCancellationProcessor(transactionSupport, eventPublisher, cardService, roomParticipantRepository);
     org.mockito.Mockito.lenient()
         .when(cardService.closeForPerformance(any(), any()))
         .thenAnswer(invocation -> invocation.getArgument(0));
@@ -734,17 +734,9 @@ class PerformanceServiceTest {
 
     performanceService.cancel(USER_ID, ROOM_ID, PERFORMANCE_ID);
 
-    ArgumentCaptor<PerformanceSnapShot> cancelledCaptor =
-        ArgumentCaptor.forClass(PerformanceSnapShot.class);
-
-    verify(performanceStore).save(cancelledCaptor.capture());
-
-    PerformanceSnapShot cancelled = cancelledCaptor.getValue();
-
-    assertThat(cancelled.status()).isEqualTo(PerformanceStatus.CANCELLED);
-
     assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
 
+    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
     verify(performanceStore, never()).delete(any(PerformanceSnapShot.class));
 
     verifyNoInteractions(eventPublisher);
@@ -753,7 +745,7 @@ class PerformanceServiceTest {
 
     InOrder commitOrder = inOrder(performanceStore, eventPublisher);
 
-    commitOrder.verify(performanceStore).delete(cancelled);
+    commitOrder.verify(performanceStore).delete(playing);
 
     commitOrder
         .verify(eventPublisher)

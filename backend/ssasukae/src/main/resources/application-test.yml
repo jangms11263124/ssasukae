@@ -16,4 +16,6 @@ JWT_SECRET: test-jwt-secret-key-must-be-at-least-32-bytes
 openvidu:
   url: http://localhost:0
   secret: test-openvidu-secret
+  webhook: test-webhook-secret
 AI_INTERNAL_API_KEY: test-ai-internal-api-key
+

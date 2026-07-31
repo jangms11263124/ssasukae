@@ -1,14 +1,5 @@
 package com.ssafy.ssasukae.domain.performanceResult.service;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.IntStream;
-
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardEntry;
 import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardStore;
@@ -26,6 +17,8 @@ import com.ssafy.ssasukae.domain.performanceResult.dto.PerformanceResultResponse
 import com.ssafy.ssasukae.domain.performanceResult.entity.PerformanceResult;
 import com.ssafy.ssasukae.domain.performanceResult.repository.PerformanceResultRepository;
 import com.ssafy.ssasukae.domain.room.entity.Room;
+import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
+import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 import com.ssafy.ssasukae.domain.song.entity.Song;
@@ -36,8 +29,15 @@ import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.performanceAnalysis.PerformanceAnalysisErrorCode;
 import com.ssafy.ssasukae.global.exception.song.SongErrorCode;
 import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
-
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
@@ -53,6 +53,7 @@ public class PerformanceResultService {
   private final Clock clock;
   private final PerformanceTransactionSupport transactionSupport;
   private final PerformanceWebSocketEventPublisher eventPublisher;
+  private final RoomParticipantRepository roomParticipantRepository;
 
   @Transactional
   public PerformanceResultResponseDTO.PerformanceIdDTO getScore(
@@ -94,23 +95,16 @@ public class PerformanceResultService {
     transactionSupport.restoreOnRollback(
         () -> restoreLeaderboardEntry(room.getId(), analyzing.performanceId(), previousEntry));
 
-    PerformanceSnapShot finished;
-    try {
-      finished = analyzing.completeAnalysis();
-    } catch (IllegalStateException exception) {
-      throw new CustomException(PerformanceAnalysisErrorCode.INVALID_PERFORMANCE_STATE);
-    }
-
-    transactionSupport.saveWithRollback(analyzing, finished);
     room.cancelPerformance();
+    clearPerformer(room.getId(), analyzing.performerParticipantId());
 
     LeaderboardUpdatedPayload leaderboardPayload =
         new LeaderboardUpdatedPayload(
             analyzing.performanceId(), request.getFinalScore(), toPayload(rankedEntries));
     transactionSupport.afterCommit(
         () -> {
-          transactionSupport.deletePerformance(finished);
-          transactionSupport.deleteRecoveryDeadline(finished.performanceId());
+          transactionSupport.deletePerformance(analyzing);
+          transactionSupport.deleteRecoveryDeadline(analyzing.performanceId());
           eventPublisher.publish(
               room.getId(), PerformanceWebSocketEventType.LEADERBOARD_UPDATED, leaderboardPayload);
           eventPublisher.publish(
@@ -214,5 +208,11 @@ public class PerformanceResultService {
                   entry.finalScore());
             })
         .toList();
+  }
+  private void clearPerformer(Long roomId, Long performerParticipantId) {
+    roomParticipantRepository.findById(performerParticipantId)
+            .filter(participant -> participant.getRoom().getId().equals(roomId))
+            .filter(RoomParticipant::isActive)
+            .ifPresent(RoomParticipant::demoteToParticipant);
   }
 }

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomJoinResponse;
+import com.ssafy.ssasukae.domain.room.dto.RoomPerformerSelectRequest;
 import com.ssafy.ssasukae.domain.room.dto.RoomSnapshotResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomTokenResponse;
 import com.ssafy.ssasukae.domain.room.service.RoomService;
@@ -55,6 +56,20 @@ public class RoomController {
     ) {
         String token = roomService.issueConnectionToken(authenticatedUser.userId(), roomId);
         return ResponseEntity.ok(new RoomTokenResponse(roomId, token));
+    }
+
+    @PostMapping("/{roomId}/performer")
+    public ResponseEntity<Void> selectPerformer(
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser,
+            @PathVariable Long roomId,
+            @Valid @RequestBody RoomPerformerSelectRequest request
+    ) {
+        roomService.selectPerformer(
+                authenticatedUser.userId(),
+                roomId,
+                request.participantId()
+        );
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{roomId}")
