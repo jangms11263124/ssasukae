@@ -6,6 +6,7 @@ import { cn } from '@/shared/lib/cn';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
 import { formatPerformedAt } from '../lib/formatters';
+import { getScoreGrade, GRADE_CLASS } from '../lib/scoreGrade';
 import { ChevronRightIcon, HistoryIcon } from './icons';
 import { TrackThumbnail } from './TrackThumbnail';
 
@@ -54,6 +55,7 @@ export function RecentActivityCard({ performances }: RecentActivityCardProps) {
           <ul>
             {performances.map((performance) => {
               const performedAt = formatPerformedAt(performance.performanceAt);
+              const grade = getScoreGrade(performance.score);
 
               return (
                 <li
@@ -92,16 +94,15 @@ export function RecentActivityCard({ performances }: RecentActivityCardProps) {
                     {performance.score.toFixed(1)}
                   </p>
 
-                  {/* GRADE는 점수 구간 기준이 정해지지 않아 자리만 만들어 둔다. */}
                   <div className="flex justify-end">
                     <span
                       className={cn(
                         jetBrainsMono.className,
-                        'flex size-7 items-center justify-center border border-white/[0.07] text-[0.6rem] font-bold text-zinc-700',
+                        'flex size-7 items-center justify-center border text-[0.6rem] font-bold',
+                        GRADE_CLASS[grade],
                       )}
-                      title="등급 기준 확정 전"
                     >
-                      --
+                      {grade}
                     </span>
                   </div>
                 </li>
