@@ -72,8 +72,13 @@ export async function apiClient<T>(path: string, options: RequestOptions = {}): 
 
   const requestHeaders = new Headers(headers);
 
-  if (body !== undefined) {
+  // FormData는 브라우저가 boundary 포함 Content-Type을 직접 지정해야 하므로 그대로 보낸다.
+  let requestBody: BodyInit | undefined;
+  if (body instanceof FormData) {
+    requestBody = body;
+  } else if (body !== undefined) {
     requestHeaders.set('Content-Type', 'application/json');
+    requestBody = JSON.stringify(body);
   }
 
   if (auth) {
@@ -88,7 +93,7 @@ export async function apiClient<T>(path: string, options: RequestOptions = {}): 
     ...rest,
     credentials: 'include',
     headers: requestHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: requestBody,
   });
 
   if (
