@@ -212,7 +212,8 @@ class RoomServiceMediaSessionTest {
   @DisplayName("참가자가 명시적으로 방을 나가면 진행 중인 가창 공연 복구를 요청한다")
   void leaveRoomRequestsPerformanceRecovery() {
     Room room = room(10L, "openvidu-session-1");
-    RoomParticipant participant = participant(room, 100L, ConnectionStatus.CONNECTED);
+    RoomParticipant participant =
+        connectedParticipant(room, 100L, 2L, "participant-connection");
     when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByRoomIdAndUserId(10L, 2L))
         .thenReturn(Optional.of(participant));
@@ -221,6 +222,8 @@ class RoomServiceMediaSessionTest {
 
     assertThat(participant.isActive()).isFalse();
     verify(performanceRecoveryService).recoverPerformerExitCase(10L, 2L);
+    verify(mediaSessionGateway)
+        .disconnect("openvidu-session-1", "participant-connection");
   }
 
   @Test
@@ -236,6 +239,7 @@ class RoomServiceMediaSessionTest {
 
     assertThat(participant.getConnectionStatus()).isEqualTo(ConnectionStatus.LEFT);
     verify(performanceRecoveryService).recoverPerformerExitCase(10L, 2L);
+    verify(mediaSessionGateway, never()).disconnect(any(), any());
   }
 
   @Test
@@ -251,6 +255,51 @@ class RoomServiceMediaSessionTest {
 
     assertThat(participant.getConnectionStatus()).isEqualTo(ConnectionStatus.CONNECTED);
     verifyNoInteractions(performanceRecoveryService);
+    verify(mediaSessionGateway, never()).disconnect(any(), any());
+  }
+
+  @Test
+  @DisplayName("온라인 참가자를 강퇴하면 해당 OpenVidu 연결을 종료한다")
+  void kickParticipantDisconnectsOnlineParticipant() {
+    User host = user(1L);
+    Room room = room(10L, "openvidu-session-1", host);
+    RoomParticipant sender =
+        connectedParticipant(room, 101L, 1L, "host-connection");
+    RoomParticipant receiver =
+        connectedParticipant(room, 100L, 2L, "participant-connection");
+    when(userRepository.findById(1L)).thenReturn(Optional.of(host));
+    when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByRoomIdAndUserId(10L, 1L))
+        .thenReturn(Optional.of(sender));
+    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(receiver));
+
+    roomService.kickParticipant(10L, 100L, 1L);
+
+    assertThat(receiver.getConnectionStatus()).isEqualTo(ConnectionStatus.KICKED);
+    verify(mediaSessionGateway)
+        .disconnect("openvidu-session-1", "participant-connection");
+  }
+
+  @Test
+  @DisplayName("연결이 끊긴 참가자를 강퇴하면 OpenVidu 연결 종료를 요청하지 않는다")
+  void kickParticipantDoesNotDisconnectOfflineParticipant() {
+    User host = user(1L);
+    Room room = room(10L, "openvidu-session-1", host);
+    RoomParticipant sender =
+        connectedParticipant(room, 101L, 1L, "host-connection");
+    RoomParticipant receiver =
+        connectedParticipant(room, 100L, 2L, "participant-connection");
+    receiver.disconnect(LocalDateTime.now());
+    when(userRepository.findById(1L)).thenReturn(Optional.of(host));
+    when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByRoomIdAndUserId(10L, 1L))
+        .thenReturn(Optional.of(sender));
+    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(receiver));
+
+    roomService.kickParticipant(10L, 100L, 1L);
+
+    assertThat(receiver.getConnectionStatus()).isEqualTo(ConnectionStatus.KICKED);
+    verify(mediaSessionGateway, never()).disconnect(any(), any());
   }
 
   private User user(Long id) {
@@ -281,6 +330,18 @@ class RoomServiceMediaSessionTest {
     RoomParticipant participant = RoomParticipant.join(room, user(2L), LocalDateTime.now());
     ReflectionTestUtils.setField(participant, "id", id);
     ReflectionTestUtils.setField(participant, "connectionStatus", connectionStatus);
+    return participant;
+  }
+
+  private RoomParticipant connectedParticipant(
+      Room room,
+      Long id,
+      Long userId,
+      String connectionId) {
+    RoomParticipant participant =
+        RoomParticipant.join(room, user(userId), LocalDateTime.now());
+    ReflectionTestUtils.setField(participant, "id", id);
+    participant.connect(connectionId);
     return participant;
   }
 }

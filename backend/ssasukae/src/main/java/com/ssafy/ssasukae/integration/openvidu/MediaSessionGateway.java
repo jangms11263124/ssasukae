@@ -6,5 +6,7 @@ public interface MediaSessionGateway {
 
   String createConnectionToken(String sessionId, Long participantId);
 
+  void disconnect(String sessionId, String connectionId);
+
   void closeSession(String sessionId);
 }
