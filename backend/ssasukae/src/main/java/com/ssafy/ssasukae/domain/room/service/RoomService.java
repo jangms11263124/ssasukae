@@ -59,6 +59,7 @@ public class RoomService {
     private static final int INVITE_CODE_MAX_RETRY = 20;
 
     private static final List<ConnectionStatus> ACTIVE_STATUSES = List.of(
+            ConnectionStatus.PREPARING,
             ConnectionStatus.CONNECTED,
             ConnectionStatus.DISCONNECTED
     );
@@ -142,8 +143,6 @@ public class RoomService {
                 room.getOpenViduSessionId(),
                 savedParticipant.getId()
         );
-
-        webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_JOINED, room.getId(), new ParticipantJoinedPayload(savedParticipant.getId(), user.getNickname())));
 
         return new RoomJoinResponse(
                 room.getId(),
@@ -266,6 +265,30 @@ public class RoomService {
             throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
         }
 
+        leaveParticipant(currentRoom, participant);
+    }
+
+    @Transactional
+    public void leaveByConnectionExpiration(Long participantId) {
+        RoomParticipant currentParticipant = roomParticipantRepository.findById(participantId)
+                .orElse(null);
+        if(currentParticipant == null) return;
+
+        Room currentRoom = roomRepository.findByIdForUpdate(currentParticipant.getRoom().getId())
+                .orElse(null);
+        if(currentRoom == null) return;
+
+        RoomParticipant participant = roomParticipantRepository.findByIdForUpdate(participantId)
+                .orElse(null);
+        if(participant == null
+                || participant.getConnectionStatus() != ConnectionStatus.DISCONNECTED) return;
+
+        leaveParticipant(currentRoom, participant);
+    }
+
+    private void leaveParticipant(Room currentRoom, RoomParticipant participant) {
+        Long roomId = currentRoom.getId();
+        Long userId = participant.getUser().getId();
         RoomParticipant newHost = null;
         if(currentRoom.isHost(userId)) {
             List<RoomParticipant> participants = roomParticipantRepository.findRoomParticipantsByRoom(currentRoom);
