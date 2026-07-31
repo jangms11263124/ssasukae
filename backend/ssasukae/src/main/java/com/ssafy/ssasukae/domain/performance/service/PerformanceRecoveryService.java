@@ -59,7 +59,6 @@ public class PerformanceRecoveryService {
   }
 
   /**
-   * Redis 마감 시각이 지난 공연을 현재 상태에 맞게 복구한다.
    * ANALYZING 상태에서 AI 응답 제한 시간이 실제로 지난 경우 분석 실패로 종료한다.
    */
   @Transactional
@@ -88,14 +87,14 @@ public class PerformanceRecoveryService {
       deadlineStore.delete(performanceId);
       return;
     }
-    // 방이 제거됐거나, 방 상태가 PLAYING이 아니면 공연 복구 정보 삭제
-    if (current.isTerminal() || room.getStatus() != RoomStatus.PLAYING) {
+    // 방 상태가 PLAYING이 아니면 공연 복구 정보 삭제
+    if (room.getStatus() != RoomStatus.PLAYING) {
       cleanup(current);
       return;
     }
     // 현재 분석중이라면 복구 정보 저장
     if (current.status() == PerformanceStatus.ANALYZING) {
-      recoverAnalysisTimeout(room, current, now);
+      failAnalysis(room, current);
       return;
     }
 
@@ -103,40 +102,22 @@ public class PerformanceRecoveryService {
   }
 
 
-  // 분석 타임아웃 설정 후 레디스에 저장
-  private void recoverAnalysisTimeout(
-      Room room, PerformanceSnapShot analyzing, Instant currentTime) {
-    // 타임아웃은, 음원 종료 시각 기준 +2분으로 잡음
-    Instant analysisDeadline =
-        analyzing.playbackFinishedAt().toInstant().plus(properties.getAnalysisTimeout());
-
-    //  만약 현재 시각이 타임아웃시각보다 앞이라면 레디스에다가 저장
-    if (currentTime.isBefore(analysisDeadline)) {
-      deadlineStore.save(analyzing.performanceId(), analysisDeadline);
-      return;
-    }
-
-    // 현재 시각이 타임아웃시간보다 뒤다 -> 타임아웃 오버됐다. -> 공연 강제 종료 시켜야함
-    PerformanceSnapShot failed = analyzing.failAnalysis();
-    // 현재 공연 상태를 분석 실패처리
-    transactionSupport.saveWithRollback(analyzing, failed);
-    // 방 상태를 PREPARE로 복구 -> 다음 곡 준비를 위해
+  // 분석 실패 처리
+  private void failAnalysis(Room room, PerformanceSnapShot analyzing) {
     room.recoverPerformance();
 
-    transactionSupport.afterCommit(
-        () -> {
-          // 공연 정보와 복구 정보 삭제
-          cleanup(failed);
-
-          // 공연 상태가 변경되었으니 이벤트 발행 (분석중 -> 분석 실패)
-          eventPublisher.publish(
+    transactionSupport.afterCommit(() -> {
+      cleanup(analyzing);
+      eventPublisher.publish(
               room.getId(),
               PerformanceWebSocketEventType.PERFORMANCE_STATE_CHANGED,
               new PerformanceStateChangedPayload(
-                  failed.performanceId(),
-                  PerformanceStatus.ANALYZING,
-                  PerformanceStatus.ANALYSIS_FAILED));
-        });
+                      analyzing.performanceId(),
+                      PerformanceStatus.ANALYZING,
+                      PerformanceStatus.ANALYSIS_FAILED
+              )
+      );
+    });
   }
 
   // 공연 정보와 복구 정보를 레디스에서 삭제
