@@ -6,5 +6,8 @@ public record PerformancePreparationStartedPayload(
     Long performerParticipantId,
     Long songId,
     String songTitle,
+    Integer difficultyLevel,
+    String thumbnailImageUrl,
     String mrDownloadUrl,
-    String midiJsonDownloadUrl) {}
+    String midiJsonDownloadUrl,
+    String lyricsDownloadUrl) {}
