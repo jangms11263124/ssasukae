@@ -16,7 +16,8 @@ public enum RoomWebSocketEventType implements WebSocketEventType {
   // 방 종료
   ROOM_TERMINATED,
   // 참가자 채팅
-  PARTICIPANT_CHAT;
+  PARTICIPANT_CHAT,
+  PERFORMER_SELECTED;
 
   @Override
   public String value() {

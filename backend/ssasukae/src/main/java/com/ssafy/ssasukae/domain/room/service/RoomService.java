@@ -1,5 +1,36 @@
 package com.ssafy.ssasukae.domain.room.service;
 
+import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
+import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
+import com.ssafy.ssasukae.domain.room.dto.*;
+import com.ssafy.ssasukae.domain.room.entity.Room;
+import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
+import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
+import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
+import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
+import com.ssafy.ssasukae.domain.room.type.RoomStatus;
+import com.ssafy.ssasukae.domain.room.websocket.RoomWebSocketEventType;
+import com.ssafy.ssasukae.domain.room.websocket.payload.*;
+import com.ssafy.ssasukae.domain.room.websocket.request.HostChangeRequest;
+import com.ssafy.ssasukae.domain.room.websocket.request.ParticipantChatRequest;
+import com.ssafy.ssasukae.domain.user.entity.User;
+import com.ssafy.ssasukae.domain.user.repository.UserRepository;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
+import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
+import com.ssafy.ssasukae.global.exception.websocket.WebSocketErrorCode;
+import com.ssafy.ssasukae.global.exception.websocket.WebSocketException;
+import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
+import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
+import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
 import java.security.Principal;
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -8,44 +39,6 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.List;
-
-import com.ssafy.ssasukae.domain.room.type.RoomStatus;
-import com.ssafy.ssasukae.domain.room.websocket.RoomWebSocketEventType;
-import com.ssafy.ssasukae.domain.room.websocket.payload.*;
-import com.ssafy.ssasukae.domain.room.websocket.request.HostChangeRequest;
-import com.ssafy.ssasukae.domain.room.websocket.request.ParticipantChatRequest;
-import com.ssafy.ssasukae.global.exception.websocket.WebSocketErrorCode;
-import com.ssafy.ssasukae.global.exception.websocket.WebSocketException;
-import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
-import com.ssafy.ssasukae.global.websocket.message.WebSocketEventType;
-import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import com.ssafy.ssasukae.domain.card.service.CardService;
-import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
-import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
-import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
-import com.ssafy.ssasukae.domain.room.dto.ActiveCardSnapshotResponse;
-import com.ssafy.ssasukae.domain.room.dto.MyCardSnapshotResponse;
-import com.ssafy.ssasukae.domain.room.dto.PlaybackSnapshotResponse;
-import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
-import com.ssafy.ssasukae.domain.room.dto.RoomCreateResponse;
-import com.ssafy.ssasukae.domain.room.dto.RoomJoinResponse;
-import com.ssafy.ssasukae.domain.room.dto.RoomSnapshotResponse;
-import com.ssafy.ssasukae.domain.room.entity.Room;
-import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
-import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
-import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
-import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
-import com.ssafy.ssasukae.domain.user.entity.User;
-import com.ssafy.ssasukae.domain.user.repository.UserRepository;
-import com.ssafy.ssasukae.global.exception.CustomException;
-import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
-import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
-import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
-
-import lombok.RequiredArgsConstructor;
 
 import static com.ssafy.ssasukae.domain.room.websocket.RoomWebSocketEventType.*;
 
@@ -403,5 +396,62 @@ public class RoomService {
         if (online) mediaSessionGateway.disconnect(room.getOpenViduSessionId(), connectionId);
 
         webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_KICKED, room.getId(), new ParticipantKickedPayload(participantId)));
+    }
+    @Transactional
+    public void selectPerformer(Long hostUserId, Long roomId, Long performerParticipantId) {
+        Room room = roomRepository.findByIdForUpdate(roomId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+
+        if (!room.isHost(hostUserId)) {
+            throw new CustomException(RoomErrorCode.HOST_ONLY);
+        }
+
+        if (room.getStatus() != RoomStatus.PREPARING) {
+            throw new CustomException(RoomErrorCode.ROOM_NOT_READY_FOR_PERFORMANCE);
+        }
+
+        RoomParticipant performer = roomParticipantRepository.findById(performerParticipantId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
+
+        if (!performer.getRoom().getId().equals(roomId)) {
+            throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND);
+        }
+
+        if (!performer.isOnline()) {
+            throw new CustomException(RoomErrorCode.PARTICIPANT_MUST_BE_ONLINE);
+        }
+
+        roomParticipantRepository.findRoomParticipantsByRoom(room).stream()
+                .filter(RoomParticipant::isActive)
+                .forEach(RoomParticipant::demoteToParticipant);
+
+        performer.promoteToPerformer();
+
+        afterCommit(
+                () -> webSocketEventPublisher.publishToRoom(
+                        roomId,
+                        WebSocketEvent.roomEvent(
+                                RoomWebSocketEventType.PERFORMER_SELECTED,
+                                roomId,
+                                new PerformerSelectedPayload(performer.getId())
+                        )
+                )
+        );
+    }
+
+    private void afterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        action.run();
+                    }
+                }
+        );
     }
 }

@@ -232,7 +232,7 @@ public class RedisPerformanceStore implements PerformanceStore {
          * 활성 공연 ID가 실제 Snapshot을 가리키지 않거나
          * 이미 종료 상태인 경우 관련 Redis 데이터를 정리한다.
          */
-        if (session.isEmpty() || session.get().isTerminal()) {
+        if (session.isEmpty()) {
             /*
              * 종료된 Snapshot이 존재한다면 해당 세션 키도 제거한다.
              * Snapshot 자체가 없다면 삭제 작업은 수행되지 않는다.

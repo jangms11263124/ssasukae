@@ -17,6 +17,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
+import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -84,6 +85,7 @@ class PerformanceResultServiceTest {
   @Mock private RoomLeaderboardStore roomLeaderboardStore;
   @Mock private PerformanceRecoveryDeadlineStore recoveryDeadlineStore;
   @Mock private PerformanceWebSocketEventPublisher eventPublisher;
+  @Mock private RoomParticipantRepository roomParticipantRepository;
 
   private PerformanceResultService service;
 
@@ -103,7 +105,8 @@ class PerformanceResultServiceTest {
         new PerformanceRecoveryProperties(),
         Clock.fixed(currentTime, ZoneOffset.UTC),
         new PerformanceTransactionSupport(performanceStore, recoveryDeadlineStore),
-        eventPublisher);
+        eventPublisher,
+            roomParticipantRepository);
   }
 
   @AfterEach
@@ -154,11 +157,7 @@ class PerformanceResultServiceTest {
     verify(performanceResultRepository).save(resultCaptor.capture());
     assertThat(resultCaptor.getValue().getFinalScore()).isEqualTo(92);
 
-    ArgumentCaptor<PerformanceSnapShot> snapshotCaptor =
-        ArgumentCaptor.forClass(PerformanceSnapShot.class);
-    verify(performanceStore).save(snapshotCaptor.capture());
-    PerformanceSnapShot finished = snapshotCaptor.getValue();
-    assertThat(finished.status()).isEqualTo(PerformanceStatus.FINISHED);
+    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
     verifyNoInteractions(eventPublisher);
 
     commitTransaction();
@@ -175,7 +174,7 @@ class PerformanceResultServiceTest {
                 92),
             new LeaderboardItemPayload(2, 29L, 99L, "이전 참가자", 19L, "이전 곡", 80));
     InOrder order = inOrder(performanceStore, recoveryDeadlineStore, eventPublisher);
-    order.verify(performanceStore).delete(finished);
+    order.verify(performanceStore).delete(analyzing);
     order.verify(recoveryDeadlineStore).delete(PERFORMANCE_ID);
     order
         .verify(eventPublisher)
@@ -290,7 +289,7 @@ class PerformanceResultServiceTest {
             org.mockito.ArgumentMatchers.argThat(entry -> entry.finalScore() == 92));
     order.verify(roomLeaderboardStore).saveAndGetRanked(ROOM_ID, previous);
     verify(roomLeaderboardStore, never()).delete(ROOM_ID, PERFORMANCE_ID);
-    verify(performanceStore).save(analyzing);
+    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
     verifyNoInteractions(eventPublisher);
   }
 

@@ -179,42 +179,7 @@ public record PerformanceSnapShot(
         pausedAt);
   }
 
-  public PerformanceSnapShot cancel() {
-    requireStatus(
-        "준비 또는 재생 중인 공연만 취소할 수 있습니다.", PerformanceStatus.PREPARING, PerformanceStatus.PLAYING);
-    return copy(
-        PerformanceStatus.CANCELLED,
-        settings,
-        startedAt,
-        null,
-        accumulatedPausedDurationMs,
-        playbackPositionMs,
-        null);
-  }
 
-  public PerformanceSnapShot completeAnalysis() {
-    requireStatus("분석 중인 공연만 완료할 수 있습니다.", PerformanceStatus.ANALYZING);
-    return copy(
-        PerformanceStatus.FINISHED,
-        settings,
-        startedAt,
-        playbackFinishedAt,
-        accumulatedPausedDurationMs,
-        playbackPositionMs,
-        null);
-  }
-
-  public PerformanceSnapShot failAnalysis() {
-    requireStatus("분석 중인 공연만 실패 처리할 수 있습니다.", PerformanceStatus.ANALYZING);
-    return copy(
-        PerformanceStatus.ANALYSIS_FAILED,
-        settings,
-        startedAt,
-        playbackFinishedAt,
-        accumulatedPausedDurationMs,
-        playbackPositionMs,
-        null);
-  }
 
   public long playbackPositionAt(OffsetDateTime at) {
     if (startedAt == null) {
@@ -242,13 +207,6 @@ public record PerformanceSnapShot(
 
   public boolean isPerformedBy(Long participantId) {
     return performerParticipantId.equals(participantId);
-  }
-
-  @JsonIgnore
-  public boolean isTerminal() {
-    return status == PerformanceStatus.FINISHED
-        || status == PerformanceStatus.CANCELLED
-        || status == PerformanceStatus.ANALYSIS_FAILED;
   }
 
   private PerformanceSnapShot copy(
@@ -314,19 +272,12 @@ public record PerformanceSnapShot(
           requireTimeNotBefore(pausedAt, startedAt, "pausedAt", "startedAt");
         }
       }
-      case ANALYZING, FINISHED, ANALYSIS_FAILED -> {
+      case ANALYZING-> {
         Objects.requireNonNull(startedAt, status + " 상태에는 startedAt이 필요합니다.");
         Objects.requireNonNull(playbackFinishedAt, status + " 상태에는 playbackFinishedAt이 필요합니다.");
         requireNull(pausedAt, status + " 상태에는 pausedAt이 없어야 합니다.");
         requireTimeNotBefore(startedAt, preparedAt, "startedAt", "preparedAt");
         requireTimeNotBefore(playbackFinishedAt, startedAt, "playbackFinishedAt", "startedAt");
-      }
-      case CANCELLED -> {
-        requireNull(playbackFinishedAt, "CANCELLED 상태에는 playbackFinishedAt이 없어야 합니다.");
-        requireNull(pausedAt, "CANCELLED 상태에는 pausedAt이 없어야 합니다.");
-        if (startedAt != null) {
-          requireTimeNotBefore(startedAt, preparedAt, "startedAt", "preparedAt");
-        }
       }
     }
   }
