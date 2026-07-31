@@ -1,31 +1,34 @@
-﻿import traceback
+﻿from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from fastapi import FastAPI, HTTPException, UploadFile
-from pydantic import BaseModel
-
-from app.stt_service import transcribe_audio_bytes
-
-
-class SttResponse(BaseModel):
-    transcript: str
+from app.routers import score, stt
+from app.settings import cors_origins
 
 
 app = FastAPI()
 
+# 개발 중 프론트엔드에서 FastAPI를 직접 호출할 수 있도록 CORS를 허용합니다.
+# 배포 주소가 추가되면 CORS_ORIGINS 환경 변수에 쉼표로 구분해 넣으면 됩니다.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins(),
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/")
 def health_check():
+    # 서버가 실행 중인지 확인하는 가장 간단한 상태 확인 API입니다.
     return {"status": "ok"}
 
 
-@app.post("/api/v1/stt", response_model=SttResponse)
-async def transcribe_audio(audio: UploadFile):
-    try:
-        transcript = await transcribe_audio_bytes(
-            await audio.read(),
-            audio.filename,
-        )
-        return SttResponse(transcript=transcript)
-    except Exception as exc:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+@app.get("/ping", status_code=200)
+def ping():
+    # 모니터링 도구나 프론트엔드 연결 확인에서 사용할 수 있는 ping API입니다.
+    return {"status": "ok"}
+
+
+app.include_router(stt.router)
+app.include_router(score.router)
