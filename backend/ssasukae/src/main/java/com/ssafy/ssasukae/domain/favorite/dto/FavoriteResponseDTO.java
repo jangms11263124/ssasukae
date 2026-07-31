@@ -26,6 +26,7 @@ public class FavoriteResponseDTO {
         String title;
         String artist;
         String thumbnailUrl;
+        Integer durationSeconds;
         LocalDateTime favoritedAt;
     }
 
