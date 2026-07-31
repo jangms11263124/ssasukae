@@ -56,10 +56,10 @@ public class Song {
   private Integer difficultyLevel;
 
   /**
-   * S3에 저장된 앨범 커버 이미지의 Object Key
+   * 앨범 커버 썸네일 이미지 URL
    */
-  @Column(name = "cover_object_key", length = 2048)
-  private String coverObjectKey;
+  @Column(name = "thumbnail_image_url", length = 2048)
+  private String thumbnailImageUrl;
 
   /**
    * S3에 저장된 MR 음원 파일의 Object Key
@@ -96,7 +96,7 @@ public class Song {
           String artist,
           Integer duration,
           Integer difficultyLevel,
-          String coverObjectKey,
+          String thumbnailImageUrl,
           String mrObjectKey,
           String midiObjectKey,
           String lyricsObjectKey
@@ -105,7 +105,7 @@ public class Song {
     this.artist = artist;
     this.duration = duration;
     this.difficultyLevel = difficultyLevel;
-    this.coverObjectKey = coverObjectKey;
+    this.thumbnailImageUrl = thumbnailImageUrl;
     this.mrObjectKey = mrObjectKey;
     this.midiObjectKey = midiObjectKey;
     this.lyricsObjectKey = lyricsObjectKey;
@@ -119,7 +119,7 @@ public class Song {
           String artist,
           Integer duration,
           Integer difficultyLevel,
-          String coverObjectKey,
+          String thumbnailImageUrl,
           String mrObjectKey,
           String midiObjectKey,
           String lyricsObjectKey
@@ -129,7 +129,7 @@ public class Song {
             artist,
             duration,
             difficultyLevel,
-            coverObjectKey,
+            thumbnailImageUrl,
             mrObjectKey,
             midiObjectKey,
             lyricsObjectKey
@@ -170,15 +170,15 @@ public class Song {
   }
 
   /**
-   * 음원 전처리 완료 후 S3 Object Key를 등록하거나 변경한다.
+   * 음원 전처리 완료 후 썸네일 URL과 S3 Object Key를 등록하거나 변경한다.
    */
-  public void updateObjectKeys(
-          String coverObjectKey,
+  public void updateResources(
+          String thumbnailImageUrl,
           String mrObjectKey,
           String midiObjectKey,
           String lyricsObjectKey
   ) {
-    this.coverObjectKey = coverObjectKey;
+    this.thumbnailImageUrl = thumbnailImageUrl;
     this.mrObjectKey = mrObjectKey;
     this.midiObjectKey = midiObjectKey;
     this.lyricsObjectKey = lyricsObjectKey;

@@ -85,6 +85,7 @@ public class PerformanceService {
     validatePerformanceResources(song);
     String mrDownloadUrl = createPresignedUrl(song.getMrObjectKey());
     String midiJsonDownloadUrl = createPresignedUrl(song.getMidiObjectKey());
+    String lyricsDownloadUrl = createPresignedUrl(song.getLyricsObjectKey());
 
     // 지금 현재 상태를 snapshot으로 남김
     PerformanceSnapShot snapShot =
@@ -127,8 +128,11 @@ public class PerformanceService {
                   snapShot.performerParticipantId(),
                   snapShot.songId(),
                   song.getTitle(),
+                  song.getDifficultyLevel(),
+                  song.getThumbnailImageUrl(),
                   mrDownloadUrl,
-                  midiJsonDownloadUrl));
+                  midiJsonDownloadUrl,
+                  lyricsDownloadUrl));
         });
   }
 
@@ -323,7 +327,8 @@ public class PerformanceService {
 
   private void validatePerformanceResources(Song song) {
     if (!StringUtils.hasText(song.getMrObjectKey())
-        || !StringUtils.hasText(song.getMidiObjectKey())) {
+        || !StringUtils.hasText(song.getMidiObjectKey())
+        || !StringUtils.hasText(song.getLyricsObjectKey())) {
       throw business(WebSocketErrorCode.PERFORMANCE_RESOURCE_NOT_READY);
     }
   }
