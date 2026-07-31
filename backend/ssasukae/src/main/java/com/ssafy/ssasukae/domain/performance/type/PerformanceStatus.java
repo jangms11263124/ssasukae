@@ -5,6 +5,6 @@ public enum PerformanceStatus {
     PLAYING,
     ANALYZING,
     ANALYSIS_FAILED,
-    FINISHED,
     CANCELLED,
+    FINISHED
 }

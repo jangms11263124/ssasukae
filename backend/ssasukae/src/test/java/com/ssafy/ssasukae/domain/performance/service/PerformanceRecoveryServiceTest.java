@@ -13,12 +13,12 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
+import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -57,6 +57,7 @@ class PerformanceRecoveryServiceTest {
   private static final OffsetDateTime PLAYBACK_FINISHED_AT = STARTED_AT.plusMinutes(3);
 
   @Mock private RoomRepository roomRepository;
+  @Mock private RoomParticipantRepository roomParticipantRepository;
   @Mock private PerformanceStore performanceStore;
   @Mock private PerformanceRecoveryDeadlineStore deadlineStore;
   @Mock private PerformanceWebSocketEventPublisher eventPublisher;
@@ -71,7 +72,7 @@ class PerformanceRecoveryServiceTest {
     PerformanceTransactionSupport transactionSupport =
         new PerformanceTransactionSupport(performanceStore, deadlineStore);
     PerformanceCancellationProcessor cancellationProcessor =
-        new PerformanceCancellationProcessor(transactionSupport, eventPublisher, cardService);
+        new PerformanceCancellationProcessor(transactionSupport, eventPublisher, cardService, roomParticipantRepository);
     org.mockito.Mockito.lenient()
         .when(
             cardService.closeForPerformance(
@@ -110,18 +111,14 @@ class PerformanceRecoveryServiceTest {
 
     service.recoverExpired(PERFORMANCE_ID, expiredAt);
 
-    ArgumentCaptor<PerformanceSnapShot> captor = ArgumentCaptor.forClass(PerformanceSnapShot.class);
-    verify(performanceStore).save(captor.capture());
-    PerformanceSnapShot failed = captor.getValue();
-
-    assertThat(failed.status()).isEqualTo(PerformanceStatus.ANALYSIS_FAILED);
     assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
+    verify(performanceStore, never()).save(org.mockito.ArgumentMatchers.any());
     verifyNoInteractions(eventPublisher);
 
     commitTransaction();
 
     verify(deadlineStore).delete(PERFORMANCE_ID);
-    verify(performanceStore).delete(failed);
+    verify(performanceStore).delete(analyzing);
     verify(eventPublisher)
         .publish(
             ROOM_ID,
@@ -131,22 +128,31 @@ class PerformanceRecoveryServiceTest {
   }
 
   @Test
-  @DisplayName("분석 제한 시간이 아직 남았으면 실제 분석 마감 시각으로 다시 예약한다")
-  void recoverExpiredReschedulesPrematureAnalysisDeadline() {
+  @DisplayName("복구 대상으로 들어온 ANALYZING 공연은 재예약 없이 분석 실패로 종료한다")
+  void recoverExpiredFailsAnalyzingPerformanceWithoutRescheduling() {
     Room room = playingRoom();
     PerformanceSnapShot analyzing = analyzingSnapshot();
-    Instant expectedDeadline =
-        PLAYBACK_FINISHED_AT.toInstant().plus(properties.getAnalysisTimeout());
-
     when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
     when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
 
+    beginTransaction();
+
     service.recoverExpired(PERFORMANCE_ID, PLAYBACK_FINISHED_AT.toInstant().plusSeconds(10));
 
-    verify(deadlineStore).save(PERFORMANCE_ID, expectedDeadline);
     verify(performanceStore, never()).save(org.mockito.ArgumentMatchers.any());
-    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
     verifyNoInteractions(eventPublisher);
+
+    commitTransaction();
+
+    verify(deadlineStore).delete(PERFORMANCE_ID);
+    verify(performanceStore).delete(analyzing);
+    verify(eventPublisher)
+        .publish(
+            ROOM_ID,
+            PerformanceWebSocketEventType.PERFORMANCE_STATE_CHANGED,
+            new PerformanceStateChangedPayload(
+                PERFORMANCE_ID, PerformanceStatus.ANALYZING, PerformanceStatus.ANALYSIS_FAILED));
   }
 
   @Test
@@ -173,15 +179,13 @@ class PerformanceRecoveryServiceTest {
 
     service.recoverPerformerExitCase(ROOM_ID, USER_ID);
 
-    ArgumentCaptor<PerformanceSnapShot> captor = ArgumentCaptor.forClass(PerformanceSnapShot.class);
-    verify(performanceStore).save(captor.capture());
-    assertThat(captor.getValue().status()).isEqualTo(PerformanceStatus.CANCELLED);
+    verify(performanceStore, never()).save(org.mockito.ArgumentMatchers.any());
     assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
 
     commitTransaction();
 
     verify(deadlineStore).delete(PERFORMANCE_ID);
-    verify(performanceStore).delete(captor.getValue());
+    verify(performanceStore).delete(playing);
   }
 
   private PerformanceSnapShot playingSnapshot() {
