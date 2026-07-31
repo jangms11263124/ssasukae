@@ -6,6 +6,7 @@ import { cn } from '@/shared/lib/cn';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
 import { formatCount, formatUpdatedAt } from '../lib/formatters';
+import { getScoreGrade, GRADE_CLASS, NO_SCORE_LABEL } from '../lib/scoreGrade';
 import { ChartIcon, RefreshIcon } from './icons';
 
 const EMPTY_VALUE = '--';
@@ -24,11 +25,11 @@ interface StatColumnProps {
   /** 값 아래 보조 라벨. 세 칸의 높이를 맞추기 위해 항상 자리를 차지한다. */
   caption: string;
   captionTone: Tone;
-  /** 대표 지표만 값에 색을 준다. */
-  isPrimary?: boolean;
+  /** 값 강조색. 없으면 중립색. */
+  valueClassName?: string;
 }
 
-function StatColumn({ label, value, caption, captionTone, isPrimary }: StatColumnProps) {
+function StatColumn({ label, value, caption, captionTone, valueClassName }: StatColumnProps) {
   return (
     <div className="px-5 first:pl-0 last:pr-0">
       <p className="text-[0.58rem] font-bold tracking-[0.16em] text-zinc-500">{label}</p>
@@ -36,7 +37,7 @@ function StatColumn({ label, value, caption, captionTone, isPrimary }: StatColum
         className={cn(
           jetBrainsMono.className,
           'mt-3 text-xl font-bold',
-          isPrimary ? 'text-cyan-300' : 'text-zinc-100',
+          valueClassName ?? 'text-zinc-100',
         )}
       >
         {value}
@@ -72,6 +73,11 @@ export function PerformanceStatusCard() {
     difference === undefined
       ? EMPTY_VALUE
       : `${difference >= 0 ? '+' : ''}${difference.toFixed(1)}% Δ`;
+  // 공연 기록이 없으면 서버가 avgScore 0을 줄 수 있어, 그대로 계산하면 F로 오인된다.
+  const grade = stat && stat.totalSongs > 0 ? getScoreGrade(stat.avgScore) : undefined;
+  const gradeValue = grade ?? (hasStat ? NO_SCORE_LABEL : EMPTY_VALUE);
+  // N/A는 등급이 아니라 데이터 없음이므로 기본 값 색(zinc-100) 대신 죽인 색으로 구분한다.
+  const gradeClassName = grade ? GRADE_CLASS[grade] : hasStat ? 'text-zinc-500' : undefined;
 
   return (
     <SettingsPanel title="PERFORMANCE STATUS" icon={<ChartIcon />}>
@@ -103,7 +109,7 @@ export function PerformanceStatusCard() {
           value={stat ? stat.avgScore.toFixed(1) : EMPTY_VALUE}
           caption={differenceCaption}
           captionTone={getDifferenceTone(difference)}
-          isPrimary={hasStat}
+          valueClassName={hasStat ? 'text-cyan-300' : undefined}
         />
         <StatColumn
           label="TOTAL SONGS"
@@ -111,12 +117,12 @@ export function PerformanceStatusCard() {
           caption="ALL_TIME"
           captionTone="muted"
         />
-        {/* RANK는 점수 구간 기준이 정해지지 않아 값을 비워 둔다. */}
         <StatColumn
-          label="RANK"
-          value={EMPTY_VALUE}
-          caption="PENDING_CRITERIA"
+          label="GRADE"
+          value={gradeValue}
+          caption="AVG_BASED"
           captionTone="muted"
+          valueClassName={gradeClassName}
         />
       </div>
 
