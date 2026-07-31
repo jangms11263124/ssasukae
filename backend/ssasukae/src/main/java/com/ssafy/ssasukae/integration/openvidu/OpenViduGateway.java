@@ -46,6 +46,16 @@ public class OpenViduGateway implements MediaSessionGateway {
     }
 
     @Override
+    public void disconnect(String sessionId, String connectionId) {
+        try {
+            Session session = findActiveSession(sessionId);
+            session.forceDisconnect(connectionId);
+        } catch (OpenViduJavaClientException | OpenViduHttpException e) {
+            throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
+        }
+    }
+
+    @Override
     public void closeSession(String sessionId) {
         try {
             Session session = findActiveSession(sessionId);
