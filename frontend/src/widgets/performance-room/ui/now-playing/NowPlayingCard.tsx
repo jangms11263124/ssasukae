@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 import { useStageStore } from '../../model/stageStore';
-import { HeartIcon } from '../icons/HeartIcon';
+import { HeartIcon } from '@/shared/ui/icons/HeartIcon';
 import { RoomPanel } from '../RoomPanel';
 
 // 오디오 엔진이 붙기 전까지 사용하는 목업 재생 정보.

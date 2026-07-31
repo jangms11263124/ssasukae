@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 
+import { SongSearchModal } from '@/features/song-search';
+import { cn } from '@/shared/lib/cn';
+import { HeartIcon } from '@/shared/ui/icons/HeartIcon';
+
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { useStageStore, type StageSong } from '../../model/stageStore';
-import { SongSearchModal } from '../song-search/SongSearchModal';
 import { StageButton } from './StageButton';
 import { StageMessage } from './StageMessage';
 
@@ -41,7 +44,27 @@ export function SongSelectStage({ isPerformer }: SongSelectStageProps) {
         }
       />
       {isModalOpen ? (
-        <SongSearchModal onClose={() => setIsModalOpen(false)} onSelectSong={handleSelectSong} />
+        <SongSearchModal
+          onClose={() => setIsModalOpen(false)}
+          renderSongAction={(song) => (
+            <>
+              {/* 찜 토글 API 연동 전까지는 서버가 내려준 찜 상태를 표시만 한다. */}
+              <span
+                aria-label={song.favorite ? '찜한 곡' : undefined}
+                className={cn('shrink-0', song.favorite ? 'text-fuchsia-500' : 'text-zinc-600')}
+              >
+                <HeartIcon filled={song.favorite} />
+              </span>
+              <button
+                type="button"
+                onClick={() => handleSelectSong({ id: song.songId, title: song.title })}
+                className="shrink-0 border border-white/25 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
+              >
+                + 노래 부르기
+              </button>
+            </>
+          )}
+        />
       ) : null}
     </>
   );
