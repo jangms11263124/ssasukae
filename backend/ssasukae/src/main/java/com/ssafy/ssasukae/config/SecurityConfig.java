@@ -71,10 +71,12 @@ public class SecurityConfig {
                                 "/api/auth/refresh",
                                 "/api/users/nickname/check",
                                 "/internal/api/v1/performances/**",
+                                "/internal/api/songs/**",
                                 "/internal/openvidu/webhook",
                                 "/ws",
                                 "/ws/**"
                         ).permitAll()
+                        .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
