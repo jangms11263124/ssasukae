@@ -313,8 +313,14 @@ public class RoomService {
             currentRoom.delegateHost(newHost.getUser());
         }
 
-        participant.leave(LocalDateTime.now());
         performanceRecoveryService.recoverPerformerExitCase(roomId, userId);
+
+        boolean online = participant.isOnline();
+        String connectionId = participant.getConnectionId();
+
+        participant.leave(LocalDateTime.now());
+
+        if (online) mediaSessionGateway.disconnect(currentRoom.getOpenViduSessionId(), connectionId);
 
         if(newHost != null) webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(ROOM_HOST_CHANGED, roomId, new RoomHostChangedPayload(newHost.getId())));
         webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(PARTICIPANT_LEFT, roomId, new ParticipantLeftPayload(participant.getId())));
@@ -391,7 +397,11 @@ public class RoomService {
         RoomParticipant receiver = roomParticipantRepository.findById(participantId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
         if(!receiver.isActive()) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
 
+        boolean online = receiver.isOnline();
+        String connectionId = receiver.getConnectionId();
         receiver.kick(LocalDateTime.now());
+        if (online) mediaSessionGateway.disconnect(room.getOpenViduSessionId(), connectionId);
+
         webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_KICKED, room.getId(), new ParticipantKickedPayload(participantId)));
     }
 }
