@@ -71,6 +71,7 @@ public class SecurityConfig {
                                 "/api/auth/refresh",
                                 "/api/users/nickname/check",
                                 "/internal/api/v1/performances/**",
+                                "/internal/openvidu/webhook",
                                 "/ws",
                                 "/ws/**"
                         ).permitAll()
