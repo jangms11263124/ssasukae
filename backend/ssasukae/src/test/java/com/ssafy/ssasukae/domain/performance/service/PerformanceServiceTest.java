@@ -878,6 +878,7 @@ class PerformanceServiceTest {
         RoomParticipant.join(room, user(userId), LocalDateTime.of(2026, 7, 28, 9, 1));
 
     ReflectionTestUtils.setField(participant, "id", participantId);
+    participant.connect("test-connection-" + participantId);
 
     return participant;
   }

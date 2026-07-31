@@ -16,6 +16,7 @@ spring:
 openvidu:
   url: ${OPENVIDU_URL}
   secret: ${OPENVIDU_SECRET}
+  webhook: ${OPENVIDU_WEBHOOK_SECRET}
 
 logging:
   level:
