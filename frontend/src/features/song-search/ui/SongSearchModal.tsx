@@ -1,13 +1,17 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 
-import { formatSongDuration, searchSongs, type SongFilter } from '@/entities/song';
+import {
+  formatSongDuration,
+  searchSongs,
+  SongThumbnail,
+  type SongFilter,
+  type SongSearchItem,
+} from '@/entities/song';
 import { cn } from '@/shared/lib/cn';
-
-import type { StageSong } from '../../model/stageStore';
-import { HeartIcon } from '../icons/HeartIcon';
+import { useInfiniteScrollTrigger } from '@/shared/lib/useInfiniteScrollTrigger';
 
 const TABS = ['ALL', 'POPULAR', 'MY_FAVORITES'] as const;
 type TabKey = (typeof TABS)[number];
@@ -57,10 +61,11 @@ function CloseIcon() {
 
 interface SongSearchModalProps {
   onClose: () => void;
-  onSelectSong: (song: StageSong) => void;
+  /** 각 곡 행의 오른쪽 액션 영역(찜 토글, 노래 부르기 버튼 등)을 렌더링한다. */
+  renderSongAction: (song: SongSearchItem) => ReactNode;
 }
 
-export function SongSearchModal({ onClose, onSelectSong }: SongSearchModalProps) {
+export function SongSearchModal({ onClose, renderSongAction }: SongSearchModalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('ALL');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -95,18 +100,29 @@ export function SongSearchModal({ onClose, onSelectSong }: SongSearchModalProps)
     isPending,
     isError,
     error,
-  } = useQuery({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
     queryKey: ['songs', 'search', effectiveQuery, TAB_TO_FILTER[activeTab]],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       searchSongs({
         query: effectiveQuery || undefined,
         filter: TAB_TO_FILTER[activeTab],
+        cursor: pageParam,
         size: SEARCH_PAGE_SIZE,
       }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) => lastPage.cursor ?? undefined,
     placeholderData: keepPreviousData,
   });
 
-  const songs = (data?.items ?? []).filter(
+  const sentinelRef = useInfiniteScrollTrigger(
+    fetchNextPage,
+    Boolean(hasNextPage) && !isFetchingNextPage,
+  );
+
+  const songs = (data?.pages.flatMap((page) => page.items) ?? []).filter(
     (song) => activeTab !== 'MY_FAVORITES' || song.favorite,
   );
 
@@ -212,19 +228,7 @@ export function SongSearchModal({ onClose, onSelectSong }: SongSearchModalProps)
               <span className="w-6 shrink-0 font-mono text-xs text-zinc-500">
                 {String(index + 1).padStart(2, '0')}
               </span>
-              {song.thumbnailUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={song.thumbnailUrl}
-                  alt=""
-                  className="size-11 shrink-0 border border-white/10 object-cover"
-                />
-              ) : (
-                <div
-                  aria-hidden="true"
-                  className="size-11 shrink-0 border border-white/10 bg-[linear-gradient(135deg,#2c2c33,#131316)]"
-                />
-              )}
+              <SongThumbnail src={song.thumbnailUrl} className="size-11" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-white">{song.title}</p>
                 <p className="mt-1 truncate font-mono text-[10px] tracking-[0.16em] text-zinc-500">
@@ -234,23 +238,7 @@ export function SongSearchModal({ onClose, onSelectSong }: SongSearchModalProps)
               <span className="shrink-0 font-mono text-xs text-zinc-400">
                 {formatSongDuration(song.durationSeconds)}
               </span>
-              {/* 찜 토글 API 연동 전까지는 서버가 내려준 찜 상태를 표시만 한다. */}
-              <span
-                aria-label={song.favorite ? '찜한 곡' : undefined}
-                className={cn(
-                  'shrink-0',
-                  song.favorite ? 'text-fuchsia-500' : 'text-zinc-600',
-                )}
-              >
-                <HeartIcon filled={song.favorite} />
-              </span>
-              <button
-                type="button"
-                onClick={() => onSelectSong({ id: song.songId, title: song.title })}
-                className="shrink-0 border border-white/25 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
-              >
-                + 노래 부르기
-              </button>
+              {renderSongAction(song)}
             </li>
           ))}
           {isPending ? (
@@ -268,6 +256,13 @@ export function SongSearchModal({ onClose, onSelectSong }: SongSearchModalProps)
               NO_TRACKS_FOUND
             </li>
           ) : null}
+          {isFetchingNextPage ? (
+            <li className="py-5 text-center font-mono text-xs tracking-[0.2em] text-zinc-600">
+              LOADING_MORE...
+            </li>
+          ) : null}
+          {/* IntersectionObserver는 높이 0짜리 요소를 교차로 판정하지 않으므로 최소 높이를 준다. */}
+          <li ref={sentinelRef} aria-hidden="true" className="h-px" />
         </ul>
 
         <div className="mt-4 flex items-center justify-between bg-zinc-400/85 px-5 py-2 font-mono text-[10px] tracking-[0.2em] text-cyan-800">
