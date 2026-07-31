@@ -83,6 +83,33 @@ class OpenViduGatewayTest {
 
   @Test
   @DisplayName("활성 세션 목록에서 sessionId가 일치하는 세션을 찾아 종료한다")
+  void disconnect_forcesDisconnectForMatchingConnection() throws Exception {
+    // given
+    when(session.getSessionId()).thenReturn("openvidu-session-1");
+    when(openVidu.getActiveSessions()).thenReturn(List.of(session));
+
+    // when
+    openViduGateway.disconnect("openvidu-session-1", "connection-1");
+
+    // then
+    verify(session).forceDisconnect("connection-1");
+  }
+
+  @Test
+  @DisplayName("활성 세션 목록에 sessionId가 없으면 참가자 연결 종료에 실패한다")
+  void disconnect_throwsWhenSessionNotActive() throws Exception {
+    // given
+    when(openVidu.getActiveSessions()).thenReturn(List.of());
+
+    // when & then
+    assertThatThrownBy(
+            () -> openViduGateway.disconnect("openvidu-session-1", "connection-1"))
+        .isInstanceOf(CustomException.class)
+        .hasMessage(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED.getMessage());
+  }
+
+  @Test
+  @DisplayName("활성 세션 목록에서 sessionId가 일치하는 세션을 찾아 종료한다")
   void closeSession_closesMatchingActiveSession() throws Exception {
     // given
     when(session.getSessionId()).thenReturn("openvidu-session-1");
