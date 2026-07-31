@@ -223,6 +223,36 @@ class RoomServiceMediaSessionTest {
     verify(performanceRecoveryService).recoverPerformerExitCase(10L, 2L);
   }
 
+  @Test
+  @DisplayName("재접속 유예 시간이 만료된 DISCONNECTED 참가자를 실제 퇴장 처리한다")
+  void leaveByConnectionExpirationLeavesDisconnectedParticipant() {
+    Room room = room(10L, "openvidu-session-1");
+    RoomParticipant participant = participant(room, 100L, ConnectionStatus.DISCONNECTED);
+    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(participant));
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
+
+    roomService.leaveByConnectionExpiration(100L);
+
+    assertThat(participant.getConnectionStatus()).isEqualTo(ConnectionStatus.LEFT);
+    verify(performanceRecoveryService).recoverPerformerExitCase(10L, 2L);
+  }
+
+  @Test
+  @DisplayName("재접속한 참가자에게 도착한 만료 작업은 실제 퇴장 처리하지 않는다")
+  void leaveByConnectionExpirationIgnoresConnectedParticipant() {
+    Room room = room(10L, "openvidu-session-1");
+    RoomParticipant participant = participant(room, 100L, ConnectionStatus.CONNECTED);
+    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(participant));
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
+
+    roomService.leaveByConnectionExpiration(100L);
+
+    assertThat(participant.getConnectionStatus()).isEqualTo(ConnectionStatus.CONNECTED);
+    verifyNoInteractions(performanceRecoveryService);
+  }
+
   private User user(Long id) {
     User user =
         User.builder()

@@ -42,6 +42,9 @@ public class RoomParticipant {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    @Column(name = "connection_id", nullable = true)
+    private String connectionId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "stage_role", nullable = false, length = 20)
     private ParticipantRole stageRole;
@@ -63,7 +66,7 @@ public class RoomParticipant {
         this.room = room;
         this.user = user;
         this.stageRole = ParticipantRole.PARTICIPANT;
-        this.connectionStatus = ConnectionStatus.CONNECTED;
+        this.connectionStatus = ConnectionStatus.PREPARING;
         this.joinedAt = now;
     }
 
@@ -71,7 +74,15 @@ public class RoomParticipant {
         return new RoomParticipant(room, user, now);
     }
 
-    public void reconnect() {
+    public void connect(String connectionId) {
+        if(this.connectionStatus != ConnectionStatus.PREPARING) throw new CustomException(RoomErrorCode.ROOM_NOT_JOINABLE);
+
+        this.connectionId = connectionId;
+        this.connectionStatus = ConnectionStatus.CONNECTED;
+        this.disconnectedAt = null;
+    }
+
+    public void reconnect(String connectionId) {
         if (connectionStatus == ConnectionStatus.KICKED) {
             throw new CustomException(RoomErrorCode.REENTRY_BANNED);
         }
@@ -80,6 +91,7 @@ public class RoomParticipant {
             throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
         }
 
+        this.connectionId = connectionId;
         connectionStatus = ConnectionStatus.CONNECTED;
         disconnectedAt = null;
     }
@@ -125,7 +137,8 @@ public class RoomParticipant {
     }
 
     public boolean isActive() {
-        return connectionStatus == ConnectionStatus.CONNECTED
+        return connectionStatus == ConnectionStatus.PREPARING
+                || connectionStatus == ConnectionStatus.CONNECTED
                 || connectionStatus == ConnectionStatus.DISCONNECTED;
     }
 
