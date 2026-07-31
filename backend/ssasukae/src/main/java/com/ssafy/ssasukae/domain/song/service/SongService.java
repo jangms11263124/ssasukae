@@ -9,7 +9,6 @@ import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.song.SongErrorCode;
 import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
-import com.ssafy.ssasukae.integration.aws.S3StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -28,7 +27,6 @@ public class SongService {
     private final SongRepository songRepository;
     private final FavoriteRepository favoriteRepository;
     private final UserRepository userRepository;
-    private final S3StorageService s3StorageService;
 
     public SongResponseDTO.searchDTO search(Long userId, String query, String filter, Long cursor, Integer size) {
         User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
@@ -53,7 +51,7 @@ public class SongService {
                                 .title(song.getTitle())
                                 .artist(song.getArtist())
                                 .durationSeconds(song.getDuration())
-                                .thumbnailUrl(s3StorageService.presignedUrl(song.getCoverObjectKey()))
+                                .thumbnailUrl(song.getThumbnailImageUrl())
                                 .favorite(likes.contains(song.getId())).build())
                         .toList())
                 .cursor(hasNext && !songs.isEmpty() ? songs.get(songs.size() - 1).getId() : null)

@@ -146,41 +146,48 @@ class PerformanceServiceTest {
     stubPrepareContext(room, performer, song);
 
     when(performanceStore.nextPerformanceId()).thenReturn(PERFORMANCE_ID);
-
     when(performanceStore.create(any(PerformanceSnapShot.class))).thenReturn(true);
 
-    when(s3StorageService.presignedUrl("songs/20/mr.mp3")).thenReturn("https://cdn.test/mr");
+    when(s3StorageService.presignedUrl("songs/20/mr.mp3"))
+            .thenReturn("https://cdn.test/mr");
 
-    when(s3StorageService.presignedUrl("songs/20/midi.json")).thenReturn("https://cdn.test/midi");
+    when(s3StorageService.presignedUrl("songs/20/midi.json"))
+            .thenReturn("https://cdn.test/midi");
+
+    when(s3StorageService.presignedUrl("songs/20/lyrics.json"))
+            .thenReturn("https://cdn.test/lyrics");
 
     beginTransaction();
 
-    performanceService.prepare(USER_ID, ROOM_ID, new PerformancePrepareRequest(SONG_ID));
+    performanceService.prepare(
+            USER_ID,
+            ROOM_ID,
+            new PerformancePrepareRequest(SONG_ID));
 
     ArgumentCaptor<PerformanceSnapShot> sessionCaptor =
-        ArgumentCaptor.forClass(PerformanceSnapShot.class);
+            ArgumentCaptor.forClass(PerformanceSnapShot.class);
 
     verify(performanceStore).create(sessionCaptor.capture());
 
     PerformanceSnapShot created = sessionCaptor.getValue();
 
     assertThat(created)
-        .extracting(
-            PerformanceSnapShot::performanceId,
-            PerformanceSnapShot::roomId,
-            PerformanceSnapShot::performerParticipantId,
-            PerformanceSnapShot::performerUserId,
-            PerformanceSnapShot::songId,
-            PerformanceSnapShot::status,
-            PerformanceSnapShot::settings)
-        .containsExactly(
-            PERFORMANCE_ID,
-            ROOM_ID,
-            PARTICIPANT_ID,
-            USER_ID,
-            SONG_ID,
-            PerformanceStatus.PREPARING,
-            PerformanceSettings.defaults());
+            .extracting(
+                    PerformanceSnapShot::performanceId,
+                    PerformanceSnapShot::roomId,
+                    PerformanceSnapShot::performerParticipantId,
+                    PerformanceSnapShot::performerUserId,
+                    PerformanceSnapShot::songId,
+                    PerformanceSnapShot::status,
+                    PerformanceSnapShot::settings)
+            .containsExactly(
+                    PERFORMANCE_ID,
+                    ROOM_ID,
+                    PARTICIPANT_ID,
+                    USER_ID,
+                    SONG_ID,
+                    PerformanceStatus.PREPARING,
+                    PerformanceSettings.defaults());
 
     assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
 
@@ -191,29 +198,32 @@ class PerformanceServiceTest {
     InOrder eventOrder = inOrder(eventPublisher);
 
     eventOrder
-        .verify(eventPublisher)
-        .publish(
-            ROOM_ID,
-            PerformanceWebSocketEventType.PERFORMANCE_STARTED,
-            new PerformanceStartedPayload(
-                PERFORMANCE_ID,
-                PARTICIPANT_ID,
-                SONG_ID,
-                PerformanceStatus.PREPARING,
-                RoomStatus.PLAYING));
+            .verify(eventPublisher)
+            .publish(
+                    ROOM_ID,
+                    PerformanceWebSocketEventType.PERFORMANCE_STARTED,
+                    new PerformanceStartedPayload(
+                            PERFORMANCE_ID,
+                            PARTICIPANT_ID,
+                            SONG_ID,
+                            PerformanceStatus.PREPARING,
+                            RoomStatus.PLAYING));
 
     eventOrder
-        .verify(eventPublisher)
-        .publish(
-            ROOM_ID,
-            PerformanceWebSocketEventType.PERFORMANCE_PREPARATION_STARTED,
-            new PerformancePreparationStartedPayload(
-                PERFORMANCE_ID,
-                PARTICIPANT_ID,
-                SONG_ID,
-                "테스트 곡",
-                "https://cdn.test/mr",
-                "https://cdn.test/midi"));
+            .verify(eventPublisher)
+            .publish(
+                    ROOM_ID,
+                    PerformanceWebSocketEventType.PERFORMANCE_PREPARATION_STARTED,
+                    new PerformancePreparationStartedPayload(
+                            PERFORMANCE_ID,
+                            PARTICIPANT_ID,
+                            SONG_ID,
+                            "테스트 곡",
+                            3,
+                            "songs/20/cover.jpg",
+                            "https://cdn.test/mr",
+                            "https://cdn.test/midi",
+                            "https://cdn.test/lyrics"));
   }
 
   @Test
