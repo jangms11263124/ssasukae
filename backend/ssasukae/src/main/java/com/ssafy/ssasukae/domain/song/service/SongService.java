@@ -58,6 +58,36 @@ public class SongService {
                 .build();
     }
 
+    /**
+     * 제목/가수명만으로 곡을 우선 생성해 songId를 확보한다.
+     * S3 업로드 키가 songId를 필요로 하기 때문에 자산 업로드보다 먼저 호출되어야 한다.
+     */
+    @Transactional
+    public Long createBareSong(String title, String artist) {
+        Song song = Song.create(title, artist);
+        return songRepository.save(song).getId();
+    }
+
+    /**
+     * S3 업로드가 모두 끝난 뒤, AI 분석 결과로 곡 정보를 완성한다.
+     * S3 호출은 이 메서드 밖(호출자)에서 이미 끝낸 상태로 넘어와야 한다 — DB 커넥션을 느린 외부 I/O 동안 붙들지 않기 위함.
+     */
+    @Transactional
+    public void finalizeSongResources(
+            Long songId,
+            Integer duration,
+            Integer difficultyLevel,
+            String thumbnailImageUrl,
+            String mrObjectKey,
+            String midiObjectKey,
+            String lyricsObjectKey
+    ) {
+        Song song = songRepository.findById(songId)
+                .orElseThrow(() -> new CustomException(SongErrorCode.SONG_NOT_FOUND));
+        song.updateMetadata(song.getTitle(), song.getArtist(), duration, difficultyLevel);
+        song.updateResources(thumbnailImageUrl, mrObjectKey, midiObjectKey, lyricsObjectKey);
+    }
+
     private List<Song> searchAll(String query, Long cursor, int size) {
         return songRepository.searchAll(query, cursor, PageRequest.of(0, size + 1));
     }

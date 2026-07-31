@@ -38,6 +38,17 @@ public class S3StorageService {
         deleteObject(key);
     }
 
+    /**
+     * 만료되지 않는 고정 공개 URL. 버킷/프리픽스가 public-read로 열려 있어야 클라이언트가 접근 가능하다.
+     */
+    public String publicUrl(String key) {
+        return "https://%s.s3.%s.amazonaws.com/%s".formatted(
+                awsS3Properties.getS3().getBucket(),
+                awsS3Properties.getS3().getRegion(),
+                key
+        );
+    }
+
     public String presignedUrl(String key) {
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(awsS3Properties.getS3().getBucket())

@@ -68,7 +68,9 @@ management:
       show-details: never
 
 ai:
-  internal-api-key: ${AI_INTERNAL_API_KEY:}
+  internal-api-key: ${AI_INTERNAL_API_KEY}
+  upload-ticket-secret: ${AI_UPLOAD_TICKET_SECRET}
+  upload-ticket-expiration-ms: 600000 # 10분
 
 performance:
   recovery:
