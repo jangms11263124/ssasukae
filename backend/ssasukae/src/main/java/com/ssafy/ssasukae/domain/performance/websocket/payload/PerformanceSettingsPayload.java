@@ -7,9 +7,7 @@ public record PerformanceSettingsPayload(
         Integer keyOffset,
         Integer tempoPercent,
         Integer mrVolumePercent,
-        Integer micVolumePercent,
-        Integer echoLevel,
-        Integer reverbLevel
+        Integer echoLevel
 ) {
 
     public static PerformanceSettingsPayload from(
@@ -19,9 +17,7 @@ public record PerformanceSettingsPayload(
                 settings.keyOffset(),
                 settings.tempoPercent(),
                 settings.mrVolumePercent(),
-                settings.micVolumePercent(),
-                settings.echoLevel(),
-                settings.reverbLevel()
+                settings.echoLevel()
         );
     }
 }

@@ -173,9 +173,7 @@ public class CardService {
     if (!performance.performanceId().equals(performanceId)) {
       throw business(WebSocketErrorCode.PERFORMANCE_MISMATCH);
     }
-    if (performance.status() != PerformanceStatus.PLAYING
-        || performance.startedAt() == null
-        || performance.isPausedForCard()) {
+    if (performance.status() != PerformanceStatus.PLAYING || performance.startedAt() == null) {
       throw business(WebSocketErrorCode.PLAYBACK_NOT_RUNNING);
     }
     // 공연자인가
@@ -207,8 +205,6 @@ public class CardService {
 
     validateNoRoomCard(roomId);
 
-    // 사용 승인 떨어지면 정지시킴
-    PerformanceSnapShot paused = performance.pauseForCard(approvedAt);
     // 프론트가 타이머 설정하기 위해서 3초 뒤의 시간을 넘겨줌
     OffsetDateTime activateAt = approvedAt.plusSeconds(ACTIVATION_COUNTDOWN_SECONDS);
     RoomCardSnapshot pendingRoomCard =
@@ -228,19 +224,12 @@ public class CardService {
             assignment.effectValue(),
             assignment.durationSeconds(),
             null,
-            paused.playbackPositionMs(),
             approvedAt,
             activateAt,
             null,
             null);
 
     cardStateStore.saveRoomCard(pendingRoomCard);
-    try {
-      performanceStore.save(paused);
-    } catch (RuntimeException exception) {
-      cardStateStore.deleteRoomCard(roomId);
-      throw business(WebSocketErrorCode.CARD_STATE_CONFLICT);
-    }
 
     // 카드 사용 예정 이벤트 발행 및 activatedAt 시각에 startEffect 메서드 실행
     eventPublisher.publishToRoom(
@@ -272,11 +261,7 @@ public class CardService {
     RoomCardSnapshot roomCard = roomCardOptional.get();
     cardStateStore.deleteRoomCard(roomCard.roomId());
     if (roomCard.status() == RoomCardStatus.PENDING) {
-      if (restored.isPausedForCard()) {
-        restored = restored.resumeAfterCard(now());
-        performanceStore.save(restored);
-      }
-      publishCancelled(roomCard, reason, false);
+      publishCancelled(roomCard, reason);
       return restored;
     }
 
@@ -297,11 +282,7 @@ public class CardService {
       RoomCardSnapshot roomCard = roomCardOptional.get();
       if (roomCard.status() == RoomCardStatus.PENDING) {
         cardStateStore.deleteRoomCard(roomCard.roomId());
-        if (restored.isPausedForCard()) {
-          restored = restored.resumeAfterCard(now());
-          performanceStore.save(restored);
-        }
-        publishCancelled(roomCard, reason, false);
+        publishCancelled(roomCard, reason);
       } else if (roomCard.status() == RoomCardStatus.ACTIVE) {
         cardStateStore.deleteRoomCard(roomCard.roomId());
         restored = restorePerformanceSettings(restored, roomCard);
@@ -348,7 +329,7 @@ public class CardService {
         cardStateStore.findAssignment(roomId, performanceId, participantId);
     Optional<PerformanceSnapShot> performanceOptional = performanceStore.findActiveByRoomId(roomId);
     if (assignmentOptional.isEmpty() || performanceOptional.isEmpty()) {
-      cancelScheduled(pending, CardEffectEndReason.SYSTEM_CANCELLED, true);
+      cancelScheduled(pending, CardEffectEndReason.SYSTEM_CANCELLED);
       return;
     }
 
@@ -356,9 +337,8 @@ public class CardService {
     CardAssignmentSnapshot assignment = assignmentOptional.get();
     if (assignment.status() != CardAssignmentStatus.ASSIGNED
         || performance.status() != PerformanceStatus.PLAYING
-        || !performance.performanceId().equals(performanceId)
-        || !performance.isPausedForCard()) {
-      cancelScheduled(pending, CardEffectEndReason.SYSTEM_CANCELLED, true);
+        || !performance.performanceId().equals(performanceId)) {
+      cancelScheduled(pending, CardEffectEndReason.SYSTEM_CANCELLED);
       return;
     }
 
@@ -371,9 +351,7 @@ public class CardService {
     cardStateStore.saveRoomCard(active);
 
     PerformanceSnapShot changed =
-        performance
-            .resumeAfterCard(startedAt)
-            .changeSettings(applyEffect(performance.settings(), active));
+        performance.changeSettings(applyEffect(performance.settings(), active));
     try {
       performanceStore.save(changed);
     } catch (RuntimeException exception) {
@@ -430,8 +408,7 @@ public class CardService {
     publishEnded(roomCard, CardEffectEndReason.DURATION_EXPIRED, now());
   }
 
-  private void cancelScheduled(
-      RoomCardSnapshot roomCard, CardEffectEndReason reason, boolean resumePlayback) {
+  private void cancelScheduled(RoomCardSnapshot roomCard, CardEffectEndReason reason) {
     if (roomCard == null) {
       return;
     }
@@ -443,16 +420,7 @@ public class CardService {
       return;
     }
     cardStateStore.deleteRoomCard(roomCard.roomId());
-
-    if (resumePlayback) {
-      performanceStore
-          .findActiveByRoomId(roomCard.roomId())
-          .filter(performance -> performance.performanceId().equals(roomCard.performanceId()))
-          .filter(PerformanceSnapShot::isPausedForCard)
-          .map(performance -> performance.resumeAfterCard(now()))
-          .ifPresent(performanceStore::save);
-    }
-    publishCancelled(roomCard, reason, resumePlayback);
+    publishCancelled(roomCard, reason);
   }
 
   private Card draw(List<Card> cards) {
@@ -531,40 +499,21 @@ public class CardService {
     return new CardActivationScheduledPayload(
         roomCard.performanceId(),
         roomCard.sourceParticipantId(),
-        roomCard.targetParticipantId(),
-        roomCard.targetType(),
-        roomCard.cardId(),
-        roomCard.cardCode(),
-        roomCard.cardName(),
-        roomCard.description(),
-        roomCard.cardImageUrl(),
-        roomCard.effectType(),
-        roomCard.effectValue(),
-        roomCard.durationSeconds(),
         serverNow,
-        roomCard.pausedPlaybackPositionMs(),
         ACTIVATION_COUNTDOWN_SECONDS,
         roomCard.approvedAt(),
         roomCard.activateAt());
   }
 
-  private void publishCancelled(
-      RoomCardSnapshot roomCard, CardEffectEndReason reason, boolean resumePlayback) {
+  private void publishCancelled(RoomCardSnapshot roomCard, CardEffectEndReason reason) {
     eventPublisher.publishToRoom(
         roomCard.roomId(),
         CardWebSocketEventType.CARD_ACTIVATION_CANCELLED,
         new CardActivationCancelledPayload(
             roomCard.performanceId(),
             roomCard.sourceParticipantId(),
-            roomCard.targetParticipantId(),
-            roomCard.cardId(),
-            roomCard.cardCode(),
-            roomCard.cardName(),
-            roomCard.cardImageUrl(),
             reason,
-            now(),
-            roomCard.pausedPlaybackPositionMs(),
-            resumePlayback));
+            now()));
   }
 
   private void publishEnded(
@@ -598,9 +547,7 @@ public class CardService {
               clamp(settings.keyOffset() + roomCard.effectValue(), -6, 6),
               settings.tempoPercent(),
               settings.mrVolumePercent(),
-              settings.micVolumePercent(),
-              settings.echoLevel(),
-              settings.reverbLevel());
+              settings.echoLevel());
       case MR_TEMPO_CHANGE ->
           new PerformanceSettings(
               settings.keyOffset(),
@@ -609,9 +556,7 @@ public class CardService {
                   50,
                   150),
               settings.mrVolumePercent(),
-              settings.micVolumePercent(),
-              settings.echoLevel(),
-              settings.reverbLevel());
+              settings.echoLevel());
       case MIC_OPEN, LYRICS_HIDE -> settings;
     };
   }
@@ -629,17 +574,13 @@ public class CardService {
                   roomCard.previousValue(),
                   settings.tempoPercent(),
                   settings.mrVolumePercent(),
-                  settings.micVolumePercent(),
-                  settings.echoLevel(),
-                  settings.reverbLevel());
+                  settings.echoLevel());
           case MR_TEMPO_CHANGE ->
               new PerformanceSettings(
                   settings.keyOffset(),
                   roomCard.previousValue(),
                   settings.mrVolumePercent(),
-                  settings.micVolumePercent(),
-                  settings.echoLevel(),
-                  settings.reverbLevel());
+                  settings.echoLevel());
           case MIC_OPEN, LYRICS_HIDE -> settings;
         };
     return performance.changeSettings(restored);

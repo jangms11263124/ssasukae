@@ -3,7 +3,6 @@ package com.ssafy.ssasukae.domain.card.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,7 +16,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -32,7 +30,6 @@ import com.ssafy.ssasukae.domain.card.redis.RoomCardStatus;
 import com.ssafy.ssasukae.domain.card.repository.CardRepository;
 import com.ssafy.ssasukae.domain.card.type.CardTier;
 import com.ssafy.ssasukae.domain.card.websocket.CardWebSocketEventPublisher;
-import com.ssafy.ssasukae.domain.card.websocket.CardWebSocketEventType;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectTargetType;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
@@ -123,66 +120,6 @@ class CardServiceTest {
   }
 
   @Test
-  void activationSavesTheRoomCardAndPausesPlayback() {
-    cardService.activate(USER_ID, ROOM_ID, PERFORMANCE_ID);
-
-    ArgumentCaptor<PerformanceSnapShot> performanceCaptor =
-        ArgumentCaptor.forClass(PerformanceSnapShot.class);
-    verify(performanceStore).save(performanceCaptor.capture());
-    assertThat(performanceCaptor.getValue().isPausedForCard()).isTrue();
-    assertThat(performanceCaptor.getValue().playbackPositionMs()).isEqualTo(60_000L);
-    verify(cardStateStore).saveRoomCard(any(RoomCardSnapshot.class));
-    verify(eventPublisher)
-        .publishToRoom(
-            org.mockito.ArgumentMatchers.eq(ROOM_ID),
-            org.mockito.ArgumentMatchers.eq(CardWebSocketEventType.CARD_ACTIVATION_SCHEDULED),
-            any());
-    verify(taskScheduler)
-        .schedule(any(Runnable.class), org.mockito.ArgumentMatchers.eq(NOW.plusSeconds(3)));
-  }
-
-  @Test
-  void scheduledActivationMarksTheAssignmentUsedAndStartsTheEffect() {
-    cardService.activate(USER_ID, ROOM_ID, PERFORMANCE_ID);
-
-    ArgumentCaptor<PerformanceSnapShot> pausedCaptor =
-        ArgumentCaptor.forClass(PerformanceSnapShot.class);
-    ArgumentCaptor<RoomCardSnapshot> pendingCaptor =
-        ArgumentCaptor.forClass(RoomCardSnapshot.class);
-    ArgumentCaptor<Runnable> countdownCaptor = ArgumentCaptor.forClass(Runnable.class);
-    verify(performanceStore).save(pausedCaptor.capture());
-    verify(cardStateStore).saveRoomCard(pendingCaptor.capture());
-    verify(taskScheduler)
-        .schedule(countdownCaptor.capture(), org.mockito.ArgumentMatchers.eq(NOW.plusSeconds(3)));
-
-    PerformanceSnapShot paused = pausedCaptor.getValue();
-    RoomCardSnapshot pending = pendingCaptor.getValue();
-    clearInvocations(performanceStore, cardStateStore, taskScheduler, eventPublisher);
-    when(performanceStore.findActiveByRoomId(ROOM_ID)).thenReturn(Optional.of(paused));
-    when(cardStateStore.findRoomCard(ROOM_ID)).thenReturn(Optional.of(pending));
-
-    countdownCaptor.getValue().run();
-
-    ArgumentCaptor<CardAssignmentSnapshot> usedCaptor =
-        ArgumentCaptor.forClass(CardAssignmentSnapshot.class);
-    ArgumentCaptor<RoomCardSnapshot> activeCaptor = ArgumentCaptor.forClass(RoomCardSnapshot.class);
-    verify(cardStateStore).saveAssignment(usedCaptor.capture());
-    verify(cardStateStore).saveRoomCard(activeCaptor.capture());
-    assertThat(usedCaptor.getValue().status()).isEqualTo(CardAssignmentStatus.USED);
-    assertThat(activeCaptor.getValue().status()).isEqualTo(RoomCardStatus.ACTIVE);
-    assertThat(activeCaptor.getValue().cardId()).isEqualTo(assignment.cardId());
-    assertThat(activeCaptor.getValue().cardImageUrl()).isEqualTo(assignment.cardImageUrl());
-    assertThat(activeCaptor.getValue().effectType()).isEqualTo(assignment.effectType());
-    assertThat(activeCaptor.getValue().effectValue()).isEqualTo(assignment.effectValue());
-    verify(performanceStore).save(any(PerformanceSnapShot.class));
-    verify(eventPublisher)
-        .publishToRoom(
-            org.mockito.ArgumentMatchers.eq(ROOM_ID),
-            org.mockito.ArgumentMatchers.eq(CardWebSocketEventType.CARD_EFFECT_STARTED),
-            any());
-  }
-
-  @Test
   void activationIsRejectedWhenAnotherCardEffectIsActive() {
     RoomCardSnapshot activeRoomCard =
         new RoomCardSnapshot(
@@ -201,7 +138,6 @@ class CardServiceTest {
             -3,
             15,
             0,
-            60_000L,
             OffsetDateTime.parse("2026-07-29T19:59:50+09:00"),
             OffsetDateTime.parse("2026-07-29T19:59:53+09:00"),
             OffsetDateTime.parse("2026-07-29T19:59:53+09:00"),

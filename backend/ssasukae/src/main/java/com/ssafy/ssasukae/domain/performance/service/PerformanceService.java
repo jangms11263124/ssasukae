@@ -214,9 +214,7 @@ public class PerformanceService {
             request.keyOffset(),
             request.tempoPercent(),
             request.mrVolumePercent(),
-            request.micVolumePercent(),
-            request.echoLevel(),
-            request.reverbLevel());
+            request.echoLevel());
 
     PerformanceSnapShot changed;
 
@@ -353,9 +351,7 @@ public class PerformanceService {
         isBetween(request.keyOffset(), -6, 6)
             && isBetween(request.tempoPercent(), 50, 150)
             && isBetween(request.mrVolumePercent(), 0, 100)
-            && isBetween(request.micVolumePercent(), 0, 100)
-            && isBetween(request.echoLevel(), 0, 100)
-            && isBetween(request.reverbLevel(), 0, 100);
+            && isBetween(request.echoLevel(), 0, 100);
 
     if (!valid) {
       throw business(WebSocketErrorCode.INVALID_PERFORMANCE_SETTING);
