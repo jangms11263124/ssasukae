@@ -256,6 +256,38 @@ public class CardService {
     return doCloseForPerformance(performance, reason);
   }
 
+  /**
+   * 가창자 재접속을 기다리는 동안 현재 예약/활성 카드만 종료한다.
+   * 공연을 재개해야 하므로 아직 사용하지 않은 개인 카드 배정은 유지한다.
+   */
+  public synchronized PerformanceSnapShot suspendForPerformance(
+      PerformanceSnapShot performance, CardEffectEndReason reason) {
+    Optional<RoomCardSnapshot> roomCardOptional = cardStateStore.findRoomCard(performance.roomId());
+    PerformanceSnapShot restored = performance;
+    if (roomCardOptional.isEmpty()
+        || !performance.performanceId().equals(roomCardOptional.get().performanceId())) {
+      return restored;
+    }
+
+    RoomCardSnapshot roomCard = roomCardOptional.get();
+    cardStateStore.deleteRoomCard(roomCard.roomId());
+    if (roomCard.status() == RoomCardStatus.PENDING) {
+      if (restored.isPausedForCard()) {
+        restored = restored.resumeAfterCard(now());
+        performanceStore.save(restored);
+      }
+      publishCancelled(roomCard, reason, false);
+      return restored;
+    }
+
+    restored = restorePerformanceSettings(restored, roomCard);
+    if (restored != performance) {
+      performanceStore.save(restored);
+    }
+    publishEnded(roomCard, reason, now());
+    return restored;
+  }
+
   private PerformanceSnapShot doCloseForPerformance(
       PerformanceSnapShot performance, CardEffectEndReason reason) {
     Optional<RoomCardSnapshot> roomCardOptional = cardStateStore.findRoomCard(performance.roomId());

@@ -18,6 +18,7 @@ import java.util.Optional;
 import com.ssafy.ssasukae.domain.card.service.CardService;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
+import com.ssafy.ssasukae.domain.performance.type.PerformanceCancelReason;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateResponse;
 import com.ssafy.ssasukae.domain.room.dto.RoomJoinResponse;
@@ -35,6 +36,8 @@ import com.ssafy.ssasukae.domain.user.type.Role;
 import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
+import com.ssafy.ssasukae.integration.aws.S3StorageService;
+import com.ssafy.ssasukae.domain.song.repository.SongRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -55,6 +58,8 @@ class RoomServiceMediaSessionTest {
   @Mock private WebSocketEventPublisher webSocketEventPublisher;
   @Mock private CardService cardService;
   @Mock private PerformanceStore performanceStore;
+  @Mock private SongRepository songRepository;
+  @Mock private S3StorageService s3StorageService;
 
   private RoomService roomService;
   private final Clock clock =
@@ -72,7 +77,9 @@ class RoomServiceMediaSessionTest {
             webSocketEventPublisher,
             cardService,
             performanceStore,
-            clock);
+            clock,
+            songRepository,
+            s3StorageService);
   }
 
   @Test
@@ -118,7 +125,8 @@ class RoomServiceMediaSessionTest {
     User joiningUser = user(2L);
     Room room = room(10L, "openvidu-session-1");
     when(userRepository.findById(2L)).thenReturn(Optional.of(joiningUser));
-    when(roomRepository.findByInviteCode("ABC123")).thenReturn(Optional.of(room));
+    when(roomRepository.findByInviteCodeForUpdate("ABC123"))
+        .thenReturn(Optional.of(room));
     when(roomParticipantRepository.existsByRoomIdAndUserIdAndConnectionStatusIn(eq(10L), eq(2L), any()))
         .thenReturn(false);
     when(roomParticipantRepository.countByRoomIdAndConnectionStatusIn(eq(10L), any())).thenReturn(1L);
@@ -140,6 +148,26 @@ class RoomServiceMediaSessionTest {
     assertThat(response.openViduToken()).isEqualTo("openvidu-token-2");
     verify(mediaSessionGateway, never()).createSession();
     verify(mediaSessionGateway).createConnectionToken("openvidu-session-1", 200L);
+  }
+
+  @Test
+  @DisplayName("강퇴 이력이 있는 사용자는 기존 초대 코드 입장 API로도 다시 입장할 수 없다")
+  void joinRoomRejectsKickedUser() {
+    User user = user(2L);
+    Room room = room(10L, "openvidu-session-1");
+    when(userRepository.findById(2L)).thenReturn(Optional.of(user));
+    when(roomRepository.findByInviteCodeForUpdate("ABC123"))
+        .thenReturn(Optional.of(room));
+    when(roomParticipantRepository.existsByRoomIdAndUserIdAndConnectionStatus(
+            10L, 2L, ConnectionStatus.KICKED))
+        .thenReturn(true);
+
+    assertThatThrownBy(() -> roomService.joinRoom(2L, "ABC123"))
+        .isInstanceOf(CustomException.class)
+        .hasMessage("강퇴된 참가자는 다시 입장할 수 없습니다.");
+
+    verify(roomParticipantRepository, never()).save(any());
+    verifyNoInteractions(mediaSessionGateway);
   }
 
   @Test
@@ -174,6 +202,20 @@ class RoomServiceMediaSessionTest {
     assertThatThrownBy(() -> roomService.issueConnectionToken(2L, 10L))
         .isInstanceOf(CustomException.class)
         .hasMessage("활성 상태의 참가자가 아닙니다.");
+    verifyNoInteractions(mediaSessionGateway);
+  }
+
+  @Test
+  @DisplayName("강퇴 이력이 있는 사용자는 OpenVidu 토큰을 재발급받을 수 없다")
+  void issueConnectionTokenRejectsKickedUser() {
+    when(roomParticipantRepository.existsByRoomIdAndUserIdAndConnectionStatus(
+            10L, 2L, ConnectionStatus.KICKED))
+        .thenReturn(true);
+
+    assertThatThrownBy(() -> roomService.issueConnectionToken(2L, 10L))
+        .isInstanceOf(CustomException.class)
+        .hasMessage("강퇴된 참가자는 다시 입장할 수 없습니다.");
+
     verifyNoInteractions(mediaSessionGateway);
   }
 
@@ -221,7 +263,8 @@ class RoomServiceMediaSessionTest {
     roomService.leaveRoom(2L, 10L);
 
     assertThat(participant.isActive()).isFalse();
-    verify(performanceRecoveryService).recoverPerformerExitCase(10L, 2L);
+    verify(performanceRecoveryService)
+        .recoverPerformerExitCase(10L, 2L, PerformanceCancelReason.PERFORMER_REQUEST);
     verify(mediaSessionGateway)
         .disconnect("openvidu-session-1", "participant-connection");
   }
@@ -231,14 +274,14 @@ class RoomServiceMediaSessionTest {
   void leaveByConnectionExpirationLeavesDisconnectedParticipant() {
     Room room = room(10L, "openvidu-session-1");
     RoomParticipant participant = participant(room, 100L, ConnectionStatus.DISCONNECTED);
-    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(participant));
     when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
 
     roomService.leaveByConnectionExpiration(100L);
 
     assertThat(participant.getConnectionStatus()).isEqualTo(ConnectionStatus.LEFT);
-    verify(performanceRecoveryService).recoverPerformerExitCase(10L, 2L);
+    verify(performanceRecoveryService)
+        .recoverPerformerExitCase(10L, 2L, PerformanceCancelReason.PERFORMER_DISCONNECTED);
     verify(mediaSessionGateway, never()).disconnect(any(), any());
   }
 
@@ -247,8 +290,6 @@ class RoomServiceMediaSessionTest {
   void leaveByConnectionExpirationIgnoresConnectedParticipant() {
     Room room = room(10L, "openvidu-session-1");
     RoomParticipant participant = participant(room, 100L, ConnectionStatus.CONNECTED);
-    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(participant));
-    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
 
     roomService.leaveByConnectionExpiration(100L);
