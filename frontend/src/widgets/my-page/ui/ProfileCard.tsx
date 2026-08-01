@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 
-import type { MyPageResponse } from '@/entities/user';
+import { PROFILE_IMAGE_ACCEPT, type MyPageResponse } from '@/entities/user';
 import { anybody, jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
 import { ActionButton } from '@/shared/ui/button/ActionButton';
 
 import { formatMemberSince, maskEmail } from '../lib/formatters';
 import { useNicknameEdit } from '../model/useNicknameEdit';
+import { PROFILE_IMAGE_EDIT_COPY, useProfileImageEdit } from '../model/useProfileImageEdit';
 import { LogOutIcon, PencilIcon } from './icons';
 import { NicknameField } from './NicknameField';
 import { ProfileImage } from './ProfileImage';
@@ -41,6 +42,8 @@ export function ProfileCard({ profile, isLoggingOut, onLogout }: ProfileCardProp
     currentNickname: profile.nickname,
     onSaved: () => setIsEditing(false),
   });
+  // ref가 포함된 객체를 그대로 쓰면 react-hooks/refs가 렌더 중 ref 접근으로 오인한다.
+  const { fileInputRef, isUploading, openFilePicker, handleFileChange } = useProfileImageEdit();
 
   // 편집을 열고 닫을 때마다 서버 값 기준으로 되돌려, 이전 편집 흔적이 남지 않게 한다.
   const handleStartEdit = () => {
@@ -66,14 +69,21 @@ export function ProfileCard({ profile, isLoggingOut, onLogout }: ProfileCardProp
       />
 
       <div className="relative flex flex-col gap-7 sm:flex-row sm:gap-9">
+        {/* 화면에 그리지 않는 파일 선택 트리거. 연필 버튼이 대신 클릭한다. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={PROFILE_IMAGE_ACCEPT}
+          onChange={(event) => void handleFileChange(event)}
+          className="hidden"
+        />
+
         <ProfileImage
           profileImageUrl={profile.profileImageUrl}
           nickname={profile.nickname}
           isEditing={isEditing}
-          onEditImage={() => {
-            // 업로드 엔드포인트가 없어 아직 연결할 대상이 없다.
-            // presigned URL API가 생기면 여기서 파일 선택을 띄운다.
-          }}
+          isUploading={isUploading}
+          onEditImage={openFilePicker}
         />
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -151,7 +161,7 @@ export function ProfileCard({ profile, isLoggingOut, onLogout }: ProfileCardProp
                 'mt-4 text-[0.5rem] tracking-[0.12em] text-zinc-600',
               )}
             >
-              [EDIT_MODE] 이미지 업로드 API 연동 전입니다.
+              {isUploading ? PROFILE_IMAGE_EDIT_COPY.uploading : PROFILE_IMAGE_EDIT_COPY.hint}
             </p>
           )}
         </div>
