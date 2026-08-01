@@ -156,6 +156,26 @@ class PerformanceRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("가창자 재개 준비 제한시간이 지나면 중단된 공연을 취소한다")
+  void recoverExpiredCancelsSuspendedPerformance() {
+    Room room = playingRoom();
+    PerformanceSnapShot suspended =
+        playingSnapshot().suspendForPerformerDisconnect(STARTED_AT.plusSeconds(30));
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID))
+        .thenReturn(Optional.of(suspended));
+    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
+
+    beginTransaction();
+    service.recoverExpired(PERFORMANCE_ID, suspended.suspendedAt().toInstant().plusSeconds(15));
+
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
+    commitTransaction();
+
+    verify(performanceStore).delete(suspended);
+    verify(deadlineStore).delete(PERFORMANCE_ID);
+  }
+
+  @Test
   @DisplayName("이미 정리된 공연의 중복 복구 요청은 마감 정보만 제거한다")
   void recoverExpiredIsIdempotentWhenPerformanceAlreadyRemoved() {
     when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.empty());

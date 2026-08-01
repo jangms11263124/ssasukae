@@ -2,6 +2,8 @@ package com.ssafy.ssasukae.global.security.websocket;
 
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketErrorCode;
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketException;
+import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
+import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 
 import java.security.Principal;
 
@@ -24,6 +26,11 @@ import org.springframework.util.StringUtils;
 public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
 
   private final AntPathMatcher pathMatcher = new AntPathMatcher();
+  private final RoomParticipantRepository participantRepository;
+
+  public WebSocketAuthorizationInterceptor(RoomParticipantRepository participantRepository) {
+    this.participantRepository = participantRepository;
+  }
 
   @Override
   public Message<?> preSend(
@@ -72,6 +79,7 @@ public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
     if (StompCommand.SEND.equals(command)) {
       requireAuthenticated(accessor.getUser());
       requireApplicationDestination(accessor.getDestination());
+      requireRoomAccess(accessor.getUser(), accessor.getDestination(), "/app/rooms/{roomId}/**");
       return message;
     }
 
@@ -81,6 +89,10 @@ public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
     if (StompCommand.SUBSCRIBE.equals(command)) {
       requireAuthenticated(accessor.getUser());
       requireSubscriptionDestination(accessor.getDestination());
+      if (matches(accessor.getDestination(), "/topic/rooms/{roomId}")) {
+        requireRoomAccess(
+            accessor.getUser(), accessor.getDestination(), "/topic/rooms/{roomId}");
+      }
       return message;
     }
 
@@ -151,5 +163,43 @@ public class WebSocketAuthorizationInterceptor implements ChannelInterceptor {
   ) {
     return StringUtils.hasText(destination)
             && pathMatcher.match(pattern, destination);
+  }
+
+  private void requireRoomAccess(
+      Principal principal,
+      String destination,
+      String roomPattern) {
+    if (!matches(destination, roomPattern)) {
+      return;
+    }
+
+    Long userId = parsePositiveLong(principal.getName());
+    String roomIdValue = pathMatcher.extractUriTemplateVariables(roomPattern, destination).get("roomId");
+    Long roomId = parsePositiveLong(roomIdValue);
+
+    if (participantRepository.existsByRoomIdAndUserIdAndConnectionStatus(
+        roomId, userId, ConnectionStatus.KICKED)) {
+      throw new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED);
+    }
+
+    boolean active = participantRepository
+        .findByRoomIdAndUserId(roomId, userId)
+        .filter(participant -> participant.isActive())
+        .isPresent();
+    if (!active) {
+      throw new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED);
+    }
+  }
+
+  private Long parsePositiveLong(String value) {
+    try {
+      long parsed = Long.parseLong(value);
+      if (parsed <= 0) {
+        throw new NumberFormatException("not positive");
+      }
+      return parsed;
+    } catch (RuntimeException exception) {
+      throw new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED);
+    }
   }
 }

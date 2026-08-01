@@ -38,6 +38,12 @@ public class PerformanceRecoveryService {
    */
   @Transactional
   public void recoverPerformerExitCase(Long roomId, Long userId) {
+    recoverPerformerExitCase(roomId, userId, PerformanceCancelReason.PERFORMER_DISCONNECTED);
+  }
+
+  @Transactional
+  public void recoverPerformerExitCase(
+      Long roomId, Long userId, PerformanceCancelReason cancelReason) {
     if (!isPositive(roomId) || !isPositive(userId)) {
       return;
     }
@@ -55,7 +61,9 @@ public class PerformanceRecoveryService {
     }
 
     cancellationProcessor.cancel(
-        room, active, PerformanceCancelReason.PERFORMER_DISCONNECTED);
+        room,
+        active,
+        cancelReason == null ? PerformanceCancelReason.SAFETY_TERMINATION : cancelReason);
   }
 
   /**
@@ -95,6 +103,12 @@ public class PerformanceRecoveryService {
     // 현재 분석중이라면 복구 정보 저장
     if (current.status() == PerformanceStatus.ANALYZING) {
       failAnalysis(room, current);
+      return;
+    }
+
+    if (current.status() == PerformanceStatus.SUSPENDED) {
+      cancellationProcessor.cancel(
+          room, current, PerformanceCancelReason.PERFORMER_DISCONNECTED);
       return;
     }
 
