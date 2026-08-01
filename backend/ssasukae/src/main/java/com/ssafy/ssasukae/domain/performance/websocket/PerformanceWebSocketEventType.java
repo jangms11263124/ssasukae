@@ -10,6 +10,8 @@ public enum PerformanceWebSocketEventType implements WebSocketEventType {
     PLAYBACK_FINISHED,
     PERFORMANCE_SETTINGS_CHANGED,
     PERFORMANCE_CANCELLED,
+    PERFORMANCE_SUSPENDED,
+    PERFORMANCE_RESUMED,
     LEADERBOARD_UPDATED;
 
     @Override

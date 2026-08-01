@@ -53,9 +53,11 @@ public record PlaybackSnapshotResponse(
             performance.performanceId(),
 
             // 카드 활성화 카운트다운 중에는 음원이 일시 정지되어 있다.
-            performance.isPausedForCard()
-                    ? "PAUSED_FOR_CARD"
-                    : "PLAYING",
+            performance.status().name().equals("SUSPENDED")
+                    ? "SUSPENDED"
+                    : performance.status().name().equals("ANALYZING")
+                        ? "ANALYZING"
+                        : performance.isPausedForCard() ? "PAUSED_FOR_CARD" : "PLAYING",
 
             performance.startedAt(),
 

@@ -12,6 +12,7 @@ import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantConnectionSta
 import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantJoinedPayload;
 import com.ssafy.ssasukae.domain.room.websocket.type.ParticipantStatus;
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
+import com.ssafy.ssasukae.domain.performance.service.PerformanceConnectionRecoveryService;
 import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
 import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
@@ -37,6 +38,7 @@ public class OpenViduWebhookService {
     private final RoomRepository roomRepository;
     private final ParticipantReconnectDeadlineStore deadlineStore;
     private final PerformanceRecoveryProperties recoveryProperties;
+    private final PerformanceConnectionRecoveryService performanceConnectionRecoveryService;
 
     @Transactional
     public void handleParticipantJoined(OpenViduWebhookRequest request) {
@@ -79,6 +81,8 @@ public class OpenViduWebhookService {
                 participant.getId(),
                 Instant.now().plus(recoveryProperties.getPerformerDisconnectGrace())
         );
+
+        performanceConnectionRecoveryService.suspendForPerformerDisconnect(participant);
 
         webSocketEventPublisher.publishToRoom(participant.getRoom().getId(), WebSocketEvent.roomEvent(RoomWebSocketEventType.PARTICIPANT_CONNECTION_STATUS_CHANGED, participant.getRoom().getId(), new ParticipantConnectionStatusChangedPayload(participant.getId(), ParticipantStatus.DISCONNECTED)));
     }

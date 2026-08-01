@@ -9,6 +9,7 @@ import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Controller;
 
 import com.ssafy.ssasukae.domain.performance.service.PerformanceService;
+import com.ssafy.ssasukae.domain.performance.service.PerformanceConnectionRecoveryService;
 import com.ssafy.ssasukae.domain.performance.websocket.request.PerformancePrepareRequest;
 import com.ssafy.ssasukae.domain.performance.websocket.request.PerformanceSettingsChangeRequest;
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketAuthenticationException;
@@ -17,9 +18,13 @@ import com.ssafy.ssasukae.global.exception.websocket.WebSocketAuthenticationExce
 public class PerformanceWebSocketController {
 
     private final PerformanceService performanceService;
+    private final PerformanceConnectionRecoveryService connectionRecoveryService;
 
-    public PerformanceWebSocketController(PerformanceService performanceService) {
+    public PerformanceWebSocketController(
+            PerformanceService performanceService,
+            PerformanceConnectionRecoveryService connectionRecoveryService) {
         this.performanceService = performanceService;
+        this.connectionRecoveryService = connectionRecoveryService;
     }
 
     // 공연 준비 시작 SEND
@@ -66,6 +71,15 @@ public class PerformanceWebSocketController {
             @DestinationVariable Long performanceId,
             Principal principal) {
         performanceService.cancel(resolveUserId(principal), roomId, performanceId);
+    }
+
+    @MessageMapping("/rooms/{roomId}/performances/{performanceId}/resume-ready")
+    public void resumeReady(
+            @DestinationVariable Long roomId,
+            @DestinationVariable Long performanceId,
+            Principal principal) {
+        connectionRecoveryService.resumeAfterPerformerReady(
+                resolveUserId(principal), roomId, performanceId);
     }
 
     private Long resolveUserId(Principal principal) {
