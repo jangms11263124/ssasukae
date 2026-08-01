@@ -1,46 +1,36 @@
 'use client';
 
-import { cn } from '@/shared/lib/cn';
-
 import { useStageStore } from '../../../model/stageStore';
-import { CamIcon, MicIcon } from '../../media-controls/MediaIcons';
+import { CamIcon, GestureIcon, MicIcon } from '../../media-controls/MediaIcons';
+import { MediaToggleButton } from '../../media-controls/MediaToggleButton';
 
-interface MediaToggleProps {
-  icon: React.ReactNode;
-  label: string;
-  on: boolean;
-  onToggle: () => void;
+interface MediaControlsOverlayProps {
+  /** 제스처 토글은 가창자에게만 의미가 있다 */
+  showGestureToggle?: boolean;
 }
 
-function MediaToggle({ icon, label, on, onToggle }: MediaToggleProps) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={on}
-      className={cn(
-        'flex items-center gap-2 border bg-black/60 px-3 py-1.5 font-mono text-xs tracking-[0.18em] transition-colors',
-        on
-          ? 'border-cyan-300/80 text-cyan-100'
-          : 'border-white/25 text-zinc-500 hover:text-zinc-300',
-      )}
-    >
-      {icon}
-      {label} {on ? 'ON' : 'OFF'}
-    </button>
-  );
-}
-
-export function MediaControlsOverlay() {
+export function MediaControlsOverlay({ showGestureToggle = false }: MediaControlsOverlayProps) {
   const micOn = useStageStore((state) => state.micOn);
   const camOn = useStageStore((state) => state.camOn);
+  const gestureOn = useStageStore((state) => state.gestureOn);
   const toggleMic = useStageStore((state) => state.toggleMic);
   const toggleCam = useStageStore((state) => state.toggleCam);
+  const toggleGesture = useStageStore((state) => state.toggleGesture);
 
   return (
-    <div className="absolute left-4 top-4 flex gap-2">
-      <MediaToggle icon={<MicIcon />} label="MIC" on={micOn} onToggle={toggleMic} />
-      <MediaToggle icon={<CamIcon />} label="CAM" on={camOn} onToggle={toggleCam} />
+    <div className="absolute left-4 top-4 flex flex-wrap gap-2">
+      <MediaToggleButton icon={<MicIcon />} label="MIC" on={micOn} onToggle={toggleMic} />
+      <MediaToggleButton icon={<CamIcon />} label="CAM" on={camOn} onToggle={toggleCam} />
+      {showGestureToggle ? (
+        // 캠이 꺼져 있으면 손 인식 입력 자체가 없어 켤 수 없다.
+        <MediaToggleButton
+          icon={<GestureIcon />}
+          label="GESTURE"
+          on={gestureOn}
+          onToggle={toggleGesture}
+          disabled={!camOn}
+        />
+      ) : null}
     </div>
   );
 }
