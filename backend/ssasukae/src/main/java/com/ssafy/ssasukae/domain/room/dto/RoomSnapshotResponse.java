@@ -16,18 +16,20 @@ public record RoomSnapshotResponse(
     Integer maxParticipants,
     OffsetDateTime serverNow,
     List<RoomParticipantResponse> participants,
+    PerformanceSnapshotResponse performance,
     PlaybackSnapshotResponse playback,
     MyCardSnapshotResponse myCard,
     ActiveCardSnapshotResponse activeCard) {
 
   public static RoomSnapshotResponse from(Room room, List<RoomParticipant> participants) {
-    return from(room, participants, OffsetDateTime.now(), null, null, null);
+    return from(room, participants, OffsetDateTime.now(), null, null, null, null);
   }
 
   public static RoomSnapshotResponse from(
       Room room,
       List<RoomParticipant> participants,
       OffsetDateTime serverNow,
+      PerformanceSnapshotResponse performance,
       PlaybackSnapshotResponse playback,
       MyCardSnapshotResponse myCard,
       ActiveCardSnapshotResponse activeCard) {
@@ -39,6 +41,7 @@ public record RoomSnapshotResponse(
         room.getMaxParticipants(),
         serverNow,
         participants.stream().map(RoomParticipantResponse::from).toList(),
+        performance,
         playback,
         myCard,
         activeCard);

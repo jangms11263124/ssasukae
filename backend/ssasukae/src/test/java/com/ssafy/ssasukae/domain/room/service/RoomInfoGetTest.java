@@ -42,6 +42,8 @@ import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
 import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
+import com.ssafy.ssasukae.integration.aws.S3StorageService;
+import com.ssafy.ssasukae.domain.song.repository.SongRepository;
 
 @ExtendWith(MockitoExtension.class)
 class RoomInfoGetTest {
@@ -57,6 +59,8 @@ class RoomInfoGetTest {
   @Mock private WebSocketEventPublisher webSocketEventPublisher;
   @Mock private CardService cardService;
   @Mock private PerformanceStore performanceStore;
+  @Mock private SongRepository songRepository;
+  @Mock private S3StorageService s3StorageService;
 
   private RoomService roomService;
   private final Clock clock =
@@ -75,7 +79,9 @@ class RoomInfoGetTest {
                     webSocketEventPublisher,
                     cardService,
                     performanceStore,
-                    clock);
+                    clock,
+                    songRepository,
+                    s3StorageService);
   }
 
   @Test

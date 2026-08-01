@@ -51,6 +51,8 @@ import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
 import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
 import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
+import com.ssafy.ssasukae.integration.aws.S3StorageService;
+import com.ssafy.ssasukae.domain.song.repository.SongRepository;
 
 @ExtendWith(MockitoExtension.class)
 class RoomChatServiceTest {
@@ -71,6 +73,8 @@ class RoomChatServiceTest {
   @Mock private WebSocketEventPublisher webSocketEventPublisher;
   @Mock private CardService cardService;
   @Mock private PerformanceStore performanceStore;
+  @Mock private SongRepository songRepository;
+  @Mock private S3StorageService s3StorageService;
 
   private RoomService roomService;
   private AuthenticatedUser authenticatedUser;
@@ -100,7 +104,9 @@ class RoomChatServiceTest {
             webSocketEventPublisher,
             cardService,
             performanceStore,
-            clock);
+            clock,
+            songRepository,
+            s3StorageService);
     authenticatedUser = new AuthenticatedUser(USER_ID, "user@test.com", "USER");
   }
 

@@ -2,6 +2,7 @@ package com.ssafy.ssasukae.domain.room.service;
 
 import com.ssafy.ssasukae.domain.card.service.CardService;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
+import com.ssafy.ssasukae.domain.performance.type.PerformanceCancelReason;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
 import com.ssafy.ssasukae.domain.room.dto.*;
@@ -25,6 +26,9 @@ import com.ssafy.ssasukae.global.exception.websocket.WebSocketException;
 import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
 import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
+import com.ssafy.ssasukae.integration.aws.S3StorageService;
+import com.ssafy.ssasukae.domain.song.entity.Song;
+import com.ssafy.ssasukae.domain.song.repository.SongRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,6 +71,8 @@ public class RoomService {
     private final CardService cardService;
     private final PerformanceStore performanceStore;
     private final Clock clock;
+    private final SongRepository songRepository;
+    private final S3StorageService s3StorageService;
 
     @Transactional
     public RoomCreateResponse createRoom(Long hostUserId, RoomCreateRequest request) {
@@ -109,8 +115,10 @@ public class RoomService {
     public RoomJoinResponse joinRoom(Long userId, String inviteCode) {
         User user = getUser(userId);
 
-        Room room = roomRepository.findByInviteCode(inviteCode.toUpperCase())
+        Room room = roomRepository.findByInviteCodeForUpdate(inviteCode.toUpperCase())
                 .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+
+        validateNotKicked(room.getId(), user.getId());
 
         if (roomParticipantRepository.existsByRoomIdAndUserIdAndConnectionStatusIn(
                 room.getId(),
@@ -147,6 +155,8 @@ public class RoomService {
     }
 
     public RoomSnapshotResponse getRoomSnapshot(Long userId, Long roomId) {
+        validateNotKicked(roomId, userId);
+
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
@@ -172,6 +182,9 @@ public class RoomService {
         PerformanceSnapShot performance = performanceStore == null
                 ? null
                 : performanceStore.findActiveByRoomId(roomId).orElse(null);
+        PerformanceSnapshotResponse performanceResponse = performance == null
+                ? null
+                : createPerformanceSnapshot(performance, serverNow);
         PlaybackSnapshotResponse playback = performance == null
                 ? null
                 : PlaybackSnapshotResponse.from(performance, serverNow);
@@ -202,11 +215,34 @@ public class RoomService {
                         .orElse(null);
 
         return RoomSnapshotResponse.from(
-                room, activeParticipants, serverNow, playback, myCard, activeCard);
+                room,
+                activeParticipants,
+                serverNow,
+                performanceResponse,
+                playback,
+                myCard,
+                activeCard);
+    }
+
+    private PerformanceSnapshotResponse createPerformanceSnapshot(
+            PerformanceSnapShot performance,
+            OffsetDateTime serverNow) {
+        Song song = songRepository.findById(performance.songId())
+                .orElseThrow(() -> new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED));
+        return PerformanceSnapshotResponse.from(
+                performance,
+                song,
+                serverNow,
+                s3StorageService.presignedUrl(song.getMrObjectKey()),
+                s3StorageService.presignedUrl(song.getMidiObjectKey()),
+                s3StorageService.presignedUrl(song.getLyricsObjectKey())
+        );
     }
 
     @Transactional
     public String issueConnectionToken(Long userId, Long roomId) {
+        validateNotKicked(roomId, userId);
+
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
@@ -258,30 +294,34 @@ public class RoomService {
             throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
         }
 
-        leaveParticipant(currentRoom, participant);
+        leaveParticipant(currentRoom, participant, PerformanceCancelReason.PERFORMER_REQUEST);
     }
 
     @Transactional
     public void leaveByConnectionExpiration(Long participantId) {
-        RoomParticipant currentParticipant = roomParticipantRepository.findById(participantId)
-                .orElse(null);
-        if(currentParticipant == null) return;
-
-        Room currentRoom = roomRepository.findByIdForUpdate(currentParticipant.getRoom().getId())
-                .orElse(null);
-        if(currentRoom == null) return;
-
         RoomParticipant participant = roomParticipantRepository.findByIdForUpdate(participantId)
                 .orElse(null);
         if(participant == null
                 || participant.getConnectionStatus() != ConnectionStatus.DISCONNECTED) return;
 
-        leaveParticipant(currentRoom, participant);
+        Room currentRoom = roomRepository.findByIdForUpdate(participant.getRoom().getId())
+                .orElse(null);
+        if(currentRoom == null) return;
+
+        leaveParticipant(currentRoom, participant, PerformanceCancelReason.PERFORMER_DISCONNECTED);
     }
 
-    private void leaveParticipant(Room currentRoom, RoomParticipant participant) {
+    private void leaveParticipant(
+            Room currentRoom,
+            RoomParticipant participant,
+            PerformanceCancelReason performanceCancelReason) {
         Long roomId = currentRoom.getId();
         Long userId = participant.getUser().getId();
+        performanceRecoveryService.recoverPerformerExitCase(
+                roomId,
+                userId,
+                performanceCancelReason);
+
         RoomParticipant newHost = null;
         if(currentRoom.isHost(userId)) {
             List<RoomParticipant> participants = roomParticipantRepository.findRoomParticipantsByRoom(currentRoom);
@@ -306,8 +346,6 @@ public class RoomService {
             currentRoom.delegateHost(newHost.getUser());
         }
 
-        performanceRecoveryService.recoverPerformerExitCase(roomId, userId);
-
         boolean online = participant.isOnline();
         String connectionId = participant.getConnectionId();
 
@@ -327,6 +365,16 @@ public class RoomService {
     private void validateNoActiveRoom(Long userId) {
         if (roomParticipantRepository.existsByUserIdAndConnectionStatusIn(userId, ACTIVE_STATUSES)) {
             throw new CustomException(RoomErrorCode.ALREADY_IN_ANOTHER_ROOM);
+        }
+    }
+
+    private void validateNotKicked(Long roomId, Long userId) {
+        if (roomParticipantRepository.existsByRoomIdAndUserIdAndConnectionStatus(
+                roomId,
+                userId,
+                ConnectionStatus.KICKED
+        )) {
+            throw new CustomException(RoomErrorCode.REENTRY_BANNED);
         }
     }
 
@@ -393,6 +441,10 @@ public class RoomService {
         boolean online = receiver.isOnline();
         String connectionId = receiver.getConnectionId();
         receiver.kick(LocalDateTime.now());
+        performanceRecoveryService.recoverPerformerExitCase(
+                roomId,
+                receiver.getUser().getId(),
+                PerformanceCancelReason.SAFETY_TERMINATION);
         if (online) mediaSessionGateway.disconnect(room.getOpenViduSessionId(), connectionId);
 
         webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_KICKED, room.getId(), new ParticipantKickedPayload(participantId)));

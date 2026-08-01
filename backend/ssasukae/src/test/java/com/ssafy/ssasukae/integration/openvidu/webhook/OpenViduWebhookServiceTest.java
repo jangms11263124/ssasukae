@@ -23,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
+import com.ssafy.ssasukae.domain.performance.service.PerformanceConnectionRecoveryService;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.recovery.ParticipantReconnectDeadlineStore;
@@ -49,6 +50,7 @@ class OpenViduWebhookServiceTest {
     @Mock private WebSocketEventPublisher webSocketEventPublisher;
     @Mock private RoomRepository roomRepository;
     @Mock private ParticipantReconnectDeadlineStore deadlineStore;
+    @Mock private PerformanceConnectionRecoveryService performanceConnectionRecoveryService;
 
     private OpenViduWebhookService service;
     private RoomParticipant participant;
@@ -63,7 +65,8 @@ class OpenViduWebhookServiceTest {
                 webSocketEventPublisher,
                 roomRepository,
                 deadlineStore,
-                properties
+                properties,
+                performanceConnectionRecoveryService
         );
 
         Room room = room();
@@ -77,6 +80,7 @@ class OpenViduWebhookServiceTest {
     @DisplayName("participantLeft 수신 시 참가자를 DISCONNECTED로 변경하고 deadline을 저장한다")
     void handleParticipantLeftDisconnectsParticipantAndSavesDeadline() {
         participant.connect("connection-1");
+        participant.promoteToPerformer();
         Instant before = Instant.now().plusSeconds(14);
 
         service.handleParticipantLeft(request("participantLeft", "connection-1"));
@@ -87,6 +91,8 @@ class OpenViduWebhookServiceTest {
                 eq(PARTICIPANT_ID),
                 argThat(deadline -> deadline.isAfter(before))
         );
+        verify(performanceConnectionRecoveryService)
+                .suspendForPerformerDisconnect(participant);
         verify(webSocketEventPublisher).publishToRoom(eq(ROOM_ID), any());
     }
 
