@@ -14,7 +14,7 @@ public record PlaybackSnapshotResponse(
         // 현재 재생 중인 공연 ID
         Long performanceId,
 
-        // 현재 음원 상태: PLAYING 또는 PAUSED_FOR_CARD
+        // 현재 음원 상태
         String playbackStatus,
 
         // 서버가 음원 재생 시작을 확정한 최초 시각
@@ -23,15 +23,11 @@ public record PlaybackSnapshotResponse(
         // serverNow 기준으로 계산한 현재 음원 재생 위치(ms)
         Long playbackPositionMs,
 
-        // 카드 카운트다운으로 음원이 정지했던 서버 기준 누적 시간(ms)
+        // 연결 중단으로 음원이 정지했던 서버 기준 누적 시간(ms)
         Long accumulatedPausedDurationMs,
 
         // 전체 음원 길이(ms)
-        Long songDurationMs,
-
-        // 카드 카운트다운으로 현재 정지 중이라면 정지를 시작한 서버 시각.
-        // 재생 중이면 null이다.
-        OffsetDateTime pausedAt) {
+        Long songDurationMs) {
 
   /**
    * 공연 스냅샷을 클라이언트 재생 상태 응답으로 변환한다.
@@ -52,21 +48,17 @@ public record PlaybackSnapshotResponse(
     return new PlaybackSnapshotResponse(
             performance.performanceId(),
 
-            // 카드 활성화 카운트다운 중에는 음원이 일시 정지되어 있다.
             performance.status().name().equals("SUSPENDED")
                     ? "SUSPENDED"
                     : performance.status().name().equals("ANALYZING")
-                        ? "ANALYZING"
-                        : performance.isPausedForCard() ? "PAUSED_FOR_CARD" : "PLAYING",
+                        ? "ANALYZING" : "PLAYING",
 
             performance.startedAt(),
 
-            // 현재 위치 = 현재 서버 시각 - 재생 시작 시각 - 누적 정지 시간
-            // 현재 카드로 정지 중이면 정지 순간의 playbackPositionMs를 반환한다.
+            // 현재 위치 = 현재 서버 시각 - 재생 시작 시각 - 누적 연결 중단 시간
             performance.playbackPositionAt(serverNow),
 
             performance.accumulatedPausedDurationMs(),
-            performance.songDurationMs(),
-            performance.pausedAt());
+            performance.songDurationMs());
   }
 }

@@ -7,6 +7,4 @@ public record PerformanceSettingsChangeRequest(
         @NotNull(message = "keyOffset은 필수입니다.") Integer keyOffset,
         @NotNull(message = "tempoPercent는 필수입니다.") Integer tempoPercent,
         @NotNull(message = "mrVolumePercent는 필수입니다.") Integer mrVolumePercent,
-        @NotNull(message = "micVolumePercent는 필수입니다.") Integer micVolumePercent,
-        @NotNull(message = "echoLevel은 필수입니다.") Integer echoLevel,
-        @NotNull(message = "reverbLevel은 필수입니다.") Integer reverbLevel) {}
+        @NotNull(message = "echoLevel은 필수입니다.") Integer echoLevel) {}
