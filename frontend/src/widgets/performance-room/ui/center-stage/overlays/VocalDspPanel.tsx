@@ -1,12 +1,11 @@
+'use client';
+
+import { DEFAULT_PERFORMANCE_SETTINGS } from '@/entities/performance';
 import { cn } from '@/shared/lib/cn';
 
-// 보컬 DSP 목업 패널. 오디오 엔진 연동 시 실제 파라미터 상태와 조작 UI로 교체한다.
-const DSP_PARAMS = [
-  { accent: true, label: '음정', value: '+2 Key' },
-  { accent: false, label: '템포', value: '0 Key' },
-  { accent: false, label: '에코', value: '30%' },
-  { accent: false, label: '음량', value: '80%' },
-] as const;
+import { DSP_ROWS, SOUND_PANEL_LABEL } from '../../../config/dspParams';
+import { useSettingsPublisher } from '../../../model/useSettingsPublisher';
+import { useStageStore } from '../../../model/stageStore';
 
 function CloseIcon() {
   return (
@@ -26,49 +25,93 @@ function CloseIcon() {
 
 interface VocalDspPanelProps {
   onClose: () => void;
+  /** 제스처로 조준 중인 행 */
+  activeRowIndex?: number | null;
+  /** 제스처로 값을 잡고 있는 행 */
+  grabbedRowIndex?: number | null;
 }
 
-export function VocalDspPanel({ onClose }: VocalDspPanelProps) {
+export function VocalDspPanel({
+  onClose,
+  activeRowIndex = null,
+  grabbedRowIndex = null,
+}: VocalDspPanelProps) {
+  const settings = useStageStore((state) => state.settings);
+  const publishSettings = useSettingsPublisher();
+
   return (
     <aside
-      aria-label="보컬 DSP 제어 랙"
-      className="absolute right-4 top-4 w-56 rounded-2xl border border-white/15 bg-[#1b1b1f]/90 p-4 shadow-[0_16px_40px_rgba(0,0,0,0.5)] backdrop-blur-sm"
+      aria-label={`${SOUND_PANEL_LABEL} 패널`}
+      // 손 인식은 무대 전체를 4등분해 카드 위치와 1:1로 맞지 않는다. 잡은 항목은 강조 색으로 알린다.
+      // backdrop-blur는 좌우 반전된 캠 영상과 합성되며 무대 색을 바꿔 버려 쓰지 않는다.
+      className="absolute right-4 top-[14%] w-[188px] overflow-hidden rounded-2xl border-[1.5px] border-cyan-300/45 bg-[#0c101e]/85 shadow-[0_15px_50px_rgba(0,0,0,0.65),0_0_25px_rgba(0,243,255,0.35)]"
     >
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-white">보컬 DSP 제어 랙</p>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="보컬 DSP 제어 랙 닫기"
-          className="grid size-7 place-items-center rounded-lg border border-red-400/60 bg-red-500/15 text-red-300 transition-colors hover:bg-red-500/30 hover:text-red-200"
-        >
-          <CloseIcon />
-        </button>
+      <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-black/35 px-3 py-2">
+        <p className="text-[13px] font-black tracking-tight text-white drop-shadow-[0_0_10px_rgba(0,243,255,0.55)]">
+          {SOUND_PANEL_LABEL}
+        </p>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => publishSettings(DEFAULT_PERFORMANCE_SETTINGS)}
+            // 높이는 옆 닫기 버튼과 같게 맞춘다. 한글 글자가 줄 상자 위쪽에 붙는
+            // 폰트라, 위아래 여백을 같게 주면 떠 보여 위쪽만 조금 더 준다.
+            className="flex h-[22px] items-center rounded-md border border-white/25 bg-white/10 px-2 pt-[2px] text-[10px] font-extrabold leading-none text-white transition-colors hover:border-cyan-300/70 hover:text-cyan-200"
+          >
+            초기화
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={`${SOUND_PANEL_LABEL} 패널 닫기`}
+            className="grid size-[22px] place-items-center rounded-md border border-[#ff3b30]/60 bg-[#ff3b30]/20 text-[#ff3b30] transition-all hover:bg-[#ff3b30] hover:text-white hover:shadow-[0_0_15px_#ff3b30]"
+          >
+            <CloseIcon />
+          </button>
+        </div>
       </div>
 
-      <ul className="mt-3 space-y-2">
-        {DSP_PARAMS.map((param) => (
-          <li
-            key={param.label}
-            className={cn(
-              'flex items-center justify-between rounded-xl border px-4 py-2.5 text-[13px]',
-              param.accent
-                ? 'border-pink-400/90 bg-gradient-to-r from-fuchsia-600/90 to-pink-500/70 text-white shadow-[0_0_14px_rgba(232,121,249,0.45)]'
-                : 'border-white/10 bg-[#26262b] text-zinc-200',
-            )}
-          >
-            <span className="font-semibold">{param.label}</span>
-            <span className="font-mono font-bold">{param.value}</span>
-          </li>
-        ))}
-      </ul>
+      <ul className="flex flex-col gap-2 p-3">
+        {DSP_ROWS.map((row, index) => {
+          const isGrabbed = index === grabbedRowIndex;
+          const isActive = index === activeRowIndex;
 
-      <button
-        type="button"
-        className="mt-3 w-full rounded-xl border border-white/25 bg-white/[0.04] py-2 text-xs font-semibold text-zinc-300 transition-colors hover:border-cyan-300/50 hover:text-cyan-200"
-      >
-        전체 파라미터 초기화
-      </button>
+          return (
+            <li
+              key={row.key}
+              // 크기를 바꾸면 카드가 흔들려 보여서 색과 글로우로만 표시한다.
+              className={cn(
+                'flex items-center justify-between gap-2 rounded-xl border-[1.5px] px-3 py-3 transition-colors duration-200',
+                isGrabbed
+                  ? 'border-[#ff007f] bg-gradient-to-br from-[#ff007f]/50 to-[#9d4edd]/50 shadow-[0_0_24px_rgba(255,0,127,0.55)]'
+                  : isActive
+                    ? 'border-cyan-300 bg-cyan-300/25 shadow-[0_0_20px_rgba(0,243,255,0.45)]'
+                    : 'border-white/25 bg-[#12182a]/65',
+              )}
+            >
+              {/* leading-none을 주면 한글이 박스 위쪽에 붙어 숫자와 어긋난다 */}
+              <span
+                className={cn(
+                  'text-xs font-black leading-normal text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)]',
+                  isGrabbed && 'drop-shadow-[0_0_12px_rgba(255,0,127,0.95)]',
+                  isActive && !isGrabbed && 'drop-shadow-[0_0_12px_rgba(0,243,255,0.95)]',
+                )}
+              >
+                {row.label}
+              </span>
+              <span
+                className={cn(
+                  'font-mono text-xs font-black leading-normal tabular-nums text-zinc-50 drop-shadow-[0_1px_4px_rgba(0,0,0,0.95)]',
+                  isGrabbed && 'drop-shadow-[0_0_14px_rgba(255,0,127,0.95)]',
+                  isActive && !isGrabbed && 'drop-shadow-[0_0_14px_rgba(0,243,255,0.95)]',
+                )}
+              >
+                {row.format(row.read(settings))}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </aside>
   );
 }

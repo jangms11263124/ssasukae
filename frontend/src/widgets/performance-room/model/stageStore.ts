@@ -22,6 +22,10 @@ export interface StageSong {
 
 interface StageStore {
   camOn: boolean;
+  /** DSP 조절 패널 노출 여부. 제스처와 버튼 양쪽에서 여닫는다 */
+  dspPanelOpen: boolean;
+  /** 제스처 인식 사용 여부. MediaPipe CPU 절약 + 오작동 시 끌 수 있는 탈출구 */
+  gestureOn: boolean;
   micOn: boolean;
   performerParticipantId: number | null;
   phase: StagePhase;
@@ -42,6 +46,9 @@ interface StageStore {
   endStage: () => void;
   toggleMic: () => void;
   toggleCam: () => void;
+  toggleGesture: () => void;
+  setDspPanelOpen: (isOpen: boolean) => void;
+  toggleDspPanel: () => void;
   // ── WebSocket 이벤트 반영 ──
   applyPerformanceStarted: (payload: PerformanceStartedPayload) => void;
   applyPreparationStarted: (payload: PerformancePreparationStartedPayload) => void;
@@ -62,8 +69,11 @@ const INITIAL_PERFORMANCE_STATE = {
   settings: DEFAULT_PERFORMANCE_SETTINGS,
 };
 
+// 기기 토글은 INITIAL_PERFORMANCE_STATE에 넣지 않는다. 넣으면 공연마다 초기화된다.
 export const useStageStore = create<StageStore>((set) => ({
   camOn: true,
+  dspPanelOpen: true,
+  gestureOn: true,
   micOn: true,
   ...INITIAL_PERFORMANCE_STATE,
   startSingerSelect: () => set({ phase: 'SINGER_SELECT' }),
@@ -75,7 +85,16 @@ export const useStageStore = create<StageStore>((set) => ({
   finishPerformance: (score) => set({ phase: 'SCORE', score }),
   endStage: () => set(INITIAL_PERFORMANCE_STATE),
   toggleMic: () => set((state) => ({ micOn: !state.micOn })),
-  toggleCam: () => set((state) => ({ camOn: !state.camOn })),
+  // 캠을 끄면 손 인식 입력이 사라진다. "켜져 있는데 조작은 안 되는" 상태를 막는다.
+  toggleCam: () =>
+    set((state) => {
+      const camOn = !state.camOn;
+
+      return camOn ? { camOn } : { camOn, gestureOn: false, dspPanelOpen: false };
+    }),
+  toggleGesture: () => set((state) => ({ gestureOn: !state.gestureOn })),
+  setDspPanelOpen: (isOpen) => set({ dspPanelOpen: isOpen }),
+  toggleDspPanel: () => set((state) => ({ dspPanelOpen: !state.dspPanelOpen })),
 
   applyPerformanceStarted: (payload) =>
     set({
