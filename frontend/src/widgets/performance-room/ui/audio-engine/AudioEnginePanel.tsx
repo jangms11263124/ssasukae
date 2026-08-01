@@ -1,10 +1,7 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-
-import type { PerformanceSettings } from '@/entities/performance';
-
-import { useRoomSocketContext } from '../../model/RoomSocketContext';
+import { TEMPO_STEP_PERCENT } from '../../config/dspParams';
+import { useSettingsPublisher } from '../../model/useSettingsPublisher';
 import { useStageStore } from '../../model/stageStore';
 import { RoomPanel } from '../RoomPanel';
 
@@ -96,55 +93,22 @@ function StepperRow({ label, onChange, value }: StepperRowProps) {
   );
 }
 
-// 템포 스테퍼 한 칸(-6~+6)을 백엔드 tempoPercent(50~150)로 변환하는 배율.
-const TEMPO_STEP_PERCENT = 5;
-
-const SETTINGS_PUBLISH_DEBOUNCE_MS = 400;
-
 // 값은 stageStore.settings(서버 동기화 상태)를 따르고,
-// 변경 시 공연이 진행 중이면 설정 변경 SEND를 디바운스해 발행한다.
+// 서버 발행 디바운스는 제스처 조작과 타이머를 공유하는 useSettingsPublisher가 맡는다.
 export function AudioEnginePanel() {
   const settings = useStageStore((state) => state.settings);
-  const applySettingsChanged = useStageStore((state) => state.applySettingsChanged);
-  const socket = useRoomSocketContext();
-  const publishTimerRef = useRef<number | null>(null);
+  const publishSettings = useSettingsPublisher();
 
   const mrVolume = settings.mrVolumePercent;
   const echo = settings.echoLevel;
   const pitchShift = settings.keyOffset;
   const tempoShift = Math.round((settings.tempoPercent - 100) / TEMPO_STEP_PERCENT);
 
-  useEffect(() => {
-    return () => {
-      if (publishTimerRef.current !== null) {
-        window.clearTimeout(publishTimerRef.current);
-      }
-    };
-  }, []);
-
-  const updateSettings = (patch: Partial<PerformanceSettings>) => {
-    const next = { ...useStageStore.getState().settings, ...patch };
-    applySettingsChanged(next);
-
-    if (publishTimerRef.current !== null) {
-      window.clearTimeout(publishTimerRef.current);
-    }
-
-    publishTimerRef.current = window.setTimeout(() => {
-      publishTimerRef.current = null;
-
-      // 공연(performanceId)이 없으면 로컬 프리셋으로만 유지한다.
-      if (useStageStore.getState().performanceId !== null) {
-        socket.sendSettings(useStageStore.getState().settings);
-      }
-    }, SETTINGS_PUBLISH_DEBOUNCE_MS);
-  };
-
-  const setMrVolume = (value: number) => updateSettings({ mrVolumePercent: value });
-  const setEcho = (value: number) => updateSettings({ echoLevel: value });
-  const setPitchShift = (value: number) => updateSettings({ keyOffset: value });
+  const setMrVolume = (value: number) => publishSettings({ mrVolumePercent: value });
+  const setEcho = (value: number) => publishSettings({ echoLevel: value });
+  const setPitchShift = (value: number) => publishSettings({ keyOffset: value });
   const setTempoShift = (value: number) =>
-    updateSettings({ tempoPercent: 100 + value * TEMPO_STEP_PERCENT });
+    publishSettings({ tempoPercent: 100 + value * TEMPO_STEP_PERCENT });
 
   return (
     <RoomPanel className="px-4 py-4">
