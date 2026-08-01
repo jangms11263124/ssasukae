@@ -36,6 +36,10 @@ export interface NicknameCheckResponse {
   available: boolean;
 }
 
+export interface ProfileImageChangeResponse {
+  url: string;
+}
+
 export type OAuthProvider = 'GOOGLE' | 'KAKAO';
 
 export interface FavoriteSongItem {

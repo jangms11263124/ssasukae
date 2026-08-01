@@ -1,6 +1,10 @@
 import { apiClient } from '@/shared/api/client';
 
-import type { MyPageResponse, PerformanceStatResponse } from '../types';
+import type {
+  MyPageResponse,
+  PerformanceStatResponse,
+  ProfileImageChangeResponse,
+} from '../types';
 
 /** 마이페이지 조회 (GET /api/users/me/mypage) */
 export function getMyPage() {
@@ -16,6 +20,19 @@ export function getMyPage() {
 export function refreshPerformanceStat() {
   return apiClient<PerformanceStatResponse>('/api/users/me/reperformance', {
     method: 'PATCH',
+    auth: true,
+  });
+}
+
+/** 프로필 이미지 변경 (POST /api/users/me/profile-image) — 업로드된 이미지의 공개 URL을 돌려준다 */
+export function changeProfileImage(file: File) {
+  const formData = new FormData();
+  // 파트 이름은 서버 @RequestPart("profile-image")와 일치해야 한다.
+  formData.append('profile-image', file);
+
+  return apiClient<ProfileImageChangeResponse>('/api/users/me/profile-image', {
+    method: 'POST',
+    body: formData,
     auth: true,
   });
 }
