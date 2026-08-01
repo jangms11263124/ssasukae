@@ -10,21 +10,25 @@ import com.ssafy.ssasukae.domain.song.entity.Song;
 import com.ssafy.ssasukae.domain.user.dto.MyPageResponse;
 import com.ssafy.ssasukae.domain.user.dto.NicknameRequest;
 import com.ssafy.ssasukae.domain.user.dto.PerformanceStatResponse;
+import com.ssafy.ssasukae.domain.user.dto.ProfileImageChangeResponseDTO;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.entity.UserPerformanceStat;
 import com.ssafy.ssasukae.domain.user.repository.UserPerformanceStatRepository;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
+import com.ssafy.ssasukae.global.exception.BaseErrorCode;
 import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
 import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
 
+import com.ssafy.ssasukae.integration.aws.S3StorageService;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -36,10 +40,17 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class UserService {
 
+    private static final List<String> ALLOWED_PROFILE_IMAGE_TYPES = List.of(
+            "image/jpeg",
+            "image/png",
+            "image/webp"
+    );
+
     private final UserRepository userRepository;
     private final FavoriteRepository favoriteRepository;
     private final PerformanceResultRepository performanceResultRepository;
     private final UserPerformanceStatRepository userPerformanceStatRepository;
+    private final S3StorageService s3StorageService;
 
     public Optional<User> findByProviderAndProviderId(OAuthProvider provider, String providerId) {
         return userRepository.findByProviderAndProviderId(provider, providerId);
@@ -129,6 +140,17 @@ public class UserService {
 
         user.updateNickname(request);
         userRepository.save(user);
+    }
+
+    @Transactional
+    public ProfileImageChangeResponseDTO changeProfileImage(AuthenticatedUser authenticatedUser, MultipartFile profileImage) {
+        User user = findById(authenticatedUser.userId());
+        if(profileImage == null || profileImage.isEmpty()) throw new CustomException(UserErrorCode.INVALID_REQUEST);
+        if(!ALLOWED_PROFILE_IMAGE_TYPES.contains(profileImage.getContentType())) throw new CustomException(UserErrorCode.INVALID_REQUEST);
+
+        String url = s3StorageService.publicUrl(s3StorageService.uploadProfileImage(profileImage, user.getId()));
+        user.updateProfileImageUrl(url);
+        return new ProfileImageChangeResponseDTO(url);
     }
 
     @Transactional

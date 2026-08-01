@@ -34,6 +34,12 @@ public class S3StorageService {
         return key;
     }
 
+    public String uploadProfileImage(MultipartFile file, Long userId) {
+        String key = "users/" + userId + "/profile" + extractExtension(file.getOriginalFilename());
+        putObject(file, key);
+        return key;
+    }
+
     public void delete(String key) {
         deleteObject(key);
     }
