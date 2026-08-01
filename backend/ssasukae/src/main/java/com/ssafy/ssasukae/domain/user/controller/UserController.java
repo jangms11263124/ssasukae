@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequiredArgsConstructor
@@ -40,6 +41,11 @@ public class UserController {
     public ResponseEntity changeNickname(@AuthenticationPrincipal AuthenticatedUser authenticatedUser, @RequestBody NicknameRequest request) {
         userService.changeNickname(authenticatedUser, request);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/me/profile-image")
+    public ResponseEntity<ProfileImageChangeResponseDTO> changeProfileImage(@AuthenticationPrincipal AuthenticatedUser authenticatedUser, @RequestPart("profile-image") MultipartFile profileImage){
+        return ResponseEntity.ok(userService.changeProfileImage(authenticatedUser, profileImage));
     }
 
     @PatchMapping("/me/reperformance")
