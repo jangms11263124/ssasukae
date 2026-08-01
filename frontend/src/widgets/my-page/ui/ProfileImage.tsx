@@ -11,6 +11,7 @@ interface ProfileImageProps {
   nickname: string;
   /** EDIT PROFILE로 편집 모드에 들어갔을 때만 수정 버튼을 노출한다. */
   isEditing: boolean;
+  isUploading: boolean;
   onEditImage: () => void;
 }
 
@@ -18,6 +19,7 @@ export function ProfileImage({
   profileImageUrl,
   nickname,
   isEditing,
+  isUploading,
   onEditImage,
 }: ProfileImageProps) {
   const imageSrc = toImageSrc(profileImageUrl);
@@ -57,8 +59,12 @@ export function ProfileImage({
         <button
           type="button"
           onClick={onEditImage}
-          aria-label="프로필 이미지 변경"
-          className="absolute bottom-2 right-2 flex size-8 items-center justify-center border border-cyan-400/60 bg-black/80 text-cyan-300 backdrop-blur-sm transition-colors hover:border-cyan-300 hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+          disabled={isUploading}
+          aria-label={isUploading ? '프로필 이미지 업로드 중' : '프로필 이미지 변경'}
+          className={cn(
+            'absolute bottom-2 right-2 flex size-8 items-center justify-center border border-cyan-400/60 bg-black/80 text-cyan-300 backdrop-blur-sm transition-colors hover:border-cyan-300 hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300',
+            isUploading && 'animate-pulse cursor-wait opacity-60',
+          )}
         >
           <PencilIcon />
         </button>
