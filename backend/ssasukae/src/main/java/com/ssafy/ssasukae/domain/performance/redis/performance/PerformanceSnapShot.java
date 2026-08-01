@@ -5,9 +5,10 @@ import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Objects;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record PerformanceSnapShot(
     Long performanceId,
     Long roomId,
@@ -22,9 +23,8 @@ public record PerformanceSnapShot(
     Long songDurationMs,
     // 실제 멈춘 시간 누적
     Long accumulatedPausedDurationMs,
-    // 서버에서 멈춘 순간의 곡 재생 위치
+    // 연결 중단 시 서버에서 저장한 곡 재생 위치
     Long playbackPositionMs,
-    OffsetDateTime pausedAt,
     PerformanceStatus suspendedFromStatus,
     OffsetDateTime suspendedAt) {
 
@@ -46,7 +46,6 @@ public record PerformanceSnapShot(
         preparedAt,
         startedAt,
         playbackFinishedAt,
-        pausedAt,
         suspendedFromStatus,
         suspendedAt);
   }
@@ -78,7 +77,6 @@ public record PerformanceSnapShot(
         0L,
         0L,
         null,
-        null,
         null);
   }
 
@@ -105,7 +103,6 @@ public record PerformanceSnapShot(
         0L,
         0L,
         null,
-        null,
         null);
   }
 
@@ -123,47 +120,11 @@ public record PerformanceSnapShot(
   public PerformanceSnapShot startPlayback(OffsetDateTime playbackStartedAt) {
     requireStatus("공연 준비 상태에서만 재생을 시작할 수 있습니다.", PerformanceStatus.PREPARING);
     requireTimeNotBefore(playbackStartedAt, preparedAt, "startedAt", "preparedAt");
-    return copy(PerformanceStatus.PLAYING, settings, playbackStartedAt, null, 0L, 0L, null);
-  }
-
-  public PerformanceSnapShot pauseForCard(OffsetDateTime at) {
-    requireStatus("재생 중인 공연만 카드 카운트다운을 위해 정지할 수 있습니다.", PerformanceStatus.PLAYING);
-    if (pausedAt != null) {
-      throw new IllegalStateException("공연 재생이 이미 카드 카운트다운으로 정지되어 있습니다.");
-    }
-    requireTimeNotBefore(at, startedAt, "pausedAt", "startedAt");
-    return copy(
-        status,
-        settings,
-        startedAt,
-        playbackFinishedAt,
-        accumulatedPausedDurationMs,
-        playbackPositionAt(at),
-        at);
-  }
-
-  public PerformanceSnapShot resumeAfterCard(OffsetDateTime at) {
-    requireStatus("재생 중인 공연만 다시 시작할 수 있습니다.", PerformanceStatus.PLAYING);
-    if (pausedAt == null) {
-      return this;
-    }
-    requireTimeNotBefore(at, pausedAt, "resumedAt", "pausedAt");
-    long pausedMillis = Math.max(0L, Duration.between(pausedAt, at).toMillis());
-    return copy(
-        status,
-        settings,
-        startedAt,
-        playbackFinishedAt,
-        accumulatedPausedDurationMs + pausedMillis,
-        playbackPositionMs,
-        null);
+    return copy(PerformanceStatus.PLAYING, settings, playbackStartedAt, null, 0L, 0L);
   }
 
   public PerformanceSnapShot finishPlayback(OffsetDateTime finishedAt) {
     requireStatus("재생 중인 공연만 정상 종료할 수 있습니다.", PerformanceStatus.PLAYING);
-    if (pausedAt != null) {
-      throw new IllegalStateException("카드 카운트다운 정지를 해제한 뒤 공연을 종료해야 합니다.");
-    }
     requireTimeNotBefore(finishedAt, startedAt, "finishedAt", "startedAt");
     return copy(
         PerformanceStatus.ANALYZING,
@@ -171,8 +132,7 @@ public record PerformanceSnapShot(
         startedAt,
         finishedAt,
         accumulatedPausedDurationMs,
-        playbackPositionAt(finishedAt),
-        null);
+        playbackPositionAt(finishedAt));
   }
 
   public PerformanceSnapShot suspendForPerformerDisconnect(OffsetDateTime at) {
@@ -200,7 +160,6 @@ public record PerformanceSnapShot(
         songDurationMs,
         accumulatedPausedDurationMs,
         status == PerformanceStatus.PLAYING ? playbackPositionAt(at) : 0L,
-        null,
         status,
         at);
   }
@@ -228,7 +187,6 @@ public record PerformanceSnapShot(
             : accumulatedPausedDurationMs,
         playbackPositionMs,
         null,
-        null,
         null);
   }
 
@@ -245,8 +203,7 @@ public record PerformanceSnapShot(
         startedAt,
         playbackFinishedAt,
         accumulatedPausedDurationMs,
-        playbackPositionMs,
-        pausedAt);
+        playbackPositionMs);
   }
 
 
@@ -255,7 +212,7 @@ public record PerformanceSnapShot(
     if (startedAt == null) {
       return 0L;
     }
-    if (pausedAt != null || status == PerformanceStatus.SUSPENDED) {
+    if (status == PerformanceStatus.SUSPENDED) {
       return clampPosition(playbackPositionMs);
     }
     long elapsed = Math.max(0L, Duration.between(startedAt, at).toMillis());
@@ -264,11 +221,6 @@ public record PerformanceSnapShot(
 
   public long remainingPlaybackMs(OffsetDateTime at) {
     return Math.max(0L, songDurationMs - playbackPositionAt(at));
-  }
-
-  @JsonIgnore
-  public boolean isPausedForCard() {
-    return pausedAt != null;
   }
 
   public boolean belongsToRoom(Long requestedRoomId) {
@@ -285,8 +237,7 @@ public record PerformanceSnapShot(
       OffsetDateTime changedStartedAt,
       OffsetDateTime changedFinishedAt,
       Long changedAccumulatedPausedDurationMs,
-      Long changedPlaybackPositionMs,
-      OffsetDateTime changedPausedAt) {
+      Long changedPlaybackPositionMs) {
     return new PerformanceSnapShot(
         performanceId,
         roomId,
@@ -301,7 +252,6 @@ public record PerformanceSnapShot(
         songDurationMs,
         changedAccumulatedPausedDurationMs,
         changedPlaybackPositionMs,
-        changedPausedAt,
         suspendedFromStatus,
         suspendedAt);
   }
@@ -329,27 +279,21 @@ public record PerformanceSnapShot(
       OffsetDateTime preparedAt,
       OffsetDateTime startedAt,
       OffsetDateTime playbackFinishedAt,
-      OffsetDateTime pausedAt,
       PerformanceStatus suspendedFromStatus,
       OffsetDateTime suspendedAt) {
     switch (status) {
       case PREPARING -> {
         requireNull(startedAt, "PREPARING 상태에는 startedAt이 없어야 합니다.");
         requireNull(playbackFinishedAt, "PREPARING 상태에는 playbackFinishedAt이 없어야 합니다.");
-        requireNull(pausedAt, "PREPARING 상태에는 pausedAt이 없어야 합니다.");
       }
       case PLAYING -> {
         Objects.requireNonNull(startedAt, "PLAYING 상태에는 startedAt이 필요합니다.");
         requireNull(playbackFinishedAt, "PLAYING 상태에는 playbackFinishedAt이 없어야 합니다.");
         requireTimeNotBefore(startedAt, preparedAt, "startedAt", "preparedAt");
-        if (pausedAt != null) {
-          requireTimeNotBefore(pausedAt, startedAt, "pausedAt", "startedAt");
-        }
       }
       case ANALYZING-> {
         Objects.requireNonNull(startedAt, status + " 상태에는 startedAt이 필요합니다.");
         Objects.requireNonNull(playbackFinishedAt, status + " 상태에는 playbackFinishedAt이 필요합니다.");
-        requireNull(pausedAt, status + " 상태에는 pausedAt이 없어야 합니다.");
         requireTimeNotBefore(startedAt, preparedAt, "startedAt", "preparedAt");
         requireTimeNotBefore(playbackFinishedAt, startedAt, "playbackFinishedAt", "startedAt");
       }
@@ -360,7 +304,6 @@ public record PerformanceSnapShot(
             && suspendedFromStatus != PerformanceStatus.PLAYING) {
           throw new IllegalArgumentException("중단 이전 상태는 PREPARING 또는 PLAYING이어야 합니다.");
         }
-        requireNull(pausedAt, "SUSPENDED 상태에서는 카드 일시정지 상태를 유지할 수 없습니다.");
       }
     }
   }

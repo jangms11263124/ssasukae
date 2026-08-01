@@ -7,12 +7,5 @@ import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectEndReason;
 public record CardActivationCancelledPayload(
     Long performanceId,
     Long sourceParticipantId,
-    Long targetParticipantId,
-    Long cardId,
-    String cardCode,
-    String cardName,
-    String cardImageUrl,
     CardEffectEndReason cancelReason,
-    OffsetDateTime cancelledAt,
-    Long pausedPlaybackPositionMs,
-    boolean resumePlayback) {}
+    OffsetDateTime cancelledAt) {}
