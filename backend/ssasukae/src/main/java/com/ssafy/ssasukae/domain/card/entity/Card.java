@@ -40,9 +40,6 @@ public class Card {
   @Column(name = "description", length = 1000)
   private String description;
 
-  @Column(name = "card_image_url", nullable = false, length = 1000)
-  private String cardImageUrl;
-
   @Enumerated(EnumType.STRING)
   @Column(name = "effect_type", nullable = false, length = 30)
   private CardEffectType effectType;
@@ -64,14 +61,12 @@ public class Card {
       String code,
       String name,
       String description,
-      String cardImageUrl,
       CardEffectType effectType,
       Integer effectValue,
       Integer durationSeconds) {
     this.code = code;
     this.name = name;
     this.description = description;
-    this.cardImageUrl = cardImageUrl;
     this.effectType = effectType;
     this.effectValue = effectValue;
     this.durationSeconds = durationSeconds;
@@ -83,12 +78,11 @@ public class Card {
       String code,
       String name,
       String description,
-      String cardImageUrl,
       CardEffectType effectType,
       Integer effectValue,
       Integer durationSeconds) {
     return new Card(
-        code, name, description, cardImageUrl, effectType, effectValue, durationSeconds);
+        code, name, description, effectType, effectValue, durationSeconds);
   }
 
   public CardEffectTargetType getTargetType() {
@@ -120,9 +114,6 @@ public class Card {
   }
 
   private String configurationErrorMessage() {
-    if (cardImageUrl == null || cardImageUrl.isBlank()) {
-      return "카드 이미지 URL은 필수입니다.";
-    }
     if (code == null || code.isBlank() || effectType == null) {
       return "카드 코드와 효과 종류는 필수입니다.";
     }
