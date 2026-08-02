@@ -1,0 +1,38 @@
+/**
+ * RNNoise 워크릿이 48kHz 고정 AudioContext를 요구하므로 미리 같은 값으로 통일한다.
+ * Tone.js가 만드는 기본 컨텍스트(기기 샘플레이트)와 섞이면 서로 다른 컨텍스트의
+ * 노드를 connect()할 수 없어 런타임 InvalidAccessError가 난다.
+ */
+export const AUDIO_CONTEXT_SAMPLE_RATE = 48000;
+
+/** 제스처가 값을 프레임 단위로 바꾸므로 즉시 대입 대신 짧은 램프로 지퍼 노이즈를 막는다 */
+export const PARAM_RAMP_SECONDS = 0.05;
+
+/** PitchShift 그레인 크기(초). 이 값만큼 MR이 지연된다 — 줄이면 지연 대신 음이 뭉개진다 */
+export const PITCH_SHIFT_WINDOW_SIZE = 0.1;
+
+/** 에코 반복 간격. 데모와 같은 8분음표(기본 BPM 120 기준 0.25초) */
+export const ECHO_DELAY_TIME = '8n';
+
+/** echoLevel 0~100 → 피드백 0~0.7 / 웻 0~0.8 사상 (데모 계수 유지) */
+export const ECHO_FEEDBACK_PER_PERCENT = 0.007;
+export const ECHO_WET_PER_PERCENT = 0.008;
+
+/** 음량 0%의 바닥값. -Infinity는 램프 목표가 될 수 없어 유한한 무음 레벨을 쓴다 */
+export const SILENCE_DB = -80;
+
+/** 순 피치 변화가 이 미만이면 0으로 보고 PitchShift를 바이패스한다 */
+export const PITCH_BYPASS_EPSILON = 0.01;
+
+/**
+ * 가창자 마이크 캡처 제약 — 3개 모두 false가 사양이다.
+ * AEC는 이어폰 모니터링과 충돌해 자기 목소리를 에코로 판단해 지우고,
+ * NS는 추후 RNNoise 워크릿이 맡을 자리이며, AGC는 노래 다이내믹을 뭉갠다.
+ * 이어폰 착용 전제라 스피커 누출(하울링)도 없다.
+ */
+export const VOCAL_CAPTURE_CONSTRAINTS: MediaTrackConstraints = {
+  echoCancellation: false,
+  noiseSuppression: false,
+  autoGainControl: false,
+  channelCount: 1,
+};

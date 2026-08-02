@@ -3,10 +3,11 @@
 // 임시 무대 흐름 검증용 페이지 — 검증 후 삭제됩니다.
 // 인원 제한(2명 이상)·곡 DB 없이 stageStore를 직접 조작해
 // 일반 모드 뒷단계 화면(가창자 선택 → 선곡 → 준비 → 공연 → 채점)을 확인한다.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { RoomParticipant } from '@/entities/participant';
 import { useStageStore } from '@/widgets/performance-room/model/stageStore';
+import { AudioEnginePanel } from '@/widgets/performance-room/ui/audio-engine/AudioEnginePanel';
 import { CenterStage } from '@/widgets/performance-room/ui/center-stage/CenterStage';
 
 const MY_PARTICIPANT_ID = 1;
@@ -21,6 +22,9 @@ const MOCK_SONG = { id: 999, title: '테스트 곡 (DB 우회)' };
 
 export default function StageCheckPage() {
   const [isHost, setIsHost] = useState(true);
+  // 실제 방에서는 서버가 mrDownloadUrl을 내려주지만 여기서는 로컬 파일로 대신한다.
+  const [mrFileName, setMrFileName] = useState<string | null>(null);
+  const mrObjectUrlRef = useRef<string | null>(null);
 
   const phase = useStageStore((state) => state.phase);
   const startSingerSelect = useStageStore((state) => state.startSingerSelect);
@@ -30,6 +34,29 @@ export default function StageCheckPage() {
   const finishPerformance = useStageStore((state) => state.finishPerformance);
   const applyPlaybackFinished = useStageStore((state) => state.applyPlaybackFinished);
   const endStage = useStageStore((state) => state.endStage);
+
+  // 언마운트 시 마지막 오브젝트 URL을 회수한다
+  useEffect(() => {
+    return () => {
+      if (mrObjectUrlRef.current !== null) {
+        URL.revokeObjectURL(mrObjectUrlRef.current);
+      }
+    };
+  }, []);
+
+  const handleMrFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (mrObjectUrlRef.current !== null) {
+      URL.revokeObjectURL(mrObjectUrlRef.current);
+    }
+    const url = URL.createObjectURL(file);
+    mrObjectUrlRef.current = url;
+    // 서버 이벤트(applyPreparationStarted)가 채우는 필드를 dev에서만 직접 채운다
+    useStageStore.setState({ mrDownloadUrl: url });
+    setMrFileName(file.name);
+  };
 
   const controls = [
     { label: '① 시작하기 (가창자 선택으로)', onClick: startSingerSelect },
@@ -76,6 +103,22 @@ export default function StageCheckPage() {
             ③은 곡 검색 모달을 거치지 않고 바로 READY 단계로 넘어갑니다. 곡 검색 모달 UI 자체를
             보려면 ②에서 &lsquo;나로 확정&rsquo;을 누르세요.
           </p>
+
+          <div className="mt-4 border-t border-white/10 pt-3">
+            <p className="font-mono text-xs tracking-wide text-cyan-300">[DEV] 오디오 엔진</p>
+            <label className="mt-2 block cursor-pointer border border-white/15 bg-black/40 px-3 py-2 text-xs text-zinc-300 transition-colors hover:border-cyan-300/60 hover:text-cyan-200">
+              MR 파일 선택 (서버 URL 대신)
+              <input type="file" accept="audio/*" onChange={handleMrFileChange} className="hidden" />
+            </label>
+            <p className="mt-1.5 break-all text-[11px] leading-relaxed text-zinc-500">
+              {mrFileName === null
+                ? '파일을 고르고 ①~④ 순서로 진행하면 공연 시작 시 재생됩니다. 이어폰 착용을 권장합니다(에코 테스트 시 하울링 방지).'
+                : `MR: ${mrFileName}`}
+            </p>
+            <div className="mt-3">
+              <AudioEnginePanel />
+            </div>
+          </div>
         </aside>
 
         <div className="min-w-0 flex-1">
