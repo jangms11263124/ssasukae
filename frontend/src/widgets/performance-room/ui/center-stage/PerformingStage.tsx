@@ -12,8 +12,8 @@ import { showToast } from '@/shared/model/toastStore';
 
 import { SOUND_PANEL_LABEL } from '../../config/dspParams';
 import { useGestureDspControl } from '../../model/useGestureDspControl';
+import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
-import { useLocalCameraStream } from '../../model/useLocalCameraStream';
 import { useStageStore } from '../../model/stageStore';
 import { SoundIcon } from '../media-controls/MediaIcons';
 import { MediaToggleButton } from '../media-controls/MediaToggleButton';
@@ -29,14 +29,15 @@ const MOCK_LYRICS = {
   nextLine: "I'M STANDING ON THE EDGE OF TOMORROW",
 } as const;
 
+// camOn은 무대에 오른 사람의 카메라 상태다(본인이면 내 토글, 아니면 가창자의 원격 상태).
 function resolvePlaceholder(
   isPerformer: boolean,
   camOn: boolean,
   hasStream: boolean,
 ): string | null {
   if (hasStream) return null;
-  if (!isPerformer) return '가창자 화면을 불러오는 중입니다';
   if (!camOn) return '카메라가 꺼져 있습니다';
+  if (!isPerformer) return '가창자 화면을 불러오는 중입니다';
 
   return '카메라를 준비하고 있습니다';
 }
@@ -61,8 +62,22 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
 
-  // OpenVidu 연동 시 참가자 화면에도 가창자의 remote 스트림을 같은 자리에 렌더링한다.
-  const cameraStream = useLocalCameraStream(isPerformer && camOn);
+  const performerParticipantId = useStageStore((state) => state.performerParticipantId);
+  const { localStream, remoteStreams } = useOpenViduSessionContext();
+
+  // 가창자 본인은 publisher 스트림을, 참가자는 가창자의 remote 스트림을 무대 배경으로 깐다.
+  const performerMedia =
+    performerParticipantId !== null ? remoteStreams.get(performerParticipantId) : undefined;
+  const stageCamOn = isPerformer
+    ? camOn
+    : performerMedia === undefined || performerMedia.videoActive;
+  const cameraSource = isPerformer
+    ? camOn
+      ? localStream
+      : null
+    : performerMedia !== undefined && performerMedia.videoActive
+      ? performerMedia.streamManager
+      : null;
 
   // 서버 브로드캐스트를 기다리지 않고 로컬에도 바로 반영해 전이가 늦어 보이지 않게 한다.
   const handleFinish = () => {
@@ -82,7 +97,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
     containerRef: stageRef,
     videoRef,
     cursorRef,
-    enabled: canUseGesture && isMediaPipeReady && cameraStream !== null,
+    enabled: canUseGesture && isMediaPipeReady && cameraSource !== null,
     isPanelOpen: dspPanelOpen,
     onOpenPanel: () => setDspPanelOpen(true),
     onClosePanel: () => setDspPanelOpen(false),
@@ -92,13 +107,13 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
   return (
     <StageBackdrop
       ref={stageRef}
-      placeholder={resolvePlaceholder(isPerformer, camOn, cameraStream !== null)}
+      placeholder={resolvePlaceholder(isPerformer, stageCamOn, cameraSource !== null)}
     >
       {/* CDN에서 수 MB를 받아오므로 제스처를 쓸 때만 로드한다 */}
       {canUseGesture ? <MediaPipeLoader onReady={() => setIsMediaPipeReady(true)} /> : null}
 
-      {cameraStream !== null ? (
-        <StageCameraFeed stream={cameraStream} videoRef={videoRef} />
+      {cameraSource !== null ? (
+        <StageCameraFeed source={cameraSource} mirrored={isPerformer} videoRef={videoRef} />
       ) : null}
 
       <MediaControlsOverlay showGestureToggle={isPerformer} />

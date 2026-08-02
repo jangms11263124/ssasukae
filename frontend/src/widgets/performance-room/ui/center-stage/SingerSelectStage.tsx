@@ -3,6 +3,9 @@
 import { useState } from 'react';
 
 import type { RoomParticipant } from '@/entities/participant';
+import { selectPerformer, useRoomStore } from '@/entities/room';
+import { ApiError } from '@/shared/api/client';
+import { showToast } from '@/shared/model/toastStore';
 
 import { useStageStore } from '../../model/stageStore';
 import { StageButton } from './StageButton';
@@ -15,7 +18,30 @@ interface SingerSelectStageProps {
 
 export function SingerSelectStage({ isHost, participants }: SingerSelectStageProps) {
   const confirmSinger = useStageStore((state) => state.confirmSinger);
+  const roomId = useRoomStore((state) => state.session?.roomId ?? null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 서버에 가창자 지정을 요청해 역할을 승격시킨다. 공연 준비(prepare)가
+  // PERFORMER 역할을 요구하므로 로컬 전이만 하면 이후 선곡이 서버에서 거부된다.
+  const handleConfirm = async () => {
+    if (selectedId === null || roomId === null || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await selectPerformer(roomId, selectedId);
+      // PERFORMER_SELECTED 이벤트로도 전이되지만, 지연에 대비해 즉시 반영한다.
+      confirmSinger(selectedId);
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : '가창자 지정에 실패했습니다.';
+      showToast(message, 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (!isHost) {
     return (
@@ -42,8 +68,8 @@ export function SingerSelectStage({ isHost, participants }: SingerSelectStagePro
           </div>
           <StageButton
             className="mt-5 min-w-80"
-            disabled={selectedId === null}
-            onClick={() => selectedId !== null && confirmSinger(selectedId)}
+            disabled={selectedId === null || isSubmitting}
+            onClick={handleConfirm}
           >
             시작하기
           </StageButton>
