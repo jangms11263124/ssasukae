@@ -17,7 +17,11 @@ async def transcribe_audio_bytes(
     audio_bytes: bytes,
     file_name: str | None = None,
 ) -> str:
-    """오디오 바이트를 GMS Whisper API로 보내 STT 텍스트를 반환합니다."""
+    """오디오 바이트를 GMS Whisper API로 보내고 공백을 제거한 STT 결과를 반환합니다.
+
+    API 키가 없거나 외부 API가 실패하거나 빈 텍스트를 반환하면 예외를 발생시켜 호출자가
+    실패 원인을 HTTP 응답으로 변환할 수 있게 합니다.
+    """
     # 프로젝트에서는 GMS_KEY를 기본으로 쓰고, WHISPER_API_KEY가 있으면 그 값을 사용합니다.
     api_key = os.getenv("WHISPER_API_KEY") or os.getenv("GMS_KEY")
     if not api_key:

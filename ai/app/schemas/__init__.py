@@ -1,3 +1,12 @@
 ﻿from .stt import SttResponse
 
-__all__ = ["SttResponse"]
+from .feedback import FeedbackRequest, FeedbackResponse, NoteEvent
+from .score import ScoreTestResponse
+
+__all__ = [
+    "SttResponse",
+    "FeedbackRequest",
+    "FeedbackResponse",
+    "NoteEvent",
+    "ScoreTestResponse",
+]
