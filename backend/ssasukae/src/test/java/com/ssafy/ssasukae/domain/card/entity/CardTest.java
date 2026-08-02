@@ -61,7 +61,7 @@ class CardTest {
   void invalidCardIsNotDrawableWithoutThrowingAnException() {
     Card card = validCard();
     ReflectionTestUtils.setField(card, "id", 1L);
-    ReflectionTestUtils.setField(card, "cardImageUrl", " ");
+    ReflectionTestUtils.setField(card, "durationSeconds", 12);
 
     assertThatCode(card::isDrawable).doesNotThrowAnyException();
     assertThat(card.isDrawable()).isFalse();
@@ -70,8 +70,7 @@ class CardTest {
   @Test
   void explicitValidationReportsInvalidEntityState() {
     Card card = validCard();
-    ReflectionTestUtils.setField(card, "cardImageUrl", null);
-
+    ReflectionTestUtils.setField(card, "durationSeconds", 12);
     assertThatThrownBy(card::validateConfiguration)
         .isInstanceOfSatisfying(
             CustomException.class,
@@ -89,7 +88,6 @@ class CardTest {
         "MIC_OPEN",
         "마이크 개방",
         "카드 사용자의 마이크를 개방합니다.",
-        "https://cdn.example.com/cards/mic-open.webp",
         CardEffectType.MIC_OPEN,
         null,
         durationSeconds);
