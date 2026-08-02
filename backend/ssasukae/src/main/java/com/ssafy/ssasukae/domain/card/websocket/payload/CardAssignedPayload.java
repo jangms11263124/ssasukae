@@ -11,7 +11,6 @@ public record CardAssignedPayload(
     String cardCode,
     String cardName,
     String description,
-    String cardImageUrl,
     CardEffectType effectType,
     CardEffectTargetType targetType,
     Integer effectValue,

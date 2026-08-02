@@ -9,7 +9,6 @@ public record MyCardSnapshotResponse(
     CardAssignmentStatus status,
     Long cardId,
     String cardCode,
-    String cardImageUrl,
     CardEffectType effectType,
     Integer effectValue,
     Integer durationSeconds) {
@@ -20,7 +19,6 @@ public record MyCardSnapshotResponse(
         card.status(),
         card.cardId(),
         card.cardCode(),
-        card.cardImageUrl(),
         card.effectType(),
         card.effectValue(),
         card.durationSeconds());
