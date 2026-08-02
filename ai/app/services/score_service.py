@@ -3,11 +3,16 @@ from typing import Any
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
+    """숫자가 지정한 최솟값과 최댓값 범위를 벗어나지 않도록 제한합니다."""
     # 점수가 0~100 같은 정해진 범위를 벗어나지 않도록 제한합니다.
     return min(maximum, max(minimum, value))
 
 
 def _number_field(item: dict[str, Any], names: tuple[str, ...]) -> float:
+    """여러 후보 필드 중 처음 발견한 숫자 값을 실수로 변환해 반환합니다.
+
+    숫자 또는 숫자로 변환 가능한 문자열이 없으면 입력 형식 오류를 발생시킵니다.
+    """
     # MIDI JSON을 만든 쪽에서 필드명을 조금 다르게 줄 수 있어 여러 후보명을 허용합니다.
     for name in names:
         value = item.get(name)
@@ -22,6 +27,7 @@ def _number_field(item: dict[str, Any], names: tuple[str, ...]) -> float:
 
 
 def _note_name_to_midi(note_name: str) -> float:
+    """C4·F#4·Bb3 형식의 음 이름을 MIDI 음높이 숫자로 변환합니다."""
     normalized = note_name.strip().upper()
     match = re.fullmatch(r"([A-G])([#B]?)(-?\d+)", normalized)
     if not match:
@@ -46,6 +52,7 @@ def _note_name_to_midi(note_name: str) -> float:
 
 
 def _midi_field(item: dict[str, Any]) -> float:
+    """음표 객체에서 MIDI 숫자를 찾고, 없으면 음 이름을 MIDI 숫자로 변환합니다."""
     try:
         return _number_field(
             item,
@@ -58,7 +65,12 @@ def _midi_field(item: dict[str, Any]) -> float:
         raise
 
 
-def _parse_midi_notes(payload: Any, label: str) -> list[dict[str, float]]:
+def parse_midi_notes(payload: Any, label: str) -> list[dict[str, float]]:
+    """서로 다른 필드명을 허용하는 MIDI JSON을 내부 표준 음표 목록으로 변환합니다.
+
+    각 음표는 ``start_ms``, ``end_ms``, ``midi``를 가진 사전으로 정규화되며, 필수 값이
+    없거나 종료 시간이 시작 시간보다 빠르면 입력 형식 오류를 발생시킵니다.
+    """
     # 업로드된 MIDI JSON이 객체 형태인지 먼저 검증합니다.
     if not isinstance(payload, dict):
         raise ValueError(f"{label} must be a JSON object.")
@@ -99,6 +111,7 @@ def _parse_midi_notes(payload: Any, label: str) -> list[dict[str, float]]:
 
 
 def _median(values: list[float]) -> float:
+    """정렬된 값의 가운데 값 또는 두 가운데 값의 평균으로 중앙값을 계산합니다."""
     sorted_values = sorted(values)
     middle = len(sorted_values) // 2
     if len(sorted_values) % 2:
@@ -112,6 +125,7 @@ def calculate_final_score(
     lyrics_score: int,
     difficulty_score: float,
 ) -> int:
+    """세부 채점 함수를 실행하고 결과에서 최종 종합 점수만 반환합니다."""
     return calculate_score_details(
         reference_payload,
         singer_payload,
@@ -126,12 +140,17 @@ def calculate_score_details(
     lyrics_score: int,
     difficulty_score: float,
 ) -> dict[str, int]:
+    """정답과 가창 MIDI를 비교해 음정·박자·안정성 및 최종 점수를 계산합니다.
+
+    정답 음표와 시간 구간이 겹치는 가창 음표를 비교하고 가사 점수와 난이도 보정을
+    합산합니다. 반환되는 모든 점수는 반올림한 0~100 정수입니다.
+    """
     # 난이도 점수는 프론트에서 0~100 범위로 계산해서 보내는 값입니다.
     if difficulty_score < 0 or difficulty_score > 100:
         raise ValueError("difficultyScore must be between 0 and 100.")
 
-    reference_notes = _parse_midi_notes(reference_payload, "referenceMidi")
-    singer_notes = _parse_midi_notes(singer_payload, "singerMidi")
+    reference_notes = parse_midi_notes(reference_payload, "referenceMidi")
+    singer_notes = parse_midi_notes(singer_payload, "singerMidi")
 
     pitch_scores: list[float] = []
     rhythm_hits = 0
