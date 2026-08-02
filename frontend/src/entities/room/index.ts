@@ -4,6 +4,7 @@ export {
   getRoomSnapshot,
   joinRoom,
   reissueMediaToken,
+  selectPerformer,
   terminateRoom,
   type CreateRoomRequest,
   type RoomSessionResponse,
@@ -20,6 +21,7 @@ export type {
   ParticipantJoinedPayload,
   ParticipantLeftPayload,
   ParticipantKickedPayload,
+  PerformerSelectedPayload,
   RoomHostChangedPayload,
   ParticipantConnectionStatusChangedPayload,
 } from './model/wsEvents';

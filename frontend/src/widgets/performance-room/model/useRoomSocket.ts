@@ -11,11 +11,13 @@ import type {
   PerformanceStartedPayload,
 } from '@/entities/performance';
 import {
+  getRoomSnapshot,
   useRoomStore,
   type ParticipantConnectionStatusChangedPayload,
   type ParticipantJoinedPayload,
   type ParticipantKickedPayload,
   type ParticipantLeftPayload,
+  type PerformerSelectedPayload,
   type PongPayload,
   type RoomHostChangedPayload,
   type RoomWebSocketEvent,
@@ -77,7 +79,14 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
       switch (event.eventType) {
         // ── Room ──
         case 'PARTICIPANT_JOINED':
+          // payload에 userId가 없어(명세: participantId·nickname뿐) 목록에 바로 반영하면
+          // userId 기반 비교(캠 그리드 필터 등)가 깨진다. 즉시 반영 후 스냅샷으로 보정한다.
           roomStore.applyParticipantJoined(event.payload as ParticipantJoinedPayload);
+          getRoomSnapshot(event.roomId ?? roomId)
+            .then((snapshot) => useRoomStore.getState().hydrateFromSnapshot(snapshot))
+            .catch(() => {
+              // 조회 실패 시 즉시 반영된 목록이라도 유지한다.
+            });
           break;
         case 'PARTICIPANT_LEFT':
           roomStore.applyParticipantLeft(event.payload as ParticipantLeftPayload);
@@ -94,6 +103,10 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           );
           break;
         // ── Performance ──
+        case 'PERFORMER_SELECTED':
+          // 서버가 가창자 역할을 승격했다. 모든 참가자가 선곡 단계로 전이한다.
+          stageStore.confirmSinger((event.payload as PerformerSelectedPayload).performerId);
+          break;
         case 'PERFORMANCE_STARTED':
           stageStore.applyPerformanceStarted(event.payload as PerformanceStartedPayload);
           break;
