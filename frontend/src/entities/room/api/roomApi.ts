@@ -67,6 +67,15 @@ export function getRoomSnapshot(roomId: number): Promise<RoomSnapshotResponse> {
   return apiClient<RoomSnapshotResponse>(`/api/rooms/${roomId}`, { auth: true });
 }
 
+/** 가창자 지정 (방장 전용). 서버가 역할을 승격하고 PERFORMER_SELECTED 이벤트를 브로드캐스트한다 */
+export function selectPerformer(roomId: number, participantId: number): Promise<void> {
+  return apiClient<void>(`/api/rooms/${roomId}/performer`, {
+    method: 'POST',
+    auth: true,
+    body: { participantId },
+  });
+}
+
 /** OpenVidu 미디어 연결 토큰 재발급 */
 export function reissueMediaToken(roomId: number): Promise<RoomTokenResponse> {
   return apiClient<RoomTokenResponse>(`/api/rooms/${roomId}/token`, {
