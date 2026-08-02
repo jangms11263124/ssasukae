@@ -14,7 +14,6 @@ public record CardEffectStartedPayload(
     String cardCode,
     String cardName,
     String description,
-    String cardImageUrl,
     CardEffectType effectType,
     Integer effectValue,
     Integer durationSeconds,

@@ -15,7 +15,6 @@ public record CardEffectEndedPayload(
     String cardCode,
     String cardName,
     String description,
-    String cardImageUrl,
     CardEffectType effectType,
     Integer effectValue,
     Integer restoredValue,
