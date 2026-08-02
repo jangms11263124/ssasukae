@@ -8,7 +8,9 @@ import { useAuth } from '@/entities/user';
 import { ApiError } from '@/shared/api/client';
 import { showToast } from '@/shared/model/toastStore';
 
+import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
 import { RoomSocketProvider } from '../model/RoomSocketContext';
+import { useOpenViduSession } from '../model/useOpenViduSession';
 import { useRoomSocket } from '../model/useRoomSocket';
 import { useStageStore } from '../model/stageStore';
 import { AudioEnginePanel } from './audio-engine/AudioEnginePanel';
@@ -34,6 +36,7 @@ export function GeneralRoomScreen() {
   const endStage = useStageStore((state) => state.endStage);
 
   const socket = useRoomSocket(session?.roomId ?? null);
+  const media = useOpenViduSession();
 
   // 방 세션 없이 직접 URL로 접근(새로고침 포함)하면 홈으로 돌려보낸다.
   // 방 정보 조회 응답에 초대 코드·OpenVidu 토큰이 없어 세션 전체는 복구할 수 없다.
@@ -136,55 +139,57 @@ export function GeneralRoomScreen() {
 
   return (
     <RoomSocketProvider value={socket}>
-      <div className="min-h-dvh bg-[#0b0b0d] text-zinc-100">
-        <main className="mx-auto grid min-h-[calc(100dvh-3rem)] max-w-[1500px] grid-cols-1 gap-4 px-6 py-12 lg:grid-cols-[270px_minmax(0,1fr)_300px]">
-          <RoomLeftSection
-            className="h-[calc(100dvh-6rem)] min-h-[720px]"
-            room={room}
-            participants={stagedParticipants}
-            currentUserId={currentUserId}
-            hostParticipantId={hostParticipantId ?? -1}
-            leaderboard={[]}
-            canManageParticipants={canManageParticipants}
-            onCopyInviteCode={handleCopyInviteCode}
-            onDelegateHost={handleDelegateHost}
-            onKickParticipant={handleKickParticipant}
-            onLeaveRoom={handleLeaveRoom}
-          />
-
-          <section className="flex min-w-0 flex-col gap-4" aria-label="중앙 공연 영역">
-            <CenterStage
-              currentParticipantId={session.myParticipantId}
-              isHost={canManageParticipants}
+      <OpenViduSessionProvider value={media}>
+        <div className="min-h-dvh bg-[#0b0b0d] text-zinc-100">
+          <main className="mx-auto grid min-h-[calc(100dvh-3rem)] max-w-[1500px] grid-cols-1 gap-4 px-6 py-12 lg:grid-cols-[270px_minmax(0,1fr)_300px]">
+            <RoomLeftSection
+              className="h-[calc(100dvh-6rem)] min-h-[720px]"
+              room={room}
               participants={stagedParticipants}
+              currentUserId={currentUserId}
+              hostParticipantId={hostParticipantId ?? -1}
+              leaderboard={[]}
+              canManageParticipants={canManageParticipants}
+              onCopyInviteCode={handleCopyInviteCode}
+              onDelegateHost={handleDelegateHost}
+              onKickParticipant={handleKickParticipant}
+              onLeaveRoom={handleLeaveRoom}
             />
 
-            <ParticipantVideoGrid currentUserId={currentUserId} participants={stagedParticipants} />
-            <MediaControlDock />
-          </section>
+            <section className="flex min-w-0 flex-col gap-4" aria-label="중앙 공연 영역">
+              <CenterStage
+                currentParticipantId={session.myParticipantId}
+                isHost={canManageParticipants}
+                participants={stagedParticipants}
+              />
 
-          <section className="flex flex-col gap-4" aria-label="우측 제어 영역">
-            <NowPlayingCard />
-            <AudioEnginePanel />
-            <div className="min-h-0 flex-1">
-              <TalkPanel />
-            </div>
-          </section>
-        </main>
+              <ParticipantVideoGrid currentUserId={currentUserId} participants={stagedParticipants} />
+              <MediaControlDock />
+            </section>
 
-        <footer className="flex h-12 items-center justify-between border-t border-white/10 bg-[#151517] px-6 font-mono text-[9px] tracking-wide text-zinc-500">
-          <span>
-            [ROOM_SYSTEM] ROOM_{session.roomId} ::{' '}
-            {socket.isConnected ? 'WS_CONNECTED' : 'WS_CONNECTING...'}
-            {socket.isConnected && socket.latencyMs !== null
-              ? ` :: PING ${socket.latencyMs}MS`
-              : ''}
-          </span>
-          <span>INVITE_CODE: {session.inviteCode}</span>
-        </footer>
+            <section className="flex flex-col gap-4" aria-label="우측 제어 영역">
+              <NowPlayingCard />
+              <AudioEnginePanel />
+              <div className="min-h-0 flex-1">
+                <TalkPanel />
+              </div>
+            </section>
+          </main>
 
-        <RoomHelpFloatingButton />
-      </div>
+          <footer className="flex h-12 items-center justify-between border-t border-white/10 bg-[#151517] px-6 font-mono text-[9px] tracking-wide text-zinc-500">
+            <span>
+              [ROOM_SYSTEM] ROOM_{session.roomId} ::{' '}
+              {socket.isConnected ? 'WS_CONNECTED' : 'WS_CONNECTING...'}
+              {socket.isConnected && socket.latencyMs !== null
+                ? ` :: PING ${socket.latencyMs}MS`
+                : ''}
+            </span>
+            <span>INVITE_CODE: {session.inviteCode}</span>
+          </footer>
+
+          <RoomHelpFloatingButton />
+        </div>
+      </OpenViduSessionProvider>
     </RoomSocketProvider>
   );
 }

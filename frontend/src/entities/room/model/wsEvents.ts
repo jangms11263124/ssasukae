@@ -49,6 +49,10 @@ export interface ParticipantKickedPayload {
   participantCount: number;
 }
 
+export interface PerformerSelectedPayload {
+  performerId: number;
+}
+
 export interface RoomHostChangedPayload {
   previousHostParticipantId: number;
   newHostParticipantId: number;
