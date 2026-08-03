@@ -22,11 +22,14 @@ import com.ssafy.ssasukae.integration.openvidu.webhook.dto.OpenViduWebhookReques
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 
@@ -45,10 +48,11 @@ public class OpenViduWebhookService {
     public void handleParticipantJoined(OpenViduWebhookRequest request) {
         validateRequest(request);
         String connectionId = request.connectionId();
-        RoomParticipant participant = getParticipant(request);
+        ParticipantWithRoom lockedParticipantWithRoom = getParticipantWithRoom(request);
+        RoomParticipant participant = lockedParticipantWithRoom.participant();
 
         if(participant.isOnline() && Objects.equals(participant.getConnectionId(), connectionId)) {
-            deadlineStore.delete(participant.getId());
+            afterCommit(() -> deadlineStore.delete(participant.getId()));
             return;
         }
 
@@ -58,26 +62,27 @@ public class OpenViduWebhookService {
                 || previousState == ConnectionStatus.CONNECTED) participant.reconnect(connectionId);
         else throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
 
-        deadlineStore.delete(participant.getId());
+        afterCommit(() -> deadlineStore.delete(participant.getId()));
 
         if(previousState == ConnectionStatus.PREPARING) {
-            webSocketEventPublisher.publishToRoom(participant.getRoom().getId(), WebSocketEvent.roomEvent(RoomWebSocketEventType.PARTICIPANT_JOINED, participant.getRoom().getId(), new ParticipantJoinedPayload(participant.getId(), participant.getUser().getNickname())));
+            afterCommit(() -> webSocketEventPublisher.publishToRoom(participant.getRoom().getId(), WebSocketEvent.roomEvent(RoomWebSocketEventType.PARTICIPANT_JOINED, participant.getRoom().getId(), new ParticipantJoinedPayload(participant.getId(), participant.getUser().getNickname()))));
             return;
         }
 
-        webSocketEventPublisher.publishToRoom(participant.getRoom().getId(), WebSocketEvent.roomEvent(RoomWebSocketEventType.PARTICIPANT_CONNECTION_STATUS_CHANGED, participant.getRoom().getId(), new ParticipantConnectionStatusChangedPayload(participant.getId(), ParticipantStatus.ONLINE)));
+        afterCommit(() -> webSocketEventPublisher.publishToRoom(participant.getRoom().getId(), WebSocketEvent.roomEvent(RoomWebSocketEventType.PARTICIPANT_CONNECTION_STATUS_CHANGED, participant.getRoom().getId(), new ParticipantConnectionStatusChangedPayload(participant.getId(), ParticipantStatus.ONLINE))));
     }
 
     @Transactional
     public void handleParticipantLeft(OpenViduWebhookRequest request) {
         validateRequest(request);
         String connectionId = request.connectionId();
-        RoomParticipant participant = getParticipant(request);
+        ParticipantWithRoom participantWithRoom = getParticipantWithRoom(request);
+        RoomParticipant participant = participantWithRoom.participant();
 
         if(!Objects.equals(participant.getConnectionId(), connectionId)) return;
         if(participant.getConnectionStatus() != ConnectionStatus.CONNECTED) return;
 
-        disconnectWithGracePeriod(participant);
+        disconnectWithGracePeriod(participantWithRoom.room(), participant);
     }
 
     /**
@@ -94,26 +99,32 @@ public class OpenViduWebhookService {
      */
     @Transactional
     public void handleSessionDestroyed(OpenViduWebhookRequest request) {
-        Room room = roomRepository.findByOpenViduSessionId(request.sessionId()).orElse(null);
+        Room room = roomRepository.findByOpenViduSessionIdForUpdate(request.sessionId()).orElse(null);
         if (room == null) return;
         if (room.getStatus() == RoomStatus.TERMINATED) return;
 
         List<RoomParticipant> connectedParticipants = roomParticipantRepository
                 .findAllByRoomIdAndConnectionStatusIn(room.getId(), List.of(ConnectionStatus.CONNECTED));
 
-        connectedParticipants.forEach(this::disconnectWithGracePeriod);
+        connectedParticipants.stream()
+                .sorted(Comparator.comparing(RoomParticipant::getId))
+                .map(RoomParticipant::getId)
+                .map(participantId -> roomParticipantRepository.findByIdForUpdate(participantId).orElse(null))
+                .filter(Objects::nonNull)
+                .filter(participant -> participant.getConnectionStatus() == ConnectionStatus.CONNECTED)
+                .forEach(participant -> disconnectWithGracePeriod(room, participant));
     }
 
-    private void disconnectWithGracePeriod(RoomParticipant participant) {
+    private void disconnectWithGracePeriod(Room room, RoomParticipant participant) {
         participant.disconnect(LocalDateTime.now());
         deadlineStore.save(
                 participant.getId(),
                 Instant.now().plus(recoveryProperties.getPerformerDisconnectGrace())
         );
 
-        performanceConnectionRecoveryService.suspendForPerformerDisconnect(participant);
+        performanceConnectionRecoveryService.suspendForPerformerDisconnectWithLockedRoom(room, participant);
 
-        webSocketEventPublisher.publishToRoom(participant.getRoom().getId(), WebSocketEvent.roomEvent(RoomWebSocketEventType.PARTICIPANT_CONNECTION_STATUS_CHANGED, participant.getRoom().getId(), new ParticipantConnectionStatusChangedPayload(participant.getId(), ParticipantStatus.DISCONNECTED)));
+        afterCommit(() -> webSocketEventPublisher.publishToRoom(participant.getRoom().getId(), WebSocketEvent.roomEvent(RoomWebSocketEventType.PARTICIPANT_CONNECTION_STATUS_CHANGED, participant.getRoom().getId(), new ParticipantConnectionStatusChangedPayload(participant.getId(), ParticipantStatus.DISCONNECTED))));
     }
 
     private void validateRequest(OpenViduWebhookRequest request) {
@@ -123,15 +134,35 @@ public class OpenViduWebhookService {
         || !StringUtils.hasText(request.serverData())) throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
     }
 
-    private RoomParticipant getParticipant(OpenViduWebhookRequest request) {
+    private ParticipantWithRoom getParticipantWithRoom(OpenViduWebhookRequest request) {
         OpenViduServerData serverData = objectMapper.readValue(
                 request.serverData(),
                 OpenViduServerData.class
         );
         if(serverData.participantId() == null || serverData.participantId() <= 0) throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
-        RoomParticipant participant = roomParticipantRepository.findByIdForUpdate(serverData.participantId()).orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
-        if(!participant.getRoom().getOpenViduSessionId().equals(request.sessionId())) throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
 
-        return participant;
+        Room room = roomRepository.findByOpenViduSessionIdForUpdate(request.sessionId())
+                .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+        RoomParticipant participant = roomParticipantRepository.findByIdForUpdate(serverData.participantId()).orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
+        if(!Objects.equals(participant.getRoom().getId(), room.getId())) throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
+
+        return new ParticipantWithRoom(room, participant);
+    }
+
+    private void afterCommit(Runnable action) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            action.run();
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                action.run();
+            }
+        });
+    }
+
+    private record ParticipantWithRoom(Room room, RoomParticipant participant) {
     }
 }

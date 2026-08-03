@@ -31,7 +31,9 @@ public class PerformanceCancellationProcessor {
     transactionSupport.afterCommit(
         () -> {
           transactionSupport.deletePerformance(restored);
-          transactionSupport.deleteRecoveryDeadline(restored.performanceId());
+          if (active.status() == PerformanceStatus.ANALYZING) {
+            transactionSupport.deleteRecoveryDeadline(restored.performanceId());
+          }
 
           eventPublisher.publish(
               room.getId(),
