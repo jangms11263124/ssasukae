@@ -69,12 +69,13 @@ public class PerformanceService {
     validatePositive(roomId, "roomId");
     validatePositive(request.songId(), "songId");
 
-    // 현재 방과 지금 가창자가 DB에 있는지 확인
     Room room = getRoomForUpdate(roomId);
     RoomParticipant performer = getOnlinePerformer(roomId, userId);
-
-    // 현재 방 상태가 PREPARING인지 확인
     validateRoomPreparing(room);
+
+    // DB가 PREPARING인데 Redis 활성 공연이 남아 있다면 이전 트랜잭션의 미완료 보상으로 간주한다.
+    // Room 쓰기 락을 보유하므로 정상적인 공연 생성/종료와 경쟁하지 않는다.
+    performanceStore.findActiveByRoomId(roomId).ifPresent(performanceStore::delete);
 
     Song song =
         songRepository
@@ -83,9 +84,6 @@ public class PerformanceService {
                 () -> business(WebSocketErrorCode.RESOURCE_NOT_FOUND, "요청한 곡이 존재하지 않습니다."));
     // 가져온 song에 문제 없는지 확인
     validatePerformanceResources(song);
-    String mrDownloadUrl = createPresignedUrl(song.getMrObjectKey());
-    String midiJsonDownloadUrl = createPresignedUrl(song.getMidiObjectKey());
-    String lyricsDownloadUrl = createPresignedUrl(song.getLyricsObjectKey());
 
     // 지금 현재 상태를 snapshot으로 남김
     PerformanceSnapShot snapShot =
@@ -110,6 +108,9 @@ public class PerformanceService {
     // 정상적으로 DB에 저장이 되었으면 이벤트 발행
     transactionSupport.afterCommit(
         () -> {
+          String mrDownloadUrl = createPresignedUrl(song.getMrObjectKey());
+          String midiJsonDownloadUrl = createPresignedUrl(song.getMidiObjectKey());
+          String lyricsDownloadUrl = createPresignedUrl(song.getLyricsObjectKey());
           eventPublisher.publish(
               roomId,
               PerformanceWebSocketEventType.PERFORMANCE_STARTED,
