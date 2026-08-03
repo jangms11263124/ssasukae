@@ -145,7 +145,9 @@ export const useStageStore = create<StageStore>((set) => ({
   // 점수는 채점 완료 후 LEADERBOARD_UPDATED가 채운다. 그때까지 "채점 중"으로 표시된다.
   applyPlaybackFinished: () => set({ phase: 'SCORE', score: null, scoringFailed: false }),
 
-  applySettingsChanged: (settings) => set({ settings }),
+  // 서버 settings는 4개 필드뿐이라 통째로 교체하면 로컬 전용 값(마이크 볼륨 등)이 undefined가 된다.
+  applySettingsChanged: (settings) =>
+    set((state) => ({ settings: { ...state.settings, ...settings } })),
 
   applyPerformanceCancelled: () => set(INITIAL_PERFORMANCE_STATE),
 

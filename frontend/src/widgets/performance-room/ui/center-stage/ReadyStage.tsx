@@ -9,9 +9,19 @@ interface ReadyStageProps {
   isPerformer: boolean;
   performerNickname: string;
   songTitle: string;
+  /** 준비 이벤트 수신 + MR 다운로드 완료 여부. 완료 전에는 시작할 수 없다 */
+  canStart: boolean;
+  /** MR 다운로드/엔진 초기화 실패 메시지 */
+  prepareError: string | null;
 }
 
-export function ReadyStage({ isPerformer, performerNickname, songTitle }: ReadyStageProps) {
+export function ReadyStage({
+  isPerformer,
+  performerNickname,
+  songTitle,
+  canStart,
+  prepareError,
+}: ReadyStageProps) {
   const changeSong = useStageStore((state) => state.changeSong);
   const startPerformance = useStageStore((state) => state.startPerformance);
   const performanceId = useStageStore((state) => state.performanceId);
@@ -30,6 +40,7 @@ export function ReadyStage({ isPerformer, performerNickname, songTitle }: ReadyS
   // PLAYBACK_STARTED 이벤트가 오면 서버 기준으로 다시 전이되지만,
   // 이벤트 지연에 대비해 로컬에서도 즉시 PERFORMING으로 넘어간다.
   const handleStart = () => {
+    if (!canStart) return;
     socket.sendPlaybackStart();
     startPerformance();
   };
@@ -41,10 +52,13 @@ export function ReadyStage({ isPerformer, performerNickname, songTitle }: ReadyS
   return (
     <StageMessage
       title={title}
+      subtitle={prepareError ?? (canStart ? undefined : 'MR 음원을 준비하는 중입니다...')}
       actions={
         <div className="flex flex-wrap justify-center gap-4">
           <StageButton onClick={handleChangeSong}>노래 바꾸기</StageButton>
-          <StageButton onClick={handleStart}>시작하기</StageButton>
+          <StageButton onClick={handleStart} disabled={!canStart}>
+            {canStart ? '시작하기' : '준비 중...'}
+          </StageButton>
         </div>
       }
     />
