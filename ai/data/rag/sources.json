@@ -1,0 +1,25 @@
+[
+  {
+    "document_id": "chenette_2022_foundations_aural_skills",
+    "file_name": "foundations_aural_skills_2022.pdf",
+    "title": "Foundations of Aural Skills",
+    "authors": "Timothy Chenette; contributors: Daniel Stevens, Meghan Hatfield, Ryan Becker",
+    "year": 2022,
+    "source_url": "https://uen.pressbooks.pub/auralskills/",
+    "license": "CC-BY-SA-4.0",
+    "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "license_note": "Except where otherwise noted in the book.",
+    "topics": [
+      "pitch_accuracy",
+      "pitch_stability",
+      "intonation",
+      "rhythm_accuracy",
+      "rhythm_training",
+      "ear_training",
+      "sight_singing",
+      "practice_methods"
+    ],
+    "stop_at_references": false,
+    "rag_allowed": true
+  }
+]
