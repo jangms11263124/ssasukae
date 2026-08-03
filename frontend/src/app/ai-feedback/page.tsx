@@ -9,8 +9,7 @@ export const metadata: Metadata = {
   description: '공연 기록과 AI 분석 피드백을 확인합니다.',
 };
 
-// 정적인 셸(헤더·배경·푸터)은 서버에서 렌더링하고,
-// 필터 상태와 데이터를 구독하는 AiFeedbackSection만 클라이언트 경계로 남긴다.
+// 셸은 서버 컴포넌트로 두고, 데이터를 구독하는 AiFeedbackSection만 클라이언트 경계로 남긴다.
 export default function AiFeedbackPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-[#0b0b0d] text-zinc-100">
