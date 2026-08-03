@@ -34,6 +34,7 @@ public class FeedbackResponseDTO {
         Long songId;
         String title;
         String artist;
+        String thumbnail;
         LocalDateTime singAt;
         String overall;
         Integer score;
@@ -47,6 +48,7 @@ public class FeedbackResponseDTO {
         Long performanceId;
         String title;
         String artist;
+        String thumbnail;
         ScoreDTO scores;
         String overall;
         String strength;
