@@ -6,6 +6,7 @@ import { cn } from '@/shared/lib/cn';
 import { getScoreGrade, GRADE_CLASS } from '@/shared/lib/scoreGrade';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
+import { MYPAGE_PREVIEW_COUNT } from '../config/preview';
 import { formatPerformedAt } from '../lib/formatters';
 import { ChevronRightIcon, HistoryIcon } from './icons';
 import { TrackThumbnail } from './TrackThumbnail';
@@ -15,6 +16,8 @@ interface RecentActivityCardProps {
 }
 
 export function RecentActivityCard({ performances }: RecentActivityCardProps) {
+  const previewPerformances = performances.slice(0, MYPAGE_PREVIEW_COUNT);
+
   return (
     <SettingsPanel title="RECENT ACTIVITY" icon={<HistoryIcon />}>
       <Link
@@ -30,7 +33,7 @@ export function RecentActivityCard({ performances }: RecentActivityCardProps) {
         <ChevronRightIcon />
       </Link>
 
-      {performances.length === 0 ? (
+      {previewPerformances.length === 0 ? (
         <p
           className={cn(
             jetBrainsMono.className,
@@ -53,7 +56,7 @@ export function RecentActivityCard({ performances }: RecentActivityCardProps) {
           </div>
 
           <ul>
-            {performances.map((performance) => {
+            {previewPerformances.map((performance) => {
               const performedAt = formatPerformedAt(performance.performanceAt);
               const grade = getScoreGrade(performance.score);
 

@@ -2,13 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  cardTierFromDuration,
+  type CardActivationCancelledPayload,
+  type CardActivationScheduledPayload,
+  type CardAssignedPayload,
+  type CardEffectEndedPayload,
+  type CardEffectStartedPayload,
+} from '@/entities/card';
 import type {
   LeaderboardUpdatedPayload,
   PerformanceCancelledPayload,
   PerformancePreparationStartedPayload,
+  PerformanceResumedPayload,
   PerformanceSettings,
   PerformanceSettingsChangedPayload,
   PerformanceStartedPayload,
+  PerformanceStateChangedPayload,
 } from '@/entities/performance';
 import {
   getRoomSnapshot,
@@ -20,12 +30,15 @@ import {
   type PerformerSelectedPayload,
   type PongPayload,
   type RoomHostChangedPayload,
+  type RoomParticipantChatPayload,
   type RoomWebSocketEvent,
   type WebSocketErrorEvent,
 } from '@/entities/room';
 import { createStompClient, subscribeJson } from '@/shared/api/stomp';
 import { showToast } from '@/shared/model/toastStore';
 
+import { hydrateCardsFromRoomSnapshot, useCardStore } from './cardStore';
+import { useChatStore } from './chatStore';
 import { useStageStore } from './stageStore';
 
 /** 연결 상태 확인 PING 전송 주기 (백엔드 하트비트 10초와 동일) */
@@ -47,6 +60,16 @@ export interface RoomSocketApi {
   sendSettings: (settings: PerformanceSettings) => void;
   /** 진행 중인 공연을 취소한다 (가창자 전용) */
   sendCancel: () => void;
+  /** 수성전: 내게 배정된 공격 카드를 발동한다 (공격자 전용) */
+  sendCardActivate: () => void;
+  /** 일시 중지된 공연을 재개할 준비가 됐음을 알린다 (가창자 전용) */
+  sendResumeReady: () => void;
+  /** 방 채팅 메시지를 전송한다 (300자 이하) */
+  sendChat: (message: string) => void;
+  /** 방장을 다른 참가자에게 위임한다 (방장 전용) */
+  sendHostChange: (participantId: number) => void;
+  /** 참가자를 강제 퇴장시킨다 (방장 전용) */
+  sendKick: (participantId: number) => void;
 }
 
 /**
@@ -75,6 +98,16 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
     const handleEvent = (event: RoomWebSocketEvent) => {
       const roomStore = useRoomStore.getState();
       const stageStore = useStageStore.getState();
+      const cardStore = useCardStore.getState();
+
+      // 강퇴·방 종료로 방을 떠날 때의 공통 정리. 세션이 비면
+      // GeneralRoomScreen의 세션 감시 효과가 로비로 되돌린다.
+      const exitRoom = () => {
+        stageStore.endStage();
+        cardStore.resetCards();
+        useChatStore.getState().resetChat();
+        roomStore.leaveRoom();
+      };
 
       switch (event.eventType) {
         // ── Room ──
@@ -83,7 +116,10 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           // userId 기반 비교(캠 그리드 필터 등)가 깨진다. 즉시 반영 후 스냅샷으로 보정한다.
           roomStore.applyParticipantJoined(event.payload as ParticipantJoinedPayload);
           getRoomSnapshot(event.roomId ?? roomId)
-            .then((snapshot) => useRoomStore.getState().hydrateFromSnapshot(snapshot))
+            .then((snapshot) => {
+              useRoomStore.getState().hydrateFromSnapshot(snapshot);
+              hydrateCardsFromRoomSnapshot(snapshot);
+            })
             .catch(() => {
               // 조회 실패 시 즉시 반영된 목록이라도 유지한다.
             });
@@ -91,11 +127,36 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         case 'PARTICIPANT_LEFT':
           roomStore.applyParticipantLeft(event.payload as ParticipantLeftPayload);
           break;
-        case 'PARTICIPANT_KICKED':
-          roomStore.applyParticipantKicked(event.payload as ParticipantKickedPayload);
+        case 'PARTICIPANT_KICKED': {
+          const payload = event.payload as ParticipantKickedPayload;
+          if (payload.participantId === roomStore.session?.myParticipantId) {
+            showToast('방장에 의해 강제 퇴장되었습니다.', 'error');
+            exitRoom();
+            break;
+          }
+          roomStore.applyParticipantKicked(payload);
           break;
-        case 'ROOM_HOST_CHANGED':
-          roomStore.applyHostChanged(event.payload as RoomHostChangedPayload);
+        }
+        case 'ROOM_HOST_CHANGED': {
+          const payload = event.payload as RoomHostChangedPayload;
+          const wasHost = roomStore.session?.isHost ?? false;
+          roomStore.applyHostChanged(payload);
+          if (!wasHost && payload.participantId === roomStore.session?.myParticipantId) {
+            showToast('방장이 되었습니다.', 'info');
+          }
+          break;
+        }
+        case 'ROOM_TERMINATED':
+          // 종료를 직접 요청한 방장은 이미 로컬 정리를 마쳐 세션이 없다.
+          if (roomStore.session !== null) {
+            showToast('방장이 방을 종료했습니다.', 'info');
+            exitRoom();
+          }
+          break;
+        case 'PARTICIPANT_CHAT':
+          useChatStore
+            .getState()
+            .appendMessage(event.payload as RoomParticipantChatPayload);
           break;
         case 'PARTICIPANT_CONNECTION_STATUS_CHANGED':
           roomStore.applyConnectionStatusChanged(
@@ -117,9 +178,23 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           break;
         case 'PLAYBACK_STARTED':
           stageStore.applyPlaybackStarted();
+          // 수성전: 노래 시작 시점에 가창자를 제외한 온라인 참가자 전원에게 카드가 배정된다.
+          // 타인의 카드 내용은 개인 큐로만 전달되므로, 보유 여부만 여기서 시드한다.
+          if (roomStore.session?.mode === 'BATTLE') {
+            cardStore.seedCardHolders(
+              roomStore.participants
+                .filter(
+                  (participant) =>
+                    participant.connectionStatus === 'CONNECTED' &&
+                    participant.id !== stageStore.performerParticipantId,
+                )
+                .map((participant) => participant.id),
+            );
+          }
           break;
         case 'PLAYBACK_FINISHED':
           stageStore.applyPlaybackFinished();
+          cardStore.resetCards();
           break;
         case 'PERFORMANCE_SETTINGS_CHANGED':
           stageStore.applySettingsChanged(
@@ -129,20 +204,66 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         case 'PERFORMANCE_CANCELLED': {
           const payload = event.payload as PerformanceCancelledPayload;
           stageStore.applyPerformanceCancelled();
+          cardStore.resetCards();
           if (payload.cancelReason !== 'PERFORMER_REQUEST') {
             showToast('공연이 중단되었습니다.', 'error');
           }
           break;
         }
-        case 'PERFORMANCE_STATE_CHANGED':
-          // 세부 상태(ANALYZING 등) UI는 추후 확장. 현재는 주요 이벤트로만 전이한다.
-          break;
-        case 'LEADERBOARD_UPDATED': {
-          // 리더보드 저장은 GeneralRoomScreen에서 구독 중인 스토어가 없어
-          // 이벤트 발행이 시작되면 roomStore 확장으로 연결한다. (백엔드 미완성)
-          void (event.payload as LeaderboardUpdatedPayload);
+        // ── Card (수성전) ──
+        case 'CARD_ASSIGNED': {
+          const payload = event.payload as CardAssignedPayload;
+          cardStore.applyCardAssigned({
+            ...payload,
+            // tier가 비어 오는 경우(스냅샷 등) 지속시간으로 등급을 역산한다 (10/15/20초 = S/G/P)
+            tier: payload.tier ?? cardTierFromDuration(payload.durationSeconds),
+          });
           break;
         }
+        case 'CARD_ACTIVATION_SCHEDULED': {
+          const payload = event.payload as CardActivationScheduledPayload;
+          // 카운트다운은 로컬에서 3초를 새로 세지 않고 서버 시각(activateAt) 기준으로 계산한다.
+          cardStore.setClockOffset(new Date(payload.serverNow).getTime() - Date.now());
+          cardStore.applyActivationScheduled(payload);
+          break;
+        }
+        case 'CARD_ACTIVATION_CANCELLED':
+          cardStore.applyActivationCancelled(event.payload as CardActivationCancelledPayload);
+          break;
+        case 'CARD_EFFECT_STARTED':
+          cardStore.applyEffectStarted(event.payload as CardEffectStartedPayload);
+          break;
+        case 'CARD_EFFECT_ENDED':
+          cardStore.applyEffectEnded(event.payload as CardEffectEndedPayload);
+          break;
+        case 'PERFORMANCE_STATE_CHANGED': {
+          const payload = event.payload as PerformanceStateChangedPayload;
+          if (
+            payload.currentStatus === 'ANALYSIS_FAILED' &&
+            payload.performanceId === stageStore.performanceId
+          ) {
+            stageStore.applyScoringFailed();
+            showToast('채점에 실패했습니다.', 'error');
+          }
+          // FINISHED 전이는 점수를 담은 LEADERBOARD_UPDATED가 함께 오므로 여기선 처리하지 않는다.
+          break;
+        }
+        case 'LEADERBOARD_UPDATED': {
+          const payload = event.payload as LeaderboardUpdatedPayload;
+          roomStore.applyLeaderboardUpdated(payload);
+          if (payload.updatedPerformanceId === stageStore.performanceId) {
+            stageStore.applyScore(payload.updatedFinalScore);
+          }
+          break;
+        }
+        case 'PERFORMANCE_SUSPENDED':
+          stageStore.applyPerformanceSuspended();
+          showToast('가창자 연결이 끊겨 공연이 일시 중지되었습니다.', 'info');
+          break;
+        case 'PERFORMANCE_RESUMED':
+          stageStore.applyPerformanceResumed(event.payload as PerformanceResumedPayload);
+          showToast('공연이 재개되었습니다.', 'info');
+          break;
         default:
           break;
       }
@@ -163,7 +284,8 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         setIsConnected(true);
 
         subscribeJson<RoomWebSocketEvent>(client, `/topic/rooms/${roomId}`, handleEvent);
-        subscribeJson<RoomWebSocketEvent>(client, `/user/queue/rooms/${roomId}`, handleEvent);
+        // 수성전 개인 카드 배정 큐. 일반전에서는 서버가 발행하지 않는다.
+        subscribeJson<RoomWebSocketEvent>(client, '/user/queue/cards', handleEvent);
         subscribeJson<WebSocketErrorEvent>(client, '/user/queue/errors', (event) => {
           showToast(event.payload.message, 'error');
         });
@@ -198,6 +320,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
       clientRef.current = null;
       setIsConnected(false);
       setLatencyMs(null);
+      useChatStore.getState().resetChat();
       void client.deactivate();
     };
   }, [roomId]);
@@ -249,6 +372,29 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         const performanceId = currentPerformanceId();
         if (roomId === null || performanceId === null) return;
         publish(`/app/rooms/${roomId}/performances/${performanceId}/cancel`);
+      },
+      sendCardActivate: () => {
+        const performanceId = currentPerformanceId();
+        if (roomId === null || performanceId === null) return;
+        // 카드 식별자는 보내지 않는다 — 서버가 인증 사용자 기준으로 배정 카드를 찾는다.
+        publish(`/app/rooms/${roomId}/performances/${performanceId}/cards/activate`);
+      },
+      sendResumeReady: () => {
+        const performanceId = currentPerformanceId();
+        if (roomId === null || performanceId === null) return;
+        publish(`/app/rooms/${roomId}/performances/${performanceId}/resume-ready`);
+      },
+      sendChat: (message) => {
+        if (roomId === null) return;
+        publish(`/app/rooms/${roomId}/chat`, { message });
+      },
+      sendHostChange: (participantId) => {
+        if (roomId === null) return;
+        publish(`/app/rooms/${roomId}/host-changed`, { participantId });
+      },
+      sendKick: (participantId) => {
+        if (roomId === null) return;
+        publish(`/app/rooms/${roomId}/participants/${participantId}/kick`);
       },
     };
   }, [roomId, isConnected, latencyMs]);

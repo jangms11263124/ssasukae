@@ -1,5 +1,6 @@
 package com.ssafy.ssasukae.domain.card.redis;
 
+import java.util.List;
 import java.util.Optional;
 
 // 카드 사용 관련 스냅샷 저장소 인터페이스
@@ -10,6 +11,8 @@ public interface CardStateStore {
   // 카드 할당 정보 가져옴
   Optional<CardAssignmentSnapshot> findAssignment(
       Long roomId, Long performanceId, Long participantId);
+  // 공연에 배정된 모든 카드 정보 가져옴
+  List<CardAssignmentSnapshot> findAssignments(Long roomId, Long performanceId);
   // 현재 방 카드 사용 상태 가져옴
   Optional<RoomCardSnapshot> findRoomCard(Long roomId);
   // 방 카드 사용 정보 저장

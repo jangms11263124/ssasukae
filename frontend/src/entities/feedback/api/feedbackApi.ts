@@ -1,6 +1,7 @@
 import { apiClient } from '@/shared/api/client';
 
 import type {
+  FeedbackDetail,
   FeedbackGradeFilter,
   FeedbackListPage,
   FeedbackPeriod,
@@ -34,6 +35,13 @@ export function getFeedbackList(params: GetFeedbackListParams): Promise<Feedback
   if (params.cursor !== undefined) searchParams.set('cursor', String(params.cursor));
 
   return apiClient<FeedbackListPage>(`/api/users/me/performances?${searchParams.toString()}`, {
+    auth: true,
+  });
+}
+
+/** 상세 AI 피드백 조회 (GET /api/users/me/performances/{performanceId}) */
+export function getFeedbackDetail(performanceId: number): Promise<FeedbackDetail> {
+  return apiClient<FeedbackDetail>(`/api/users/me/performances/${performanceId}`, {
     auth: true,
   });
 }
