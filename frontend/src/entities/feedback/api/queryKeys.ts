@@ -5,4 +5,6 @@ export const feedbackQueryKeys = {
   summary: () => [...feedbackQueryKeys.all, 'summary'] as const,
   list: (period: FeedbackPeriod, grade: FeedbackGradeFilter, sort: FeedbackSort) =>
     [...feedbackQueryKeys.all, 'list', period, grade, sort] as const,
+  detail: (performanceId: number) =>
+    [...feedbackQueryKeys.all, 'detail', performanceId] as const,
 };
