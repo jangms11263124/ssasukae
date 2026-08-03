@@ -19,10 +19,11 @@ public record RoomSnapshotResponse(
     PerformanceSnapshotResponse performance,
     PlaybackSnapshotResponse playback,
     MyCardSnapshotResponse myCard,
+    List<CardUsageStatusResponse> cardUsageStatuses,
     ActiveCardSnapshotResponse activeCard) {
 
   public static RoomSnapshotResponse from(Room room, List<RoomParticipant> participants) {
-    return from(room, participants, OffsetDateTime.now(), null, null, null, null);
+    return from(room, participants, OffsetDateTime.now(), null, null, null, List.of(), null);
   }
 
   public static RoomSnapshotResponse from(
@@ -32,6 +33,7 @@ public record RoomSnapshotResponse(
       PerformanceSnapshotResponse performance,
       PlaybackSnapshotResponse playback,
       MyCardSnapshotResponse myCard,
+      List<CardUsageStatusResponse> cardUsageStatuses,
       ActiveCardSnapshotResponse activeCard) {
     return new RoomSnapshotResponse(
         room.getName(),
@@ -44,6 +46,7 @@ public record RoomSnapshotResponse(
         performance,
         playback,
         myCard,
+        cardUsageStatuses,
         activeCard);
   }
 }
