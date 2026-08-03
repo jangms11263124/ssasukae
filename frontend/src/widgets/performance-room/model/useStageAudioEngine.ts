@@ -26,6 +26,8 @@ export function useStageAudioEngine(isPerformer: boolean): VocalAudioEngineState
   const mrDownloadUrl = useStageStore((state) => state.mrDownloadUrl);
   const settings = useStageStore((state) => state.settings);
   const micOn = useStageStore((state) => state.micOn);
+  const isSuspended = useStageStore((state) => state.isSuspended);
+  const resumeOffsetMs = useStageStore((state) => state.resumeOffsetMs);
   const activeEffect = useCardStore((state) => state.activeEffect);
 
   // 수성전 공격 카드: 가창자 대상 키/템포 효과를 서버와 같은 식(base + value, clamp)으로 겹친다.
@@ -60,7 +62,9 @@ export function useStageAudioEngine(isPerformer: boolean): VocalAudioEngineState
   return useVocalAudioEngine({
     enabled: isPerformer && (phase === 'READY' || phase === 'PERFORMING'),
     mrUrl: mrDownloadUrl,
-    playing: phase === 'PERFORMING',
+    // 일시 중지 동안 MR을 멈췄다가 재개 이벤트가 오면 서버가 준 위치부터 이어 재생한다.
+    playing: phase === 'PERFORMING' && !isSuspended,
+    startOffsetMs: resumeOffsetMs,
     micOn,
     dsp: {
       keyOffset,

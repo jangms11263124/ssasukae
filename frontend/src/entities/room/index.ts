@@ -3,6 +3,7 @@ export {
   createRoom,
   getRoomSnapshot,
   joinRoom,
+  leaveRoom,
   reissueMediaToken,
   selectPerformer,
   terminateRoom,
@@ -26,5 +27,7 @@ export type {
   ParticipantKickedPayload,
   PerformerSelectedPayload,
   RoomHostChangedPayload,
+  RoomParticipantChatPayload,
+  RoomTerminatedPayload,
   ParticipantConnectionStatusChangedPayload,
 } from './model/wsEvents';

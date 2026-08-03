@@ -3,6 +3,7 @@ import type { LeaderboardEntry } from './types';
 export type PerformanceStatus =
   | 'PREPARING'
   | 'PLAYING'
+  | 'SUSPENDED'
   | 'ANALYZING'
   | 'ANALYSIS_FAILED'
   | 'FINISHED'
@@ -43,8 +44,11 @@ export interface PerformancePreparationStartedPayload {
   performerParticipantId: number;
   songId: number;
   songTitle: string;
+  difficultyLevel: number | null;
+  thumbnailImageUrl: string | null;
   mrDownloadUrl: string;
   midiJsonDownloadUrl: string;
+  lyricsDownloadUrl: string;
 }
 
 export interface PlaybackStartedPayload {
@@ -83,4 +87,27 @@ export interface LeaderboardUpdatedPayload {
   updatedPerformanceId: number;
   updatedFinalScore: number;
   items: LeaderboardEntry[];
+}
+
+export interface PerformanceSuspendedPayload {
+  performanceId: number;
+  performerParticipantId: number;
+  previousStatus: PerformanceStatus;
+  currentStatus: PerformanceStatus;
+  suspendedAt: string;
+  playbackPositionMs: number;
+}
+
+/** settings는 서버가 관리하는 4개 필드만 온다 — 기존 설정에 병합해야 한다 */
+export interface PerformanceResumedPayload {
+  performanceId: number;
+  performerParticipantId: number;
+  previousStatus: PerformanceStatus;
+  currentStatus: PerformanceStatus;
+  resumeAt: string;
+  resumePositionMs: number;
+  settings: Pick<
+    PerformanceSettings,
+    'keyOffset' | 'tempoPercent' | 'mrVolumePercent' | 'echoLevel'
+  >;
 }

@@ -1,25 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
-import { useStageStore } from '../../model/stageStore';
-import { HeartIcon } from '@/shared/ui/icons/HeartIcon';
+import { searchSongs, SongThumbnail } from '@/entities/song';
+import { FavoriteToggleButton } from '@/features/favorite-toggle';
+
+import { useStageStore, type StagePhase } from '../../model/stageStore';
 import { RoomPanel } from '../RoomPanel';
 
-// 오디오 엔진이 붙기 전까지 사용하는 목업 재생 정보.
-const MOCK_PLAYBACK = {
-  bpm: 124,
-  key: 'EM',
-  progressPercent: 85,
-  quality: 'HIGH-RES',
-} as const;
+const PHASE_SUBTITLES: Record<StagePhase, string> = {
+  WAITING: 'waiting...',
+  SINGER_SELECT: 'waiting...',
+  SONG_SELECT: 'selecting song...',
+  READY: 'ready to play',
+  PERFORMING: 'now playing',
+  SCORE: 'scoring...',
+};
+
+/** 키 오프셋을 +2 / 0 / -3 표기로 변환한다 */
+function formatKeyOffset(keyOffset: number): string {
+  return keyOffset > 0 ? `+${keyOffset}` : String(keyOffset);
+}
 
 export function NowPlayingCard() {
   const selectedSong = useStageStore((state) => state.selectedSong);
-  const [isLiked, setIsLiked] = useState(false);
+  const phase = useStageStore((state) => state.phase);
+  const settings = useStageStore((state) => state.settings);
+
+  // 스냅샷·이벤트에 내 찜 여부가 없어 곡 검색 API(favorite 필드 포함)로 조회한다.
+  // FavoriteToggleButton이 ['songs', 'search']를 무효화하므로 토글 시 함께 갱신된다.
+  const { data: favoriteData } = useQuery({
+    queryKey: ['songs', 'search', 'now-playing', selectedSong?.id ?? null],
+    queryFn: () => searchSongs({ query: selectedSong?.title ?? '' }),
+    enabled: selectedSong !== null,
+  });
+  const favorite =
+    favoriteData?.items.find((item) => item.songId === selectedSong?.id)?.favorite ?? false;
 
   const title = selectedSong?.title ?? 'LOADING';
-  const subtitle = selectedSong ? 'ready to play' : 'waiting...';
+  const subtitle = PHASE_SUBTITLES[phase];
 
   return (
     <RoomPanel className="relative overflow-hidden p-4">
@@ -30,56 +49,32 @@ export function NowPlayingCard() {
 
       <div className="relative">
         <div className="flex items-start gap-3">
-          <div
-            aria-hidden="true"
-            className="size-16 shrink-0 border border-white/15 bg-[linear-gradient(135deg,#2c2440,#131316)]"
-          />
+          <SongThumbnail src={selectedSong?.thumbnailUrl ?? null} className="size-16" />
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[10px] tracking-[0.24em] text-fuchsia-400">
-              LIVE PLAYING
+              {phase === 'PERFORMING' ? 'LIVE PLAYING' : 'UP NEXT'}
             </p>
             <p className="mt-1 truncate text-lg font-black uppercase italic leading-tight text-white">
               {title}
             </p>
             <p className="truncate font-mono text-xs text-zinc-500">{subtitle}</p>
           </div>
-          <button
-            type="button"
-            aria-pressed={isLiked}
-            aria-label="현재 곡 좋아요"
-            onClick={() => setIsLiked((prev) => !prev)}
-            className={
-              isLiked
-                ? 'shrink-0 text-fuchsia-500 transition-colors'
-                : 'shrink-0 text-fuchsia-400/70 transition-colors hover:text-fuchsia-300'
-            }
-          >
-            <HeartIcon filled={isLiked} className="size-6" />
-          </button>
+          {selectedSong !== null ? (
+            <FavoriteToggleButton
+              songId={selectedSong.id}
+              favorite={favorite}
+              iconClassName="size-6"
+            />
+          ) : null}
         </div>
 
-        <div className="mt-4">
-          <div className="flex justify-between font-mono text-[10px] text-zinc-400">
-            <span>00:00</span>
-            <span>00:00</span>
-          </div>
-          <div className="relative mt-1.5 h-1 bg-white/15">
-            <div
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan-300 to-fuchsia-500"
-              style={{ width: `${MOCK_PLAYBACK.progressPercent}%` }}
-            />
-            <span
-              aria-hidden="true"
-              className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 bg-white"
-              style={{ left: `${MOCK_PLAYBACK.progressPercent}%` }}
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 flex items-center justify-between font-mono text-[9px] tracking-wide text-zinc-500">
-          <span>KEY: {MOCK_PLAYBACK.key}</span>
-          <span>BPM: {MOCK_PLAYBACK.bpm}</span>
-          <span>QUALITY: {MOCK_PLAYBACK.quality}</span>
+        <div className="mt-4 flex items-center justify-between font-mono text-[9px] tracking-wide text-zinc-500">
+          <span>KEY: {formatKeyOffset(settings.keyOffset)}</span>
+          <span>TEMPO: {settings.tempoPercent}%</span>
+          <span>
+            DIFFICULTY:{' '}
+            {selectedSong?.difficultyLevel != null ? `LV.${selectedSong.difficultyLevel}` : '-'}
+          </span>
         </div>
       </div>
     </RoomPanel>
