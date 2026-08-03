@@ -44,6 +44,22 @@ function volumePercentToDb(percent: number): number {
   return Math.max(SILENCE_DB, 20 * Math.log10(percent / 100));
 }
 
+function asFiniteNumber(value: number, fallback: number): number {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+/** 비유한 값(undefined·NaN 등)이 램프 목표가 되면 RangeError로 터진다. 마지막 정상값으로 대체한다. */
+function sanitizeDspValues(values: VocalDspValues, fallback: VocalDspValues): VocalDspValues {
+  return {
+    keyOffset: asFiniteNumber(values.keyOffset, fallback.keyOffset),
+    // 0 이하 템포는 playbackRate·피치 보정(log2)을 무너뜨린다
+    tempoPercent: Math.max(1, asFiniteNumber(values.tempoPercent, fallback.tempoPercent)),
+    echoLevel: asFiniteNumber(values.echoLevel, fallback.echoLevel),
+    mrVolumePercent: asFiniteNumber(values.mrVolumePercent, fallback.mrVolumePercent),
+    micVolumePercent: asFiniteNumber(values.micVolumePercent, fallback.micVolumePercent),
+  };
+}
+
 class ToneVocalAudioEngine implements VocalAudioEngine {
   private readonly context: SinkSelectableContext;
   /** 노드 생성 시점의 전역 컨텍스트. 이후 다른 엔진이 전역을 바꿔도 이 엔진의 노드는 여기 묶인다 */
@@ -174,18 +190,19 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   }
 
   applyDsp(values: VocalDspValues): void {
-    this.lastDsp = values;
+    const safe = sanitizeDspValues(values, this.lastDsp);
+    this.lastDsp = safe;
     // 정리와 설정 반영이 같은 렌더에 겹치면 파기된 노드의 램프 호출로 죽을 수 있다
     if (this.disposed) return;
 
-    const speedMultiplier = values.tempoPercent / 100;
+    const speedMultiplier = safe.tempoPercent / 100;
     if (this.player !== null) {
       this.player.playbackRate = speedMultiplier;
     }
 
     // playbackRate가 키를 함께 올리므로 상쇄해서 "템포만 바뀌고 키는 그대로"를 만든다
     const pitchCompensation = -12 * Math.log2(speedMultiplier);
-    const netPitch = values.keyOffset + pitchCompensation;
+    const netPitch = safe.keyOffset + pitchCompensation;
     if (Math.abs(netPitch) < PITCH_BYPASS_EPSILON) {
       this.pitchShift.wet.rampTo(0, PARAM_RAMP_SECONDS);
     } else {
@@ -193,11 +210,11 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
       this.pitchShift.wet.rampTo(1, PARAM_RAMP_SECONDS);
     }
 
-    this.echoDelay.feedback.rampTo(values.echoLevel * ECHO_FEEDBACK_PER_PERCENT, PARAM_RAMP_SECONDS);
-    this.echoDelay.wet.rampTo(values.echoLevel * ECHO_WET_PER_PERCENT, PARAM_RAMP_SECONDS);
+    this.echoDelay.feedback.rampTo(safe.echoLevel * ECHO_FEEDBACK_PER_PERCENT, PARAM_RAMP_SECONDS);
+    this.echoDelay.wet.rampTo(safe.echoLevel * ECHO_WET_PER_PERCENT, PARAM_RAMP_SECONDS);
 
-    this.mrGain.volume.rampTo(volumePercentToDb(values.mrVolumePercent), PARAM_RAMP_SECONDS);
-    this.micGain.volume.rampTo(volumePercentToDb(values.micVolumePercent), PARAM_RAMP_SECONDS);
+    this.mrGain.volume.rampTo(volumePercentToDb(safe.mrVolumePercent), PARAM_RAMP_SECONDS);
+    this.micGain.volume.rampTo(volumePercentToDb(safe.micVolumePercent), PARAM_RAMP_SECONDS);
   }
 
   async setOutputDevice(deviceId: string): Promise<void> {
