@@ -1,6 +1,7 @@
 package com.ssafy.ssasukae.integration.openvidu;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -123,14 +124,13 @@ class OpenViduGatewayTest {
   }
 
   @Test
-  @DisplayName("활성 세션 목록에 sessionId가 없으면 세션 종료에 실패한다")
-  void closeSession_throwsWhenSessionNotActive() throws Exception {
+  @DisplayName("활성 세션 목록에 sessionId가 없으면(이미 닫혀있으면) 예외 없이 조용히 넘어간다")
+  void closeSession_doesNothingWhenSessionAlreadyGone() throws Exception {
     // given
     when(openVidu.getActiveSessions()).thenReturn(List.of());
 
     // when & then
-    assertThatThrownBy(() -> openViduGateway.closeSession("openvidu-session-1"))
-        .isInstanceOf(CustomException.class)
-        .hasMessage(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED.getMessage());
+    assertThatCode(() -> openViduGateway.closeSession("openvidu-session-1"))
+        .doesNotThrowAnyException();
   }
 }
