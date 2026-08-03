@@ -6,3 +6,5 @@ httpx
 openai
 rapidfuzz
 jamo
+pymupdf==1.28.0
+chromadb==1.5.9

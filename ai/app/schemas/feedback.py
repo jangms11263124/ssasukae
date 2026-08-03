@@ -7,6 +7,10 @@ class NoteEvent(BaseModel):
     start: float = Field(..., description="Note start time in seconds")
     duration: float = Field(..., description="Note duration in seconds")
     note: str = Field(..., description="Pitch name, for example C4 or F#4")
+    midi: float | None = Field(
+        default=None,
+        description="Original MIDI pitch value before note-name rounding",
+    )
 
 
 class FeedbackRequest(BaseModel):
