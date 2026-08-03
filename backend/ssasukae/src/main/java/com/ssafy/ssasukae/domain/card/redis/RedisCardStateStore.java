@@ -8,6 +8,7 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -38,6 +39,14 @@ public class RedisCardStateStore implements CardStateStore {
     return Optional.ofNullable(json)
         .map(Object::toString)
         .map(value -> deserialize(value, CardAssignmentSnapshot.class));
+  }
+
+  @Override
+  public List<CardAssignmentSnapshot> findAssignments(Long roomId, Long performanceId) {
+    return redisTemplate.opsForHash().values(assignmentsKey(roomId, performanceId)).stream()
+        .map(Object::toString)
+        .map(value -> deserialize(value, CardAssignmentSnapshot.class))
+        .toList();
   }
 
   @Override
