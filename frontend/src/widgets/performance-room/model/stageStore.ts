@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import {
   DEFAULT_PERFORMANCE_SETTINGS,
   type PerformancePreparationStartedPayload,
+  type PerformanceResumedPayload,
   type PerformanceSettings,
   type PerformanceStartedPayload,
 } from '@/entities/performance';
@@ -18,6 +19,8 @@ export type StagePhase =
 export interface StageSong {
   id: number;
   title: string;
+  thumbnailUrl?: string | null;
+  difficultyLevel?: number | null;
 }
 
 interface StageStore {
@@ -35,7 +38,15 @@ interface StageStore {
   performanceId: number | null;
   mrDownloadUrl: string | null;
   midiJsonDownloadUrl: string | null;
+  /** 가사 파일 URL. AI 분석 파이프라인의 파일 포맷 확정 후 가사 싱크에 사용한다 */
+  lyricsDownloadUrl: string | null;
   settings: PerformanceSettings;
+  /** AI 채점 실패 여부 (PERFORMANCE_STATE_CHANGED → ANALYSIS_FAILED) */
+  scoringFailed: boolean;
+  /** 가창자 연결 끊김으로 공연이 일시 중지된 상태 */
+  isSuspended: boolean;
+  /** 재개 시 MR을 이어 재생할 위치(ms). 새 공연 시작 시 0으로 돌아간다 */
+  resumeOffsetMs: number;
   // 무대 진행 전이. 서버 이벤트 수신 시 apply* 액션이 상태를 덮어쓴다.
   startSingerSelect: () => void;
   confirmSinger: (participantId: number) => void;
@@ -56,6 +67,11 @@ interface StageStore {
   applyPlaybackFinished: () => void;
   applySettingsChanged: (settings: PerformanceSettings) => void;
   applyPerformanceCancelled: () => void;
+  /** AI 채점 결과 수신 (LEADERBOARD_UPDATED의 updatedFinalScore) */
+  applyScore: (score: number) => void;
+  applyScoringFailed: () => void;
+  applyPerformanceSuspended: () => void;
+  applyPerformanceResumed: (payload: PerformanceResumedPayload) => void;
 }
 
 const INITIAL_PERFORMANCE_STATE = {
@@ -66,7 +82,11 @@ const INITIAL_PERFORMANCE_STATE = {
   performanceId: null,
   mrDownloadUrl: null,
   midiJsonDownloadUrl: null,
+  lyricsDownloadUrl: null,
   settings: DEFAULT_PERFORMANCE_SETTINGS,
+  scoringFailed: false,
+  isSuspended: false,
+  resumeOffsetMs: 0,
 };
 
 // 기기 토글은 INITIAL_PERFORMANCE_STATE에 넣지 않는다. 넣으면 공연마다 초기화된다.
@@ -106,18 +126,43 @@ export const useStageStore = create<StageStore>((set) => ({
     set({
       performanceId: payload.performanceId,
       performerParticipantId: payload.performerParticipantId,
-      selectedSong: { id: payload.songId, title: payload.songTitle },
+      selectedSong: {
+        id: payload.songId,
+        title: payload.songTitle,
+        thumbnailUrl: payload.thumbnailImageUrl,
+        difficultyLevel: payload.difficultyLevel,
+      },
       mrDownloadUrl: payload.mrDownloadUrl,
       midiJsonDownloadUrl: payload.midiJsonDownloadUrl,
+      lyricsDownloadUrl: payload.lyricsDownloadUrl,
       phase: 'READY',
     }),
 
-  applyPlaybackStarted: () => set({ phase: 'PERFORMING' }),
+  // 처음부터 재생하는 경우이므로 이전 공연의 재개 위치를 버린다.
+  applyPlaybackStarted: () =>
+    set({ phase: 'PERFORMING', isSuspended: false, resumeOffsetMs: 0 }),
 
-  // 채점 결과(리더보드) 이벤트는 백엔드 미완성이라 점수 없이 SCORE 단계로 전이한다.
-  applyPlaybackFinished: () => set({ phase: 'SCORE' }),
+  // 점수는 채점 완료 후 LEADERBOARD_UPDATED가 채운다. 그때까지 "채점 중"으로 표시된다.
+  applyPlaybackFinished: () => set({ phase: 'SCORE', score: null, scoringFailed: false }),
 
   applySettingsChanged: (settings) => set({ settings }),
 
   applyPerformanceCancelled: () => set(INITIAL_PERFORMANCE_STATE),
+
+  applyScore: (score) => set({ phase: 'SCORE', score, scoringFailed: false }),
+
+  applyScoringFailed: () => set({ phase: 'SCORE', scoringFailed: true }),
+
+  applyPerformanceSuspended: () => set({ isSuspended: true }),
+
+  applyPerformanceResumed: (payload) =>
+    set((state) => ({
+      isSuspended: false,
+      performanceId: payload.performanceId,
+      performerParticipantId: payload.performerParticipantId,
+      resumeOffsetMs: payload.resumePositionMs,
+      // 서버 settings는 4개 필드만 관리하므로 로컬 전용 값(마이크 볼륨 등)은 유지한다.
+      settings: { ...state.settings, ...payload.settings },
+      phase: payload.currentStatus === 'PLAYING' ? 'PERFORMING' : 'READY',
+    })),
 }));

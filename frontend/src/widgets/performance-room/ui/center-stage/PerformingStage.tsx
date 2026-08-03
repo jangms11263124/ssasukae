@@ -26,6 +26,8 @@ import { StageBackdrop } from './StageBackdrop';
 import { StageCameraFeed } from './StageCameraFeed';
 
 // 가사 싱크 엔진 연동 전까지 쓰는 목업.
+// 실제 가사는 stageStore.lyricsDownloadUrl로 받을 수 있으나,
+// AI 분석 파이프라인의 가사 파일 포맷이 확정되지 않아 싱크 구현을 보류 중이다.
 const MOCK_LYRICS = {
   currentLine: 'LOOKING BACK AT THE STARS IN YOUR EYES',
   nextLine: "I'M STANDING ON THE EDGE OF TOMORROW",

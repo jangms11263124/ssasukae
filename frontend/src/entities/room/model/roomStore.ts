@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import type { RoomParticipant } from '@/entities/participant';
+import type { LeaderboardEntry, LeaderboardUpdatedPayload } from '@/entities/performance';
 
 import type { RoomSnapshotResponse } from '../api/roomApi';
 import type { RoomMode } from '../types';
@@ -41,6 +42,8 @@ interface RoomStore {
   session: RoomSession | null;
   participants: RoomParticipant[];
   hostParticipantId: number | null;
+  /** 방 리더보드. 스냅샷에 없어 LEADERBOARD_UPDATED 이벤트로만 쌓인다 */
+  leaderboard: LeaderboardEntry[];
 
   enterRoom: (input: EnterRoomInput) => void;
   leaveRoom: () => void;
@@ -54,6 +57,7 @@ interface RoomStore {
   applyParticipantKicked: (payload: ParticipantKickedPayload) => void;
   applyHostChanged: (payload: RoomHostChangedPayload) => void;
   applyConnectionStatusChanged: (payload: ParticipantConnectionStatusChangedPayload) => void;
+  applyLeaderboardUpdated: (payload: LeaderboardUpdatedPayload) => void;
 }
 
 const ROOM_MAX_PARTICIPANTS = 4;
@@ -62,6 +66,7 @@ export const useRoomStore = create<RoomStore>((set) => ({
   session: null,
   participants: [],
   hostParticipantId: null,
+  leaderboard: [],
 
   enterRoom: ({ me, participantId, isHost, ...rest }) =>
     set({
@@ -85,7 +90,8 @@ export const useRoomStore = create<RoomStore>((set) => ({
       hostParticipantId: isHost ? participantId : null,
     }),
 
-  leaveRoom: () => set({ session: null, participants: [], hostParticipantId: null }),
+  leaveRoom: () =>
+    set({ session: null, participants: [], hostParticipantId: null, leaderboard: [] }),
 
   setOpenViduToken: (token) =>
     set((state) =>
@@ -133,7 +139,8 @@ export const useRoomStore = create<RoomStore>((set) => ({
             id: payload.participantId,
             nickname: payload.nickname,
             stageRole: 'PARTICIPANT',
-            userId: payload.userId,
+            // payload에 userId가 없다. 직후 방 스냅샷 조회가 실제 값으로 덮어쓴다.
+            userId: -1,
           },
         ],
       };
@@ -151,13 +158,13 @@ export const useRoomStore = create<RoomStore>((set) => ({
 
   applyHostChanged: (payload) =>
     set((state) => ({
-      hostParticipantId: payload.newHostParticipantId,
+      hostParticipantId: payload.participantId,
       session:
         state.session === null
           ? null
           : {
               ...state.session,
-              isHost: state.session.myParticipantId === payload.newHostParticipantId,
+              isHost: state.session.myParticipantId === payload.participantId,
             },
     })),
 
@@ -167,4 +174,7 @@ export const useRoomStore = create<RoomStore>((set) => ({
         p.id === payload.participantId ? { ...p, connectionStatus: payload.status } : p,
       ),
     })),
+
+  // 서버가 정렬·순위까지 계산한 전체 목록을 내려주므로 그대로 교체한다.
+  applyLeaderboardUpdated: (payload) => set({ leaderboard: payload.items }),
 }));

@@ -132,3 +132,11 @@ export function terminateRoom(roomId: number): Promise<void> {
     auth: true,
   });
 }
+
+/** 방 나가기 (일반 참가자). 서버가 PARTICIPANT_LEFT 이벤트를 브로드캐스트한다 */
+export function leaveRoom(roomId: number): Promise<void> {
+  return apiClient<void>(`/api/rooms/${roomId}/leave`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
