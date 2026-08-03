@@ -67,6 +67,7 @@ public class FeedbackService {
                             .artist(song.getArtist())
                             .songId(song.getId())
                             .singAt(pr.getCreatedAt())
+                            .thumbnail(song.getThumbnailImageUrl())
                             .overall(pr.getOverall())
                             .score(pr.getFinalScore()).build();
                 }).toList())
@@ -111,6 +112,7 @@ public class FeedbackService {
                 .performanceId(performance.getId())
                 .title(song.getTitle())
                 .artist(song.getArtist())
+                .thumbnail(song.getThumbnailImageUrl())
                 .scores(FeedbackResponseDTO.ScoreDTO.builder()
                         .pitch(performance.getPitchScore())
                         .rhythm(performance.getRhythmScore())
