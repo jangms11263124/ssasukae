@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Objects;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -58,8 +59,11 @@ public class OpenViduGateway implements MediaSessionGateway {
     @Override
     public void closeSession(String sessionId) {
         try {
-            Session session = findActiveSession(sessionId);
-            session.close();
+            Optional<Session> session = findSession(sessionId);
+            if (session.isEmpty()) {
+                return;
+            }
+            session.get().close();
         } catch (OpenViduJavaClientException | OpenViduHttpException e) {
             throw new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED);
         }
@@ -67,11 +71,16 @@ public class OpenViduGateway implements MediaSessionGateway {
 
     private Session findActiveSession(String sessionId)
             throws OpenViduJavaClientException, OpenViduHttpException {
+        return findSession(sessionId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED));
+    }
+
+    private Optional<Session> findSession(String sessionId)
+            throws OpenViduJavaClientException, OpenViduHttpException {
         openVidu.fetch();
 
         return openVidu.getActiveSessions().stream()
                 .filter(session -> Objects.equals(session.getSessionId(), sessionId))
-                .findFirst()
-                .orElseThrow(() -> new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED));
+                .findFirst();
     }
 }

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +32,7 @@ import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 import com.ssafy.ssasukae.domain.room.type.RoomMode;
+import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
@@ -72,13 +74,13 @@ class OpenViduWebhookServiceTest {
         Room room = room();
         participant = RoomParticipant.join(room, user(), LocalDateTime.now());
         ReflectionTestUtils.setField(participant, "id", PARTICIPANT_ID);
-        when(roomParticipantRepository.findByIdForUpdate(PARTICIPANT_ID))
-                .thenReturn(Optional.of(participant));
     }
 
     @Test
     @DisplayName("participantLeft 수신 시 참가자를 DISCONNECTED로 변경하고 deadline을 저장한다")
     void handleParticipantLeftDisconnectsParticipantAndSavesDeadline() {
+        when(roomParticipantRepository.findByIdForUpdate(PARTICIPANT_ID))
+                .thenReturn(Optional.of(participant));
         participant.connect("connection-1");
         participant.promoteToPerformer();
         Instant before = Instant.now().plusSeconds(14);
@@ -99,6 +101,8 @@ class OpenViduWebhookServiceTest {
     @Test
     @DisplayName("이전 connectionId의 participantLeft는 현재 연결을 끊지 않는다")
     void handleParticipantLeftIgnoresOldConnection() {
+        when(roomParticipantRepository.findByIdForUpdate(PARTICIPANT_ID))
+                .thenReturn(Optional.of(participant));
         participant.connect("connection-new");
 
         service.handleParticipantLeft(request("participantLeft", "connection-old"));
@@ -112,6 +116,8 @@ class OpenViduWebhookServiceTest {
     @Test
     @DisplayName("participantJoined 재수신 시 참가자를 CONNECTED로 복구하고 deadline을 삭제한다")
     void handleParticipantJoinedReconnectsParticipantAndDeletesDeadline() {
+        when(roomParticipantRepository.findByIdForUpdate(PARTICIPANT_ID))
+                .thenReturn(Optional.of(participant));
         participant.connect("connection-old");
         participant.disconnect(LocalDateTime.now());
 
@@ -122,6 +128,41 @@ class OpenViduWebhookServiceTest {
         assertThat(participant.getDisconnectedAt()).isNull();
         verify(deadlineStore).delete(PARTICIPANT_ID);
         verify(webSocketEventPublisher).publishToRoom(eq(ROOM_ID), any());
+    }
+
+    @Test
+    @DisplayName("sessionDestroyed 수신 시 방을 즉시 종료하지 않고, CONNECTED 참가자를 participantLeft와 동일하게 유예 처리한다")
+    void handleSessionDestroyedDisconnectsConnectedParticipantsWithoutTerminatingRoom() {
+        participant.connect("connection-1");
+        Room room = participant.getRoom();
+        when(roomRepository.findByOpenViduSessionId(SESSION_ID)).thenReturn(Optional.of(room));
+        when(roomParticipantRepository.findAllByRoomIdAndConnectionStatusIn(ROOM_ID, List.of(ConnectionStatus.CONNECTED)))
+                .thenReturn(List.of(participant));
+        Instant before = Instant.now().plusSeconds(14);
+
+        service.handleSessionDestroyed(request("sessionDestroyed", "irrelevant"));
+
+        assertThat(participant.getConnectionStatus()).isEqualTo(ConnectionStatus.DISCONNECTED);
+        assertThat(room.getStatus()).isNotEqualTo(RoomStatus.TERMINATED);
+        verify(deadlineStore).save(
+                eq(PARTICIPANT_ID),
+                argThat(deadline -> deadline.isAfter(before))
+        );
+        verify(performanceConnectionRecoveryService)
+                .suspendForPerformerDisconnect(participant);
+        verify(webSocketEventPublisher).publishToRoom(eq(ROOM_ID), any());
+    }
+
+    @Test
+    @DisplayName("이미 종료된 방에 대한 sessionDestroyed는 아무 것도 하지 않는다")
+    void handleSessionDestroyedIgnoresAlreadyTerminatedRoom() {
+        Room room = participant.getRoom();
+        room.terminate(LocalDateTime.now());
+        when(roomRepository.findByOpenViduSessionId(SESSION_ID)).thenReturn(Optional.of(room));
+
+        service.handleSessionDestroyed(request("sessionDestroyed", "irrelevant"));
+
+        verifyNoInteractions(deadlineStore, performanceConnectionRecoveryService, webSocketEventPublisher);
     }
 
     private OpenViduWebhookRequest request(String event, String connectionId) {
