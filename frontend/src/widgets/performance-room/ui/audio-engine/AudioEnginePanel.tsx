@@ -1,5 +1,7 @@
 'use client';
 
+import { useRoomStore } from '@/entities/room';
+
 import { TEMPO_STEP_PERCENT } from '../../config/dspParams';
 import { useSettingsPublisher } from '../../model/useSettingsPublisher';
 import { useStageStore } from '../../model/stageStore';
@@ -28,14 +30,15 @@ function FaderIcon() {
 }
 
 interface SliderRowProps {
+  disabled?: boolean;
   label: string;
   onChange: (value: number) => void;
   value: number;
 }
 
-function SliderRow({ label, onChange, value }: SliderRowProps) {
+function SliderRow({ disabled = false, label, onChange, value }: SliderRowProps) {
   return (
-    <div>
+    <div className={disabled ? 'opacity-50' : undefined}>
       <div className="flex items-center justify-between font-mono text-xs tracking-[0.12em]">
         <span className="text-zinc-300">{label}</span>
         <span className="text-zinc-400">{value}%</span>
@@ -45,9 +48,10 @@ function SliderRow({ label, onChange, value }: SliderRowProps) {
         min={0}
         max={100}
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
         aria-label={label}
-        className="mt-2 h-1 w-full cursor-pointer appearance-none [&::-moz-range-thumb]:size-3.5 [&::-moz-range-thumb]:rounded-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-white [&::-webkit-slider-thumb]:size-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-white"
+        className="mt-2 h-1 w-full cursor-pointer appearance-none disabled:cursor-not-allowed [&::-moz-range-thumb]:size-3.5 [&::-moz-range-thumb]:rounded-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-white [&::-webkit-slider-thumb]:size-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:bg-white"
         style={{
           background: `linear-gradient(to right, #67e8f9 ${value}%, rgba(255,255,255,0.12) ${value}%)`,
         }}
@@ -57,20 +61,21 @@ function SliderRow({ label, onChange, value }: SliderRowProps) {
 }
 
 interface StepperRowProps {
+  disabled?: boolean;
   label: string;
   onChange: (value: number) => void;
   value: number;
 }
 
-function StepperRow({ label, onChange, value }: StepperRowProps) {
+function StepperRow({ disabled = false, label, onChange, value }: StepperRowProps) {
   return (
-    <div className="flex items-center justify-between">
+    <div className={disabled ? 'flex items-center justify-between opacity-50' : 'flex items-center justify-between'}>
       <span className="font-mono text-xs tracking-[0.12em] text-zinc-300">{label}</span>
       <div className="flex items-center gap-1.5">
         <button
           type="button"
           aria-label={`${label} 낮추기`}
-          disabled={value <= SHIFT_MIN}
+          disabled={disabled || value <= SHIFT_MIN}
           onClick={() => onChange(Math.max(SHIFT_MIN, value - 1))}
           className="grid size-7 place-items-center border border-white/25 text-sm text-zinc-300 transition-colors hover:border-cyan-300/60 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -82,7 +87,7 @@ function StepperRow({ label, onChange, value }: StepperRowProps) {
         <button
           type="button"
           aria-label={`${label} 높이기`}
-          disabled={value >= SHIFT_MAX}
+          disabled={disabled || value >= SHIFT_MAX}
           onClick={() => onChange(Math.min(SHIFT_MAX, value + 1))}
           className="grid size-7 place-items-center border border-white/25 text-sm text-zinc-300 transition-colors hover:border-cyan-300/60 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -98,6 +103,14 @@ function StepperRow({ label, onChange, value }: StepperRowProps) {
 export function AudioEnginePanel() {
   const settings = useStageStore((state) => state.settings);
   const publishSettings = useSettingsPublisher();
+  // 수성전에서 키/템포는 공격 카드 전용이므로 가창자가 직접 조절할 수 없다.
+  const isBattleMode = useRoomStore((state) => state.session?.mode === 'BATTLE');
+  // 공연 설정은 가창자 전용. 다른 참가자에게는 현재 값만 보여주고 조작을 잠근다.
+  const myParticipantId = useRoomStore((state) => state.session?.myParticipantId);
+  const performerParticipantId = useStageStore((state) => state.performerParticipantId);
+  const isPerformer =
+    myParticipantId !== undefined && myParticipantId === performerParticipantId;
+  const locked = !isPerformer;
 
   const mrVolume = settings.mrVolumePercent;
   const echo = settings.echoLevel;
@@ -120,11 +133,31 @@ export function AudioEnginePanel() {
       </h2>
 
       <div className="mt-4 space-y-4">
-        <SliderRow label="MR VOLUME" value={mrVolume} onChange={setMrVolume} />
-        <SliderRow label="ECHO" value={echo} onChange={setEcho} />
-        <StepperRow label="PITCH SHIFT" value={pitchShift} onChange={setPitchShift} />
-        <StepperRow label="TEMPO SHIFT" value={tempoShift} onChange={setTempoShift} />
+        <SliderRow label="MR VOLUME" value={mrVolume} onChange={setMrVolume} disabled={locked} />
+        <SliderRow label="ECHO" value={echo} onChange={setEcho} disabled={locked} />
+        {!isBattleMode ? (
+          <>
+            <StepperRow
+              label="PITCH SHIFT"
+              value={pitchShift}
+              onChange={setPitchShift}
+              disabled={locked}
+            />
+            <StepperRow
+              label="TEMPO SHIFT"
+              value={tempoShift}
+              onChange={setTempoShift}
+              disabled={locked}
+            />
+          </>
+        ) : null}
       </div>
+
+      {locked ? (
+        <p className="mt-3 font-mono text-[10px] tracking-[0.12em] text-zinc-500">
+          가창자만 조절할 수 있습니다
+        </p>
+      ) : null}
     </RoomPanel>
   );
 }

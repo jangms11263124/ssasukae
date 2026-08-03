@@ -11,12 +11,14 @@ import {
 import { showToast } from '@/shared/model/toastStore';
 
 import { SOUND_PANEL_LABEL } from '../../config/dspParams';
+import { useCardStore } from '../../model/cardStore';
 import { useGestureDspControl } from '../../model/useGestureDspControl';
 import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { useStageStore } from '../../model/stageStore';
 import { SoundIcon } from '../media-controls/MediaIcons';
 import { MediaToggleButton } from '../media-controls/MediaToggleButton';
+import { LyricsBlackout } from './overlays/LyricsBlackout';
 import { LyricsOverlay } from './overlays/LyricsOverlay';
 import { MediaControlsOverlay } from './overlays/MediaControlsOverlay';
 import { VocalDspPanel } from './overlays/VocalDspPanel';
@@ -64,6 +66,10 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
 
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
   const { localStream, remoteStreams } = useOpenViduSessionContext();
+
+  // 수성전 가사 가리기: 가창자의 시선에서만 가려지고 다른 참가자에게는 그대로 보인다.
+  const activeEffect = useCardStore((state) => state.activeEffect);
+  const lyricsHidden = isPerformer && activeEffect?.effectType === 'LYRICS_HIDE';
 
   // 가창자 본인은 publisher 스트림을, 참가자는 가창자의 remote 스트림을 무대 배경으로 깐다.
   const performerMedia =
@@ -141,7 +147,11 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
         </>
       ) : null}
 
-      <LyricsOverlay currentLine={MOCK_LYRICS.currentLine} nextLine={MOCK_LYRICS.nextLine} />
+      {lyricsHidden ? (
+        <LyricsBlackout />
+      ) : (
+        <LyricsOverlay currentLine={MOCK_LYRICS.currentLine} nextLine={MOCK_LYRICS.nextLine} />
+      )}
 
       {isPerformer ? (
         <>
