@@ -12,6 +12,7 @@ import { ReadyStage } from './ReadyStage';
 import { ScoreStage } from './ScoreStage';
 import { SingerSelectStage } from './SingerSelectStage';
 import { SongSelectStage } from './SongSelectStage';
+import { SuspendedOverlay } from './SuspendedOverlay';
 import { WaitingStage } from './WaitingStage';
 
 interface CenterStageProps {
@@ -24,6 +25,7 @@ export function CenterStage({ currentParticipantId, isHost, participants }: Cent
   const phase = useStageStore((state) => state.phase);
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
   const selectedSong = useStageStore((state) => state.selectedSong);
+  const isSuspended = useStageStore((state) => state.isSuspended);
 
   const isPerformer = performerParticipantId === currentParticipantId;
   const performer = participants.find(({ id }) => id === performerParticipantId) ?? null;
@@ -50,6 +52,7 @@ export function CenterStage({ currentParticipantId, isHost, participants }: Cent
   return (
     <div className="relative grid aspect-video min-h-[430px] overflow-hidden border border-white/10 bg-[#2c2c2f]">
       {STAGE_VIEWS[phase]}
+      {isSuspended ? <SuspendedOverlay isPerformer={isPerformer} /> : null}
       <CardDealOverlay />
       <CardCountdownOverlay />
       <ActiveEffectBanner />

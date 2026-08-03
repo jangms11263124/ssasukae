@@ -15,8 +15,9 @@ interface ScoreStageProps {
 }
 
 export function ScoreStage({ canEndStage }: ScoreStageProps) {
-  // 채점 결과(리더보드) 이벤트가 백엔드 미완성이라 점수가 없으면 채점 중으로 표시한다.
+  // 점수는 채점 완료 후 LEADERBOARD_UPDATED 이벤트가 채운다. 그 전까지 채점 중으로 표시한다.
   const score = useStageStore((state) => state.score);
+  const scoringFailed = useStageStore((state) => state.scoringFailed);
   const endStage = useStageStore((state) => state.endStage);
 
   return (
@@ -25,7 +26,9 @@ export function ScoreStage({ canEndStage }: ScoreStageProps) {
 
       <div className="absolute inset-0 grid place-items-center">
         <div className="grid size-72 place-content-center place-items-center rounded-full border-[5px] border-white/35 bg-black/25 backdrop-blur-[2px]">
-          {score === null ? (
+          {scoringFailed ? (
+            <p className="text-3xl font-black tracking-tight text-rose-400">채점 실패</p>
+          ) : score === null ? (
             <p className="text-3xl font-black tracking-tight text-cyan-300">채점 중...</p>
           ) : (
             <>

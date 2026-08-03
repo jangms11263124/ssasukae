@@ -29,33 +29,37 @@ export interface PongPayload {
 
 // ── Room 이벤트 payload ──────────────────────────────────────
 
+/** userId가 없어 목록 반영 후 방 스냅샷 조회로 보정해야 한다 */
 export interface ParticipantJoinedPayload {
   participantId: number;
-  userId: number;
   nickname: string;
-  role: string;
-  participantCount: number;
 }
 
 export interface ParticipantLeftPayload {
   participantId: number;
-  nickname: string;
-  participantCount: number;
 }
 
 export interface ParticipantKickedPayload {
   participantId: number;
-  nickname: string;
-  participantCount: number;
 }
 
 export interface PerformerSelectedPayload {
   performerId: number;
 }
 
+/** 새 방장의 participantId만 온다 */
 export interface RoomHostChangedPayload {
-  previousHostParticipantId: number;
-  newHostParticipantId: number;
+  participantId: number;
+}
+
+export interface RoomParticipantChatPayload {
+  participantId: number;
+  message: string;
+  sendAt: string;
+}
+
+export interface RoomTerminatedPayload {
+  terminatedAt: string;
 }
 
 export interface ParticipantConnectionStatusChangedPayload {

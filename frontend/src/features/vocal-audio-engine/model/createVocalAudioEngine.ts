@@ -127,9 +127,15 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.applyDsp(this.lastDsp);
   }
 
-  startMr(): void {
+  startMr(offsetSeconds?: number): void {
     if (this.disposed || this.player === null || this.player.state === 'started') return;
-    this.player.start();
+    // 곡 길이를 넘는 오프셋으로 시작하면 Tone이 예외를 던진다.
+    const duration = this.player.buffer.duration;
+    const offset =
+      offsetSeconds !== undefined && offsetSeconds > 0
+        ? Math.min(offsetSeconds, duration)
+        : undefined;
+    this.player.start(undefined, offset);
   }
 
   stopMr(): void {

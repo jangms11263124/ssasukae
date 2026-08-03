@@ -8,6 +8,8 @@ export interface UseVocalAudioEngineOptions {
   mrUrl: string | null;
   /** MR 재생 여부. 마이크도 재생 중에만 연다 */
   playing: boolean;
+  /** 재생 시작 위치(ms). 공연 재개 시 서버가 내려준 위치를 넘긴다. 기본 0(처음부터) */
+  startOffsetMs?: number;
   micOn: boolean;
   dsp: VocalDspValues;
   /** 빈 문자열이면 시스템 기본 장치 */
@@ -28,7 +30,16 @@ export interface VocalAudioEngineState {
  * 동적 import로 내려받는다 — enabled가 한 번도 true가 안 되면 번들 비용이 없다.
  */
 export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalAudioEngineState {
-  const { enabled, mrUrl, playing, micOn, micDeviceId, speakerDeviceId, dsp } = options;
+  const {
+    enabled,
+    mrUrl,
+    playing,
+    startOffsetMs = 0,
+    micOn,
+    micDeviceId,
+    speakerDeviceId,
+    dsp,
+  } = options;
   const { keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent } = dsp;
 
   const [engine, setEngine] = useState<VocalAudioEngine | null>(null);
@@ -86,18 +97,19 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
     };
   }, [engine, mrUrl]);
 
-  // MR 재생/정지
+  // MR 재생/정지. startOffsetMs는 일시 중지→재개 전이에서만 바뀌므로
+  // deps에 넣어도 재생 중 재시작이 일어나지 않는다.
   useEffect(() => {
     if (engine === null || !isMrLoaded || !playing) return;
 
-    engine.startMr();
+    engine.startMr(startOffsetMs > 0 ? startOffsetMs / 1000 : undefined);
     // 완료 조건의 모니터링 지연 측정 기록용. 실기 검증 후 제거해도 된다.
     console.info(`[vocal-audio-engine] 모니터링 지연 ≈ ${engine.getLatencyMs() ?? '측정 불가'}ms`);
 
     return () => {
       engine.stopMr();
     };
-  }, [engine, isMrLoaded, playing]);
+  }, [engine, isMrLoaded, playing, startOffsetMs]);
 
   // 마이크 열기/닫기 — 실패해도 MR 재생은 계속돼야 하므로 에러만 남긴다
   useEffect(() => {
