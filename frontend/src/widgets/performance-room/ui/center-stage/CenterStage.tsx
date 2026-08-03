@@ -4,6 +4,9 @@ import type { RoomParticipant } from '@/entities/participant';
 
 import { useStageAudioEngine } from '../../model/useStageAudioEngine';
 import { useStageStore, type StagePhase } from '../../model/stageStore';
+import { ActiveEffectBanner } from '../cards/ActiveEffectBanner';
+import { CardCountdownOverlay } from '../cards/CardCountdownOverlay';
+import { CardDealOverlay } from '../cards/CardDealOverlay';
 import { PerformingStage } from './PerformingStage';
 import { ReadyStage } from './ReadyStage';
 import { ScoreStage } from './ScoreStage';
@@ -45,8 +48,11 @@ export function CenterStage({ currentParticipantId, isHost, participants }: Cent
   };
 
   return (
-    <div className="grid aspect-video min-h-[430px] overflow-hidden border border-white/10 bg-[#2c2c2f]">
+    <div className="relative grid aspect-video min-h-[430px] overflow-hidden border border-white/10 bg-[#2c2c2f]">
       {STAGE_VIEWS[phase]}
+      <CardDealOverlay />
+      <CardCountdownOverlay />
+      <ActiveEffectBanner />
     </div>
   );
 }
