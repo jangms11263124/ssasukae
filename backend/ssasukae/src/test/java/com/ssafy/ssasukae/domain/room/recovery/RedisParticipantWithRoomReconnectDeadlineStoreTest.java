@@ -18,7 +18,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
 
 @ExtendWith(MockitoExtension.class)
-class RedisParticipantReconnectDeadlineStoreTest {
+class RedisParticipantWithRoomReconnectDeadlineStoreTest {
 
     private static final String DEADLINE_KEY = "room:participant:reconnect:deadlines";
 

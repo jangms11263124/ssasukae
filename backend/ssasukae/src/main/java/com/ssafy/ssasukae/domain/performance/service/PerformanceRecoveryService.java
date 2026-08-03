@@ -53,7 +53,17 @@ public class PerformanceRecoveryService {
       return;
     }
 
-    PerformanceSnapShot active = performanceStore.findActiveByRoomId(roomId).orElse(null);
+    recoverPerformerExitCaseWithLockedRoom(room, userId, cancelReason);
+  }
+
+  /** 호출자가 동일 트랜잭션에서 Room 쓰기 락을 이미 보유한 경우 사용한다. */
+  public void recoverPerformerExitCaseWithLockedRoom(
+      Room room, Long userId, PerformanceCancelReason cancelReason) {
+    if (room == null || !isPositive(userId)) {
+      return;
+    }
+
+    PerformanceSnapShot active = performanceStore.findActiveByRoomId(room.getId()).orElse(null);
     if (active == null
         || !active.performerUserId().equals(userId)
         || active.status() == PerformanceStatus.ANALYZING) {
@@ -106,12 +116,7 @@ public class PerformanceRecoveryService {
       return;
     }
 
-    if (current.status() == PerformanceStatus.SUSPENDED) {
-      cancellationProcessor.cancel(
-          room, current, PerformanceCancelReason.PERFORMER_DISCONNECTED);
-      return;
-    }
-
+    // 기존 버전에서 저장한 SUSPENDED deadline을 포함해 ANALYZING이 아닌 항목은 정리만 한다.
     deadlineStore.delete(performanceId);
   }
 

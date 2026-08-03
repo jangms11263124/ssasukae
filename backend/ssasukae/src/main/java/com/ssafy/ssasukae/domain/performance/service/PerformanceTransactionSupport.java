@@ -20,11 +20,17 @@ public class PerformanceTransactionSupport {
   private final PerformanceRecoveryDeadlineStore recoveryDeadlineStore;
 
   public void saveWithRollback(PerformanceSnapShot previous, PerformanceSnapShot changed) {
-    // 일단 현재 상태를 저장
-    performanceStore.save(changed);
+    if (!performanceStore.replace(previous, changed)) {
+      throw new IllegalStateException("공연 상태가 다른 요청에 의해 먼저 변경되었습니다.");
+    }
 
-    // 이 이후에 로직 실행하다가 만약 롤백해야할 경우에는 이전 상태를 다시 저장
-    restoreOnRollback(() -> performanceStore.save(previous));
+    // 롤백 보상도 방금 저장한 값이 그대로 남아 있을 때만 수행한다.
+    restoreOnRollback(
+        () -> {
+          if (!performanceStore.replace(changed, previous)) {
+            throw new IllegalStateException("롤백 중 공연 스냅샷이 이미 변경되었습니다.");
+          }
+        });
   }
 
   public void deletePerformance(PerformanceSnapShot snapShot) {

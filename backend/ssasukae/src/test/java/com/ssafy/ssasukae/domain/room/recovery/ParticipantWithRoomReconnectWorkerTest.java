@@ -20,7 +20,7 @@ import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryPropert
 import com.ssafy.ssasukae.domain.room.service.RoomService;
 
 @ExtendWith(MockitoExtension.class)
-class ParticipantReconnectWorkerTest {
+class ParticipantWithRoomReconnectWorkerTest {
 
     @Mock private ParticipantReconnectDeadlineStore deadlineStore;
     @Mock private RoomService roomService;

@@ -3,7 +3,9 @@ package com.ssafy.ssasukae.domain.performance.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -99,6 +101,7 @@ class PerformanceServiceTest {
 
   @BeforeEach
   void setUp() {
+    lenient().when(performanceStore.replace(any(), any())).thenReturn(true);
     PerformanceTransactionSupport transactionSupport =
         new PerformanceTransactionSupport(performanceStore, recoveryDeadlineStore);
     PerformanceCancellationProcessor cancellationProcessor =
@@ -234,10 +237,6 @@ class PerformanceServiceTest {
 
     when(performanceStore.create(any(PerformanceSnapShot.class))).thenReturn(true);
 
-    when(s3StorageService.presignedUrl("songs/20/mr.mp3")).thenReturn("https://cdn.test/mr");
-
-    when(s3StorageService.presignedUrl("songs/20/midi.json")).thenReturn("https://cdn.test/midi");
-
     beginTransaction();
 
     performanceService.prepare(USER_ID, ROOM_ID, new PerformancePrepareRequest(SONG_ID));
@@ -353,7 +352,7 @@ class PerformanceServiceTest {
     ArgumentCaptor<PerformanceSnapShot> changedCaptor =
         ArgumentCaptor.forClass(PerformanceSnapShot.class);
 
-    verify(performanceStore).save(changedCaptor.capture());
+    verify(performanceStore).replace(any(), changedCaptor.capture());
 
     PerformanceSnapShot changed = changedCaptor.getValue();
 
@@ -385,7 +384,7 @@ class PerformanceServiceTest {
         WebSocketErrorCode.PERFORMER_PERMISSION_REQUIRED,
         () -> performanceService.startPlayback(USER_ID, ROOM_ID, PERFORMANCE_ID));
 
-    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
+    verify(performanceStore, never()).replace(any(), any());
 
     verifyNoInteractions(eventPublisher);
   }
@@ -408,7 +407,7 @@ class PerformanceServiceTest {
         WebSocketErrorCode.PERFORMANCE_ROOM_MISMATCH,
         () -> performanceService.startPlayback(USER_ID, ROOM_ID, PERFORMANCE_ID));
 
-    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
+    verify(performanceStore, never()).replace(any(), any());
 
     verifyNoInteractions(eventPublisher);
   }
@@ -432,7 +431,7 @@ class PerformanceServiceTest {
         WebSocketErrorCode.PERFORMER_PERMISSION_REQUIRED,
         () -> performanceService.startPlayback(OTHER_USER_ID, ROOM_ID, PERFORMANCE_ID));
 
-    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
+    verify(performanceStore, never()).replace(any(), any());
 
     verifyNoInteractions(eventPublisher);
   }
@@ -459,7 +458,7 @@ class PerformanceServiceTest {
     ArgumentCaptor<PerformanceSnapShot> changedCaptor =
         ArgumentCaptor.forClass(PerformanceSnapShot.class);
 
-    verify(performanceStore).save(changedCaptor.capture());
+    verify(performanceStore).replace(any(), changedCaptor.capture());
 
     PerformanceSnapShot changed = changedCaptor.getValue();
 
@@ -497,7 +496,7 @@ class PerformanceServiceTest {
     rollbackTransaction();
 
     verify(recoveryDeadlineStore).delete(PERFORMANCE_ID);
-    verify(performanceStore).save(playing);
+    verify(performanceStore).replace(any(), eq(playing));
     verifyNoInteractions(eventPublisher);
   }
 
@@ -514,7 +513,7 @@ class PerformanceServiceTest {
         WebSocketErrorCode.PERFORMER_PERMISSION_REQUIRED,
         () -> performanceService.finishPlayback(USER_ID, ROOM_ID, PERFORMANCE_ID));
 
-    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
+    verify(performanceStore, never()).replace(any(), any());
 
     verifyNoInteractions(eventPublisher);
   }
@@ -540,7 +539,7 @@ class PerformanceServiceTest {
 
     assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
 
-    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
+    verify(performanceStore, never()).replace(any(), any());
     verify(performanceStore, never()).delete(any(PerformanceSnapShot.class));
 
     verifyNoInteractions(eventPublisher);
@@ -563,6 +562,23 @@ class PerformanceServiceTest {
                 PerformanceStatus.CANCELLED,
                 RoomStatus.PREPARING,
                 PerformanceCancelReason.PERFORMER_REQUEST));
+    verifyNoInteractions(recoveryDeadlineStore);
+  }
+
+  @Test
+  @DisplayName("분석 중인 공연을 취소하면 분석 timeout deadline을 삭제한다")
+  void cancelAnalyzingPerformanceDeletesAnalysisDeadline() {
+    Room room = playingRoom();
+    stubPlayingContext(room, performer(room));
+    PerformanceSnapShot analyzing =
+        preparingSnapshot().startPlayback(STARTED_AT).finishPlayback(STARTED_AT.plusMinutes(3));
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
+
+    beginTransaction();
+    performanceService.cancel(USER_ID, ROOM_ID, PERFORMANCE_ID);
+    commitTransaction();
+
+    verify(recoveryDeadlineStore).delete(PERFORMANCE_ID);
   }
 
   @Test
@@ -578,7 +594,7 @@ class PerformanceServiceTest {
         WebSocketErrorCode.PERFORMER_PERMISSION_REQUIRED,
         () -> performanceService.cancel(USER_ID, ROOM_ID, PERFORMANCE_ID));
 
-    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
+    verify(performanceStore, never()).replace(any(), any());
 
     verify(performanceStore, never()).delete(any(PerformanceSnapShot.class));
 
@@ -604,7 +620,7 @@ class PerformanceServiceTest {
         WebSocketErrorCode.INVALID_PERFORMANCE_STATE,
         () -> performanceService.startPlayback(USER_ID, ROOM_ID, PERFORMANCE_ID));
 
-    verify(performanceStore, never()).save(any(PerformanceSnapShot.class));
+    verify(performanceStore, never()).replace(any(), any());
 
     verifyNoInteractions(eventPublisher);
   }

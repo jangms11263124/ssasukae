@@ -268,13 +268,18 @@ public class RoomService {
 
     @Transactional
     public void terminateRoom(Long userId, Long roomId) {
-        Room room = roomRepository.findById(roomId)
+        Room room = roomRepository.findByIdForUpdate(roomId)
                 .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
         if (!room.isHost(userId)) {
             throw new CustomException(RoomErrorCode.HOST_ONLY);
         }
 
+        terminateLockedRoom(room);
+    }
+
+    private void terminateLockedRoom(Room room) {
+        Long roomId = room.getId();
         LocalDateTime now = LocalDateTime.now();
         room.terminate(now);
         if (cardService != null) {
@@ -285,16 +290,20 @@ public class RoomService {
                 roomParticipantRepository.findAllByRoomIdAndConnectionStatusIn(roomId, ACTIVE_STATUSES);
         activeParticipants.forEach(participant -> participant.leave(now));
 
-        mediaSessionGateway.closeSession(room.getOpenViduSessionId());
-        webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(ROOM_TERMINATED, roomId, new RoomTerminatedPayload(LocalDateTime.now())));
+        afterCommit(() -> {
+            mediaSessionGateway.closeSession(room.getOpenViduSessionId());
+            webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(ROOM_TERMINATED, roomId, new RoomTerminatedPayload(now)));
+        });
     }
 
     @Transactional
     public void leaveRoom(Long userId, Long roomId) {
-        Room currentRoom = roomRepository.findById(roomId)
+        Room currentRoom = roomRepository.findByIdForUpdate(roomId)
                 .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
-        RoomParticipant participant = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
+        RoomParticipant participantCandidate = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
+        RoomParticipant participant = roomParticipantRepository.findByIdForUpdate(participantCandidate.getId())
                 .orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
 
         if (!participant.isActive()) {
@@ -306,14 +315,17 @@ public class RoomService {
 
     @Transactional
     public void leaveByConnectionExpiration(Long participantId) {
+        RoomParticipant participantCandidate = roomParticipantRepository.findById(participantId).orElse(null);
+        if(participantCandidate == null) return;
+
+        Room currentRoom = roomRepository.findByIdForUpdate(participantCandidate.getRoom().getId())
+                .orElse(null);
+        if(currentRoom == null) return;
+
         RoomParticipant participant = roomParticipantRepository.findByIdForUpdate(participantId)
                 .orElse(null);
         if(participant == null
                 || participant.getConnectionStatus() != ConnectionStatus.DISCONNECTED) return;
-
-        Room currentRoom = roomRepository.findByIdForUpdate(participant.getRoom().getId())
-                .orElse(null);
-        if(currentRoom == null) return;
 
         leaveParticipant(currentRoom, participant, PerformanceCancelReason.PERFORMER_DISCONNECTED);
     }
@@ -324,8 +336,8 @@ public class RoomService {
             PerformanceCancelReason performanceCancelReason) {
         Long roomId = currentRoom.getId();
         Long userId = participant.getUser().getId();
-        performanceRecoveryService.recoverPerformerExitCase(
-                roomId,
+        performanceRecoveryService.recoverPerformerExitCaseWithLockedRoom(
+                currentRoom,
                 userId,
                 performanceCancelReason);
 
@@ -344,9 +356,9 @@ public class RoomService {
                     .orElse(null);
 
             if(newHost == null) {
-                terminateRoom(userId, roomId);
+                terminateLockedRoom(currentRoom);
                 participant.leave(LocalDateTime.now());
-                webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(PARTICIPANT_LEFT, roomId, new ParticipantLeftPayload(participant.getId())));
+                afterCommit(() -> webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(PARTICIPANT_LEFT, roomId, new ParticipantLeftPayload(participant.getId()))));
                 return;
             }
 
@@ -358,10 +370,12 @@ public class RoomService {
 
         participant.leave(LocalDateTime.now());
 
-        if (online) mediaSessionGateway.disconnect(currentRoom.getOpenViduSessionId(), connectionId);
-
-        if(newHost != null) webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(ROOM_HOST_CHANGED, roomId, new RoomHostChangedPayload(newHost.getId())));
-        webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(PARTICIPANT_LEFT, roomId, new ParticipantLeftPayload(participant.getId())));
+        RoomParticipant changedHost = newHost;
+        afterCommit(() -> {
+            if (online) mediaSessionGateway.disconnect(currentRoom.getOpenViduSessionId(), connectionId);
+            if(changedHost != null) webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(ROOM_HOST_CHANGED, roomId, new RoomHostChangedPayload(changedHost.getId())));
+            webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(PARTICIPANT_LEFT, roomId, new ParticipantLeftPayload(participant.getId())));
+        });
     }
 
     private User getUser(Long userId) {
@@ -422,39 +436,42 @@ public class RoomService {
     @Transactional
     public void hostChange(Long roomId, HostChangeRequest request, Principal principal) {
         User user = getUser(Long.valueOf(principal.getName()));
-        Room room = roomRepository.findById(roomId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+        Room room = roomRepository.findByIdForUpdate(roomId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
         if(room.getStatus() == RoomStatus.TERMINATED) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
         if(!room.isHost(user.getId())) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
-        RoomParticipant sender = roomParticipantRepository.findByRoomIdAndUserId(room.getId(), user.getId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED));
+        RoomParticipant senderCandidate = roomParticipantRepository.findByRoomIdAndUserId(room.getId(), user.getId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED));
+        RoomParticipant sender = roomParticipantRepository.findByIdForUpdate(senderCandidate.getId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED));
         if(!sender.isActive()) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
-        RoomParticipant receiver = roomParticipantRepository.findById(request.participantId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+        RoomParticipant receiver = roomParticipantRepository.findByIdForUpdate(request.participantId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
         if(!receiver.isActive()) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
 
         room.delegateHost(receiver.getUser());
-        webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(ROOM_HOST_CHANGED, room.getId(), new RoomHostChangedPayload(receiver.getId())));
+        afterCommit(() -> webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(ROOM_HOST_CHANGED, room.getId(), new RoomHostChangedPayload(receiver.getId()))));
     }
 
     @Transactional
     public void kickParticipant(Long roomId, Long participantId, Long userId) {
         User user = getUser(userId);
-        Room room = roomRepository.findById(roomId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+        Room room = roomRepository.findByIdForUpdate(roomId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
         if(room.getStatus() == RoomStatus.TERMINATED) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
         if(!room.isHost(user.getId())) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
-        RoomParticipant sender = roomParticipantRepository.findByRoomIdAndUserId(room.getId(), user.getId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED));
+        RoomParticipant senderCandidate = roomParticipantRepository.findByRoomIdAndUserId(room.getId(), user.getId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED));
+        RoomParticipant sender = roomParticipantRepository.findByIdForUpdate(senderCandidate.getId()).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.ROOM_ACCESS_DENIED));
         if(!sender.isActive()) throw new WebSocketException(WebSocketErrorCode.ACTION_NOT_ALLOWED);
-        RoomParticipant receiver = roomParticipantRepository.findById(participantId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+        RoomParticipant receiver = roomParticipantRepository.findByIdForUpdate(participantId).orElseThrow(() -> new WebSocketException(WebSocketErrorCode.RESOURCE_NOT_FOUND));
         if(!receiver.isActive()) throw new WebSocketException(WebSocketErrorCode.INVALID_ROOM_STATE);
 
         boolean online = receiver.isOnline();
         String connectionId = receiver.getConnectionId();
         receiver.kick(LocalDateTime.now());
-        performanceRecoveryService.recoverPerformerExitCase(
-                roomId,
+        performanceRecoveryService.recoverPerformerExitCaseWithLockedRoom(
+                room,
                 receiver.getUser().getId(),
                 PerformanceCancelReason.SAFETY_TERMINATION);
-        if (online) mediaSessionGateway.disconnect(room.getOpenViduSessionId(), connectionId);
-
-        webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_KICKED, room.getId(), new ParticipantKickedPayload(participantId)));
+        afterCommit(() -> {
+            if (online) mediaSessionGateway.disconnect(room.getOpenViduSessionId(), connectionId);
+            webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_KICKED, room.getId(), new ParticipantKickedPayload(participantId)));
+        });
     }
     @Transactional
     public void selectPerformer(Long hostUserId, Long roomId, Long performerParticipantId) {
@@ -469,7 +486,7 @@ public class RoomService {
             throw new CustomException(RoomErrorCode.ROOM_NOT_READY_FOR_PERFORMANCE);
         }
 
-        RoomParticipant performer = roomParticipantRepository.findById(performerParticipantId)
+        RoomParticipant performer = roomParticipantRepository.findByIdForUpdate(performerParticipantId)
                 .orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
 
         if (!performer.getRoom().getId().equals(roomId)) {
