@@ -94,6 +94,11 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.broadcastBus = new Tone.Volume(0);
     this.broadcastDestination = context.createMediaStreamDestination();
     this.broadcastBus.connect(this.broadcastDestination);
+    // 음성용 적응 처리(VAD·잡음 억제 성향)를 피하고 반주 포함 믹스를 음악으로 인코딩하게 한다
+    const [broadcastTrack] = this.broadcastDestination.stream.getAudioTracks();
+    if (broadcastTrack !== undefined) {
+      broadcastTrack.contentHint = 'music';
+    }
 
     // MR 경로
     this.mrGain = new Tone.Volume(volumePercentToDb(DEFAULT_DSP.mrVolumePercent));
@@ -152,6 +157,10 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
         ? Math.min(offsetSeconds, duration)
         : undefined;
     this.player.start(undefined, offset);
+    // 지연 분해 진단용 — base는 브라우저 버퍼, output은 OS 오디오 스택. 실기 검증 후 제거 예정.
+    console.info(
+      `[vocal-audio-engine] baseLatency=${Math.round(this.context.baseLatency * 1000)}ms outputLatency=${Math.round((this.context.outputLatency || 0) * 1000)}ms`,
+    );
   }
 
   stopMr(): void {
