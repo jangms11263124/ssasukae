@@ -1,3 +1,4 @@
+import type { CardAssignmentStatus, CardEffectType } from '@/entities/card';
 import type {
   ParticipantConnectionStatus,
   ParticipantStageRole,
@@ -17,13 +18,53 @@ export interface RoomSnapshotParticipant {
   host: boolean;
 }
 
+/** 수성전: 재접속한 나에게 배정되어 있던 카드 (이름/설명은 스냅샷에 없어 FE 폴백으로 그린다) */
+export interface RoomSnapshotMyCard {
+  performanceId: number;
+  status: CardAssignmentStatus;
+  cardId: number;
+  cardCode: string;
+  effectType: CardEffectType;
+  effectValue: number | null;
+  durationSeconds: number;
+}
+
+/** 수성전: 참가자별 카드 사용 상태 (무지개/회색 미니 카드 복원용) */
+export interface RoomSnapshotCardUsageStatus {
+  performanceId: number;
+  participantId: number;
+  status: CardAssignmentStatus;
+  usedAt: string | null;
+}
+
+/**
+ * 수성전: 현재 방에서 발동 대기(PENDING) 또는 적용 중(ACTIVE)인 카드.
+ * 카드 이름/설명은 스냅샷에 없어 effectType 폴백으로 그린다.
+ */
+export interface RoomSnapshotActiveCard {
+  performanceId: number;
+  roomCardStatus: 'IDLE' | 'PENDING' | 'ACTIVE';
+  sourceParticipantId: number;
+  targetParticipantId: number;
+  effectType: CardEffectType;
+  effectValue: number | null;
+  approvedAt: string | null;
+  activateAt: string | null;
+  startedAt: string | null;
+  endsAt: string | null;
+}
+
 export interface RoomSnapshotResponse {
   name: string;
   mode: RoomMode;
   status: RoomStatus;
   hostUserId: number;
   maxParticipants: number;
+  serverNow?: string;
   participants: RoomSnapshotParticipant[];
+  myCard?: RoomSnapshotMyCard | null;
+  cardUsageStatuses?: RoomSnapshotCardUsageStatus[];
+  activeCard?: RoomSnapshotActiveCard | null;
 }
 
 export interface RoomSessionResponse {

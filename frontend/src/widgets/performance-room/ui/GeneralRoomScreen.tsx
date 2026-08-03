@@ -8,12 +8,16 @@ import { useAuth } from '@/entities/user';
 import { ApiError } from '@/shared/api/client';
 import { showToast } from '@/shared/model/toastStore';
 
+import { hydrateCardsFromRoomSnapshot } from '../model/cardStore';
 import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
 import { RoomSocketProvider } from '../model/RoomSocketContext';
+import { useCardEffectSideEffects } from '../model/useCardEffectSideEffects';
 import { useOpenViduSession } from '../model/useOpenViduSession';
 import { useRoomSocket } from '../model/useRoomSocket';
 import { useStageStore } from '../model/stageStore';
 import { AudioEnginePanel } from './audio-engine/AudioEnginePanel';
+import { ActiveEffectPanel } from './cards/ActiveEffectPanel';
+import { MyCardDock } from './cards/MyCardDock';
 import { CenterStage } from './center-stage/CenterStage';
 import { RoomHelpFloatingButton } from './help/RoomHelpFloatingButton';
 import { MediaControlDock } from './media-controls/MediaControlDock';
@@ -38,6 +42,9 @@ export function GeneralRoomScreen() {
   const socket = useRoomSocket(session?.roomId ?? null);
   const media = useOpenViduSession();
 
+  // 수성전 MIC_OPEN 카드: 내가 대상이면 효과 시간 동안 마이크를 강제 개방한다.
+  useCardEffectSideEffects(session?.myParticipantId ?? null);
+
   // 방 세션 없이 직접 URL로 접근(새로고침 포함)하면 홈으로 돌려보낸다.
   // 방 정보 조회 응답에 초대 코드·OpenVidu 토큰이 없어 세션 전체는 복구할 수 없다.
   useEffect(() => {
@@ -61,6 +68,8 @@ export function GeneralRoomScreen() {
       .then((snapshot) => {
         if (!cancelled) {
           hydrateFromSnapshot(snapshot);
+          // 수성전 재접속: 내 카드·참가자별 카드 사용 상태를 스냅샷 기준으로 복원한다.
+          hydrateCardsFromRoomSnapshot(snapshot);
         }
       })
       .catch((error: unknown) => {
@@ -165,10 +174,12 @@ export function GeneralRoomScreen() {
 
               <ParticipantVideoGrid currentUserId={currentUserId} participants={stagedParticipants} />
               <MediaControlDock />
+              <MyCardDock />
             </section>
 
             <section className="flex flex-col gap-4" aria-label="우측 제어 영역">
               <NowPlayingCard />
+              <ActiveEffectPanel />
               <AudioEnginePanel />
               <div className="min-h-0 flex-1">
                 <TalkPanel />

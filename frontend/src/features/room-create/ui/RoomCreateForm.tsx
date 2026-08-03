@@ -41,7 +41,7 @@ export function RoomCreateForm() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (mode !== 'GENERAL' || trimmedName === '' || isPending) {
+    if (trimmedName === '' || isPending) {
       return;
     }
 
@@ -129,14 +129,11 @@ export function RoomCreateForm() {
             );
           })}
         </div>
-        {mode === 'BATTLE' && (
-          <p className="mt-3 text-xs text-amber-300/70">수성전 모드는 준비 중입니다.</p>
-        )}
       </fieldset>
 
       <button
         type="submit"
-        disabled={mode !== 'GENERAL' || trimmedName === '' || isPending}
+        disabled={trimmedName === '' || isPending}
         className="h-12 w-full border border-cyan-300/60 bg-cyan-300/10 font-semibold text-cyan-100 transition-colors hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.02] disabled:text-zinc-600"
       >
         {isPending ? '방 만드는 중...' : '방 만들기'}
