@@ -19,6 +19,8 @@ export interface FeedbackItem {
   songId: number;
   title: string;
   artist: string;
+  /** 앨범 썸네일 URL. 백엔드 fix/89 머지 전 응답에는 없을 수 있다. */
+  thumbnail?: string | null;
   /** LocalDateTime 문자열. 예: "2026-07-22T14:59:27.965355" */
   singAt: string;
   /** AI 총평. 분석 전이면 null일 수 있다. */
@@ -32,4 +34,28 @@ export interface FeedbackListPage {
   hasNext: boolean;
   /** 필터 조건에 맞는 전체 개수 */
   total: number;
+}
+
+/** 지표 점수. 전부 0~100 스케일이며, 분석 전이면 null일 수 있다. */
+export interface FeedbackScores {
+  pitch: number | null;
+  rhythm: number | null;
+  lyricsAccuracy: number | null;
+  stability: number | null;
+  difficulty: number | null;
+  total: number | null;
+}
+
+export interface FeedbackDetail {
+  performanceId: number;
+  title: string;
+  artist: string;
+  /** 앨범 썸네일 URL. 백엔드 fix/89 머지 전 응답에는 없을 수 있다. */
+  thumbnail?: string | null;
+  scores: FeedbackScores;
+  /** AI 총평/강점/약점/개선 팁. 분석 전이면 null일 수 있다. */
+  overall: string | null;
+  strength: string | null;
+  weakness: string | null;
+  tip: string | null;
 }
