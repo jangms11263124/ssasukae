@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 
@@ -9,6 +9,7 @@ import { RoomPanel } from './RoomPanel';
 const ROOM_MODE_LABEL = {
   BATTLE: '수성전 모드',
   GENERAL: '일반 모드',
+  LOW_LATENCY: '고급 모드',
 } satisfies Record<RoomSummary['mode'], string>;
 
 const COPIED_MESSAGE_DURATION_MS = 2000;

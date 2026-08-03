@@ -1,5 +1,6 @@
 package com.ssafy.ssasukae.domain.room.controller;
 
+import com.ssafy.ssasukae.domain.room.dto.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -11,12 +12,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
-import com.ssafy.ssasukae.domain.room.dto.RoomCreateResponse;
-import com.ssafy.ssasukae.domain.room.dto.RoomJoinResponse;
-import com.ssafy.ssasukae.domain.room.dto.RoomPerformerSelectRequest;
-import com.ssafy.ssasukae.domain.room.dto.RoomSnapshotResponse;
-import com.ssafy.ssasukae.domain.room.dto.RoomTokenResponse;
 import com.ssafy.ssasukae.domain.room.service.RoomService;
 import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
 
@@ -46,6 +41,12 @@ public class RoomController {
             @PathVariable String inviteCode
     ) {
         RoomJoinResponse response = roomService.joinRoom(authenticatedUser.userId(), inviteCode);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/invite/{inviteCode}")
+    public ResponseEntity<RoomInviteResponse> getRoomByInviteCode(@PathVariable String inviteCode) {
+        RoomInviteResponse response = roomService.getRoomByInviteCode(inviteCode);
         return ResponseEntity.ok(response);
     }
 

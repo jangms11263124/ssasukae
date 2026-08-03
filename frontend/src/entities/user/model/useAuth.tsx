@@ -37,6 +37,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 5_000);
 
     async function bootstrapAuth() {
       if (useAuthStore.getState().accessToken) {
@@ -58,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const refreshed = await refreshAccessToken();
+        const refreshed = await refreshAccessToken(controller.signal);
         if (!cancelled) {
           setAccessToken(refreshed.accessToken);
         }
@@ -67,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearAccessToken();
         }
       } finally {
+        window.clearTimeout(timeoutId);
         if (!cancelled) {
           setIsBootstrapped(true);
         }
@@ -77,6 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
   }, [clearAccessToken, setAccessToken]);
 

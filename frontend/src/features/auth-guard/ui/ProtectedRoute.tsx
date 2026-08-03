@@ -5,10 +5,12 @@ import { usePathname, useRouter } from 'next/navigation';
 
 import { useAuth } from '@/entities/user';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/oauth/callback', '/login-error'] as const;
+const PUBLIC_ROUTES = ['/', '/login', '/signup', '/oauth/callback', '/login-error'] as const;
 
 function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  return PUBLIC_ROUTES.some(
+    (route) => pathname === route || (route !== '/' && pathname.startsWith(`${route}/`)),
+  );
 }
 
 function AuthLoadingScreen() {

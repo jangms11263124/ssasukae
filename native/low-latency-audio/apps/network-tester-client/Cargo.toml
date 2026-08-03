@@ -1,0 +1,10 @@
+[package]
+name = "network-tester-client"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+ctrlc.workspace = true
+metrics = { path = "../../crates/metrics" }
+protocol = { path = "../../crates/protocol" }

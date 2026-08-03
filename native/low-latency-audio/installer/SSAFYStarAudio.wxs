@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+    Id="*"
+    Name="SSAFY STAR Low Latency Audio"
+    Language="1042"
+    Version="0.1.0"
+    Manufacturer="SSAFY STAR"
+    UpgradeCode="8F624A9E-2259-4E19-91D7-0B0CA0EE31D8">
+    <Package
+      InstallerVersion="500"
+      Compressed="yes"
+      InstallScope="perUser"
+      Description="SSAFY STAR low-latency encrypted P2P karaoke audio client" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="CompanyFolder" Name="SSAFYStar">
+          <Directory Id="INSTALLFOLDER" Name="LowLatencyAudio">
+            <Component Id="ApplicationFiles" Guid="*">
+              <File Id="AudioGuiExe" Source="target\release\audio-gui.exe" KeyPath="yes" />
+            </Component>
+            <Component Id="UrlProtocolRegistration" Guid="*">
+              <RegistryKey Root="HKCU" Key="Software\Classes\ssafystar">
+                <RegistryValue Type="string" Value="URL:SSAFY STAR Low Latency Audio" KeyPath="yes" />
+                <RegistryValue Name="URL Protocol" Type="string" Value="" />
+                <RegistryKey Key="DefaultIcon">
+                  <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]audio-gui.exe&quot;,0" />
+                </RegistryKey>
+                <RegistryKey Key="shell\open\command">
+                  <RegistryValue Type="string" Value="&quot;[INSTALLFOLDER]audio-gui.exe&quot; &quot;%1&quot;" />
+                </RegistryKey>
+              </RegistryKey>
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="SSAFY STAR">
+          <Component Id="StartMenuShortcut" Guid="*">
+            <Shortcut
+              Id="ApplicationStartMenuShortcut"
+              Name="Low Latency Audio"
+              Description="SSAFY STAR Low Latency Audio"
+              Target="[INSTALLFOLDER]audio-gui.exe"
+              WorkingDirectory="INSTALLFOLDER" />
+            <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+            <RegistryValue
+              Root="HKCU"
+              Key="Software\SSAFYStar\LowLatencyAudio"
+              Name="installed"
+              Type="integer"
+              Value="1"
+              KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="Complete" Title="SSAFY STAR Low Latency Audio" Level="1">
+      <ComponentRef Id="ApplicationFiles" />
+      <ComponentRef Id="UrlProtocolRegistration" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+  </Product>
+</Wix>

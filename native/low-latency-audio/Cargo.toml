@@ -1,3 +1,46 @@
 [workspace]
-members = ["apps/audio-app"]
 resolver = "2"
+members = [
+    "crates/protocol",
+    "crates/metrics",
+    "crates/audio-core",
+    "apps/audio-relay-server",
+    "apps/network-tester-client",
+    "apps/audio-client",
+    "apps/audio-gui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+[workspace.dependencies]
+ctrlc = "3.4"
+tokio = { version = "1.49", features = ["rt-multi-thread", "sync", "time"] }
+webrtc-ice = "0.17.1"
+webrtc-util = "0.17.1"
+windows-sys = { version = "0.61", features = ["Win32_System_Threading"] }
+windows = { version = "0.54", features = [
+    "Win32_Devices_FunctionDiscovery",
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_UI_Shell_PropertiesSystem",
+] }
+ropus = "0.12.18"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tungstenite = { version = "0.26", default-features = false, features = ["handshake", "rustls-tls-native-roots"] }
+chacha20poly1305 = "0.10"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+hkdf = "0.12"
+rand_core = { version = "0.6", features = ["getrandom"] }
+sha2 = "0.10"
+x25519-dalek = { version = "2", features = ["static_secrets"] }

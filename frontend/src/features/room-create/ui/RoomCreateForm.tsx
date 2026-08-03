@@ -22,6 +22,11 @@ const ROOM_MODES = [
     label: '수성전 모드',
     value: 'BATTLE',
   },
+  {
+    description: '전용 Rust 오디오 앱으로 초저지연 음성 합주를 진행합니다.',
+    label: '고급 모드',
+    value: 'LOW_LATENCY',
+  },
 ] satisfies Array<{
   description: string;
   label: string;
@@ -41,7 +46,7 @@ export function RoomCreateForm() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (trimmedName === '' || isPending) {
+    if (mode !== 'GENERAL' || trimmedName === '' || isPending) {
       return;
     }
 
@@ -60,7 +65,11 @@ export function RoomCreateForm() {
             openViduToken: response.openViduToken,
             me: { userId: user?.id ?? 0, nickname: user?.nickname ?? '나' },
           });
-          router.push(`/rooms/general?roomId=${response.roomId}`);
+          router.push(
+            mode === 'LOW_LATENCY'
+              ? `/rooms/low-latency?roomId=${response.roomId}`
+              : `/rooms/general?roomId=${response.roomId}`,
+          );
         },
         onError: (error) => {
           const message =
@@ -92,7 +101,7 @@ export function RoomCreateForm() {
 
       <fieldset>
         <legend className="text-sm font-semibold text-zinc-200">모드 선택</legend>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
           {ROOM_MODES.map((roomMode) => {
             const isSelected = mode === roomMode.value;
 

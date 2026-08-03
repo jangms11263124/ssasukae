@@ -92,11 +92,20 @@ export function MainHome({ className }: MainHomeProps) {
       </main>
 
       <footer className="relative z-10 border-t border-white/10 bg-[#131315]">
-        <div className="mx-auto flex h-12 max-w-[1500px] items-center justify-between gap-4 px-6 font-mono text-[9px] text-zinc-600 sm:px-10">
+        <div className="mx-auto flex min-h-12 max-w-[1500px] flex-wrap items-center justify-between gap-3 px-6 py-2 font-mono text-[9px] text-zinc-600 sm:px-10">
           <span>[ROOM_SYSTEM] CREATE_CHANNEL_READY :: INVITE_CHANNEL_READY</span>
-          <span className="hidden sm:inline">
-            CORE_STATUS: OPTIMAL &nbsp; LATENCY: 12MS &nbsp; ENCRYPTION: AES_256
-          </span>
+          <div className="flex items-center gap-4">
+            <span className="hidden lg:inline">
+              CORE_STATUS: OPTIMAL &nbsp; LATENCY: 12MS &nbsp; ENCRYPTION: AES_256
+            </span>
+            <a
+              href="/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi"
+              download
+              className="border border-cyan-300/40 px-3 py-1.5 text-cyan-200 transition-colors hover:border-cyan-200 hover:bg-cyan-300/10 hover:text-white"
+            >
+              저지연 오디오 앱 다운로드 · WINDOWS
+            </a>
+          </div>
         </div>
       </footer>
     </div>

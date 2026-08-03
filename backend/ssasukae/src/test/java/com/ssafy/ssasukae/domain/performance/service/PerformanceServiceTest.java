@@ -216,6 +216,8 @@ class PerformanceServiceTest {
                             PARTICIPANT_ID,
                             SONG_ID,
                             "테스트 곡",
+                            "테스트 가수",
+                            180,
                             3,
                             "songs/20/cover.jpg",
                             "https://cdn.test/mr",
@@ -275,6 +277,27 @@ class PerformanceServiceTest {
     verify(performanceStore, never()).create(any(PerformanceSnapShot.class));
 
     verifyNoInteractions(songRepository, s3StorageService, eventPublisher);
+  }
+
+  @Test
+  @DisplayName("저지연 방에서는 연결된 일반 참가자도 자신의 앱에서 공연을 준비할 수 있다")
+  void lowLatencyParticipantCanPrepareWithoutPerformerRole() {
+    Room room = lowLatencyPreparingRoom();
+    RoomParticipant participant = participant(room, USER_ID, PARTICIPANT_ID);
+    Song song = songWithResources();
+
+    stubPrepareContext(room, participant, song);
+    when(performanceStore.nextPerformanceId()).thenReturn(PERFORMANCE_ID);
+    when(performanceStore.create(any(PerformanceSnapShot.class))).thenReturn(true);
+    when(s3StorageService.presignedUrl("songs/20/mr.mp3")).thenReturn("https://cdn.test/mr");
+    when(s3StorageService.presignedUrl("songs/20/midi.json")).thenReturn("https://cdn.test/midi");
+    when(s3StorageService.presignedUrl("songs/20/lyrics.json"))
+        .thenReturn("https://cdn.test/lyrics");
+
+    performanceService.prepare(USER_ID, ROOM_ID, new PerformancePrepareRequest(SONG_ID));
+
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
+    verify(performanceStore).create(any(PerformanceSnapShot.class));
   }
 
   @Test
@@ -519,6 +542,40 @@ class PerformanceServiceTest {
     verifyNoInteractions(eventPublisher);
   }
 
+  @Test
+  @DisplayName("저지연 공연은 분석 대기 없이 종료되고 방이 다음 곡 준비 상태로 돌아간다")
+  void lowLatencyFinishSkipsAnalysisAndRecoversRoom() {
+    Room room = lowLatencyPlayingRoom();
+    RoomParticipant participant = participant(room, USER_ID, PARTICIPANT_ID);
+    stubPlayingContext(room, participant);
+
+    PerformanceSnapShot playing = preparingSnapshot().startPlayback(STARTED_AT);
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(playing));
+
+    beginTransaction();
+    performanceService.finishPlayback(USER_ID, ROOM_ID, PERFORMANCE_ID);
+
+    ArgumentCaptor<PerformanceSnapShot> changedCaptor =
+        ArgumentCaptor.forClass(PerformanceSnapShot.class);
+    verify(performanceStore).save(changedCaptor.capture());
+    PerformanceSnapShot changed = changedCaptor.getValue();
+
+    assertThat(changed.status()).isEqualTo(PerformanceStatus.FINISHED);
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
+    verify(recoveryDeadlineStore, never()).save(any(), any());
+    verify(cardService, never()).closeForPerformance(any(), any());
+
+    commitTransaction();
+
+    verify(performanceStore).delete(changed);
+    verify(eventPublisher)
+        .publish(
+            ROOM_ID,
+            PerformanceWebSocketEventType.PLAYBACK_FINISHED,
+            new PlaybackFinishedPayload(
+                PERFORMANCE_ID, PARTICIPANT_ID, changed.playbackFinishedAt()));
+  }
+
   /*
    * 공연 취소
    */
@@ -648,6 +705,26 @@ class PerformanceServiceTest {
 
   private Room playingRoom() {
     Room room = preparingRoom();
+    room.startPerformance();
+    return room;
+  }
+
+  private Room lowLatencyPreparingRoom() {
+    Room room =
+        Room.create(
+            "LOW123",
+            "저지연 방",
+            RoomMode.LOW_LATENCY,
+            user(USER_ID),
+            "openvidu-low-latency-session",
+            LocalDateTime.of(2026, 7, 28, 9, 0));
+
+    ReflectionTestUtils.setField(room, "id", ROOM_ID);
+    return room;
+  }
+
+  private Room lowLatencyPlayingRoom() {
+    Room room = lowLatencyPreparingRoom();
     room.startPerformance();
     return room;
   }

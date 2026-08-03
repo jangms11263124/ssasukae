@@ -1,0 +1,9 @@
+[package]
+name = "audio-relay-server"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+ctrlc.workspace = true
+protocol = { path = "../../crates/protocol" }
