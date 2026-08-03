@@ -1,5 +1,3 @@
-'use client';
-
 import Image from 'next/image';
 
 import { BRAND_LOGO_SRC, BRAND_NAME } from '@/shared/config/brand';
