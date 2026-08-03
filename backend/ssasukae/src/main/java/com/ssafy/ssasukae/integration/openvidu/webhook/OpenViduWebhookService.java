@@ -27,6 +27,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 @Service
@@ -76,6 +77,34 @@ public class OpenViduWebhookService {
         if(!Objects.equals(participant.getConnectionId(), connectionId)) return;
         if(participant.getConnectionStatus() != ConnectionStatus.CONNECTED) return;
 
+        disconnectWithGracePeriod(participant);
+    }
+
+    /**
+     * OpenVidu가 세션을 자체 소멸시켰을 때(마지막 참가자의 비정상 연결 끊김 등) 호출된다.
+     * sessionDestroyed는 세션 단위 이벤트라 connectionId/serverData가 없어 특정 참가자를 지목할 수 없으므로,
+     * 해당 방의 CONNECTED 참가자 전원을 participantLeft와 동일하게 처리한다.
+     *
+     * 방을 여기서 즉시 terminate하지 않는다 — 15초 유예를 그대로 적용하고, 유예가 끝나
+     * ParticipantReconnectWorker가 leaveByConnectionExpiration을 호출할 때 남은 활성 참가자가 없으면
+     * RoomService.leaveParticipant가 자동으로 방을 종료한다. 이렇게 해야 room.terminate()가
+     * (여기서 한 번 + 유예 만료 후 leaveParticipant에서 또 한 번) 중복 호출되면서
+     * OpenViduGateway.closeSession()이 이미 사라진 세션을 다시 닫으려다 예외를 던지고,
+     * 그 예외로 트랜잭션 전체(참가자 leave() 포함)가 롤백되는 문제를 피할 수 있다.
+     */
+    @Transactional
+    public void handleSessionDestroyed(OpenViduWebhookRequest request) {
+        Room room = roomRepository.findByOpenViduSessionId(request.sessionId()).orElse(null);
+        if (room == null) return;
+        if (room.getStatus() == RoomStatus.TERMINATED) return;
+
+        List<RoomParticipant> connectedParticipants = roomParticipantRepository
+                .findAllByRoomIdAndConnectionStatusIn(room.getId(), List.of(ConnectionStatus.CONNECTED));
+
+        connectedParticipants.forEach(this::disconnectWithGracePeriod);
+    }
+
+    private void disconnectWithGracePeriod(RoomParticipant participant) {
         participant.disconnect(LocalDateTime.now());
         deadlineStore.save(
                 participant.getId(),
@@ -85,15 +114,6 @@ public class OpenViduWebhookService {
         performanceConnectionRecoveryService.suspendForPerformerDisconnect(participant);
 
         webSocketEventPublisher.publishToRoom(participant.getRoom().getId(), WebSocketEvent.roomEvent(RoomWebSocketEventType.PARTICIPANT_CONNECTION_STATUS_CHANGED, participant.getRoom().getId(), new ParticipantConnectionStatusChangedPayload(participant.getId(), ParticipantStatus.DISCONNECTED)));
-    }
-
-    @Transactional
-    public void handleSessionDestroyed(OpenViduWebhookRequest request) {
-        Room room = roomRepository.findByOpenViduSessionId(request.sessionId()).orElse(null);
-        if (room == null) return;
-        if (room.getStatus() == RoomStatus.TERMINATED) return;
-
-        room.terminate(LocalDateTime.now());
     }
 
     private void validateRequest(OpenViduWebhookRequest request) {
