@@ -79,13 +79,10 @@ const MOCK_DEFENDER = { participantId: 502, nickname: '현호' } as const;
 function seedMockParticipants() {
   const { applyParticipantJoined } = useRoomStore.getState();
 
-  [MOCK_ATTACKER, MOCK_DEFENDER].forEach((mock, index) => {
+  [MOCK_ATTACKER, MOCK_DEFENDER].forEach((mock) => {
     applyParticipantJoined({
       participantId: mock.participantId,
-      userId: 9000 + index,
       nickname: mock.nickname,
-      role: 'PARTICIPANT',
-      participantCount: index + 1,
     });
   });
 }

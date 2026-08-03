@@ -15,7 +15,8 @@ export interface VocalDspValues {
 export interface VocalAudioEngine {
   /** MR을 받아 디코드한다. 같은 URL로 다시 부르면 캐시를 재사용한다 */
   loadMr(url: string): Promise<void>;
-  startMr(): void;
+  /** offsetSeconds부터 재생한다 (공연 재개용). 생략하면 처음부터 */
+  startMr(offsetSeconds?: number): void;
   stopMr(): void;
   /** deviceId가 빈 문자열이면 시스템 기본 장치를 연다 */
   openMic(deviceId: string): Promise<void>;
