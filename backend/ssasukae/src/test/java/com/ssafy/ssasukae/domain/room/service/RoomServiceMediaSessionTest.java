@@ -225,7 +225,7 @@ class RoomServiceMediaSessionTest {
     // given
     User host = user(1L);
     Room room = room(10L, "openvidu-session-1", host);
-    when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
 
     // when
     roomService.terminateRoom(1L, 10L);
@@ -241,7 +241,7 @@ class RoomServiceMediaSessionTest {
     // given
     User host = user(1L);
     Room room = room(10L, "openvidu-session-1", host);
-    when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
 
     // when & then
     assertThatThrownBy(() -> roomService.terminateRoom(2L, 10L))
@@ -256,15 +256,16 @@ class RoomServiceMediaSessionTest {
     Room room = room(10L, "openvidu-session-1");
     RoomParticipant participant =
         connectedParticipant(room, 100L, 2L, "participant-connection");
-    when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByRoomIdAndUserId(10L, 2L))
         .thenReturn(Optional.of(participant));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
 
     roomService.leaveRoom(2L, 10L);
 
     assertThat(participant.isActive()).isFalse();
     verify(performanceRecoveryService)
-        .recoverPerformerExitCase(10L, 2L, PerformanceCancelReason.PERFORMER_REQUEST);
+        .recoverPerformerExitCaseWithLockedRoom(room, 2L, PerformanceCancelReason.PERFORMER_REQUEST);
     verify(mediaSessionGateway)
         .disconnect("openvidu-session-1", "participant-connection");
   }
@@ -274,6 +275,7 @@ class RoomServiceMediaSessionTest {
   void leaveByConnectionExpirationLeavesDisconnectedParticipant() {
     Room room = room(10L, "openvidu-session-1");
     RoomParticipant participant = participant(room, 100L, ConnectionStatus.DISCONNECTED);
+    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(participant));
     when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
 
@@ -281,7 +283,7 @@ class RoomServiceMediaSessionTest {
 
     assertThat(participant.getConnectionStatus()).isEqualTo(ConnectionStatus.LEFT);
     verify(performanceRecoveryService)
-        .recoverPerformerExitCase(10L, 2L, PerformanceCancelReason.PERFORMER_DISCONNECTED);
+        .recoverPerformerExitCaseWithLockedRoom(room, 2L, PerformanceCancelReason.PERFORMER_DISCONNECTED);
     verify(mediaSessionGateway, never()).disconnect(any(), any());
   }
 
@@ -290,6 +292,8 @@ class RoomServiceMediaSessionTest {
   void leaveByConnectionExpirationIgnoresConnectedParticipant() {
     Room room = room(10L, "openvidu-session-1");
     RoomParticipant participant = participant(room, 100L, ConnectionStatus.CONNECTED);
+    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(participant));
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
 
     roomService.leaveByConnectionExpiration(100L);
@@ -309,10 +313,11 @@ class RoomServiceMediaSessionTest {
     RoomParticipant receiver =
         connectedParticipant(room, 100L, 2L, "participant-connection");
     when(userRepository.findById(1L)).thenReturn(Optional.of(host));
-    when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByRoomIdAndUserId(10L, 1L))
         .thenReturn(Optional.of(sender));
-    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(receiver));
+    when(roomParticipantRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(sender));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(receiver));
 
     roomService.kickParticipant(10L, 100L, 1L);
 
@@ -332,10 +337,11 @@ class RoomServiceMediaSessionTest {
         connectedParticipant(room, 100L, 2L, "participant-connection");
     receiver.disconnect(LocalDateTime.now());
     when(userRepository.findById(1L)).thenReturn(Optional.of(host));
-    when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByRoomIdAndUserId(10L, 1L))
         .thenReturn(Optional.of(sender));
-    when(roomParticipantRepository.findById(100L)).thenReturn(Optional.of(receiver));
+    when(roomParticipantRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(sender));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(receiver));
 
     roomService.kickParticipant(10L, 100L, 1L);
 

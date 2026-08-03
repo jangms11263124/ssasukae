@@ -156,8 +156,8 @@ class PerformanceRecoveryServiceTest {
   }
 
   @Test
-  @DisplayName("가창자 재개 준비 제한시간이 지나면 중단된 공연을 취소한다")
-  void recoverExpiredCancelsSuspendedPerformance() {
+  @DisplayName("기존 버전의 SUSPENDED deadline은 공연을 취소하지 않고 정리한다")
+  void recoverExpiredDeletesLegacySuspendedDeadline() {
     Room room = playingRoom();
     PerformanceSnapShot suspended =
         playingSnapshot().suspendForPerformerDisconnect(STARTED_AT.plusSeconds(30));
@@ -165,13 +165,10 @@ class PerformanceRecoveryServiceTest {
         .thenReturn(Optional.of(suspended));
     when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
 
-    beginTransaction();
     service.recoverExpired(PERFORMANCE_ID, suspended.suspendedAt().toInstant().plusSeconds(15));
 
-    assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
-    commitTransaction();
-
-    verify(performanceStore).delete(suspended);
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
+    verify(performanceStore, never()).delete(suspended);
     verify(deadlineStore).delete(PERFORMANCE_ID);
   }
 
@@ -204,7 +201,7 @@ class PerformanceRecoveryServiceTest {
 
     commitTransaction();
 
-    verify(deadlineStore).delete(PERFORMANCE_ID);
+    verifyNoInteractions(deadlineStore);
     verify(performanceStore).delete(playing);
   }
 
