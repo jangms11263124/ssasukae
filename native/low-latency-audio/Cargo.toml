@@ -1,0 +1,3 @@
+[workspace]
+members = ["apps/audio-app"]
+resolver = "2"
