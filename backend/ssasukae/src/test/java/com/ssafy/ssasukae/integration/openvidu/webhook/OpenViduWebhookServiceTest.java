@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -16,12 +18,16 @@ import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.service.PerformanceConnectionRecoveryService;
@@ -74,13 +80,22 @@ class OpenViduWebhookServiceTest {
         Room room = room();
         participant = RoomParticipant.join(room, user(), LocalDateTime.now());
         ReflectionTestUtils.setField(participant, "id", PARTICIPANT_ID);
+        lenient().when(roomRepository.findByOpenViduSessionIdForUpdate(SESSION_ID))
+                .thenReturn(Optional.of(room));
+        lenient().when(roomParticipantRepository.findByIdForUpdate(PARTICIPANT_ID))
+                .thenReturn(Optional.of(participant));
+    }
+
+    @AfterEach
+    void clearTransactionSynchronization() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
     @DisplayName("participantLeft 수신 시 참가자를 DISCONNECTED로 변경하고 deadline을 저장한다")
     void handleParticipantLeftDisconnectsParticipantAndSavesDeadline() {
-        when(roomParticipantRepository.findByIdForUpdate(PARTICIPANT_ID))
-                .thenReturn(Optional.of(participant));
         participant.connect("connection-1");
         participant.promoteToPerformer();
         Instant before = Instant.now().plusSeconds(14);
@@ -94,15 +109,17 @@ class OpenViduWebhookServiceTest {
                 argThat(deadline -> deadline.isAfter(before))
         );
         verify(performanceConnectionRecoveryService)
-                .suspendForPerformerDisconnect(participant);
+                .suspendForPerformerDisconnectWithLockedRoom(participant.getRoom(), participant);
         verify(webSocketEventPublisher).publishToRoom(eq(ROOM_ID), any());
+
+        InOrder lockOrder = inOrder(roomRepository, roomParticipantRepository);
+        lockOrder.verify(roomRepository).findByOpenViduSessionIdForUpdate(SESSION_ID);
+        lockOrder.verify(roomParticipantRepository).findByIdForUpdate(PARTICIPANT_ID);
     }
 
     @Test
     @DisplayName("이전 connectionId의 participantLeft는 현재 연결을 끊지 않는다")
     void handleParticipantLeftIgnoresOldConnection() {
-        when(roomParticipantRepository.findByIdForUpdate(PARTICIPANT_ID))
-                .thenReturn(Optional.of(participant));
         participant.connect("connection-new");
 
         service.handleParticipantLeft(request("participantLeft", "connection-old"));
@@ -116,16 +133,20 @@ class OpenViduWebhookServiceTest {
     @Test
     @DisplayName("participantJoined 재수신 시 참가자를 CONNECTED로 복구하고 deadline을 삭제한다")
     void handleParticipantJoinedReconnectsParticipantAndDeletesDeadline() {
-        when(roomParticipantRepository.findByIdForUpdate(PARTICIPANT_ID))
-                .thenReturn(Optional.of(participant));
         participant.connect("connection-old");
         participant.disconnect(LocalDateTime.now());
+        TransactionSynchronizationManager.initSynchronization();
 
         service.handleParticipantJoined(request("participantJoined", "connection-new"));
 
         assertThat(participant.getConnectionStatus()).isEqualTo(ConnectionStatus.CONNECTED);
         assertThat(participant.getConnectionId()).isEqualTo("connection-new");
         assertThat(participant.getDisconnectedAt()).isNull();
+        verifyNoInteractions(deadlineStore);
+        verify(webSocketEventPublisher, never()).publishToRoom(any(), any());
+
+        commitTransaction();
+
         verify(deadlineStore).delete(PARTICIPANT_ID);
         verify(webSocketEventPublisher).publishToRoom(eq(ROOM_ID), any());
     }
@@ -135,7 +156,6 @@ class OpenViduWebhookServiceTest {
     void handleSessionDestroyedDisconnectsConnectedParticipantsWithoutTerminatingRoom() {
         participant.connect("connection-1");
         Room room = participant.getRoom();
-        when(roomRepository.findByOpenViduSessionId(SESSION_ID)).thenReturn(Optional.of(room));
         when(roomParticipantRepository.findAllByRoomIdAndConnectionStatusIn(ROOM_ID, List.of(ConnectionStatus.CONNECTED)))
                 .thenReturn(List.of(participant));
         Instant before = Instant.now().plusSeconds(14);
@@ -149,7 +169,7 @@ class OpenViduWebhookServiceTest {
                 argThat(deadline -> deadline.isAfter(before))
         );
         verify(performanceConnectionRecoveryService)
-                .suspendForPerformerDisconnect(participant);
+                .suspendForPerformerDisconnectWithLockedRoom(room, participant);
         verify(webSocketEventPublisher).publishToRoom(eq(ROOM_ID), any());
     }
 
@@ -158,7 +178,7 @@ class OpenViduWebhookServiceTest {
     void handleSessionDestroyedIgnoresAlreadyTerminatedRoom() {
         Room room = participant.getRoom();
         room.terminate(LocalDateTime.now());
-        when(roomRepository.findByOpenViduSessionId(SESSION_ID)).thenReturn(Optional.of(room));
+        when(roomRepository.findByOpenViduSessionIdForUpdate(SESSION_ID)).thenReturn(Optional.of(room));
 
         service.handleSessionDestroyed(request("sessionDestroyed", "irrelevant"));
 
@@ -180,6 +200,15 @@ class OpenViduWebhookServiceTest {
                 null,
                 null
         );
+    }
+
+    private void commitTransaction() {
+        List<TransactionSynchronization> synchronizations =
+                TransactionSynchronizationManager.getSynchronizations();
+        synchronizations.forEach(TransactionSynchronization::afterCommit);
+        synchronizations.forEach(synchronization ->
+                synchronization.afterCompletion(TransactionSynchronization.STATUS_COMMITTED));
+        TransactionSynchronizationManager.clearSynchronization();
     }
 
     private Room room() {

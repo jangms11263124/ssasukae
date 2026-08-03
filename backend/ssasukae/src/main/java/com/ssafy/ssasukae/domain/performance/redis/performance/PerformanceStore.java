@@ -10,6 +10,8 @@ public interface PerformanceStore {
 
     void save(PerformanceSnapShot session);
 
+    boolean replace(PerformanceSnapShot expected, PerformanceSnapShot changed);
+
     Optional<PerformanceSnapShot> findByPerformanceId(Long performanceId);
 
     Optional<PerformanceSnapShot> findActiveByRoomId(Long roomId);

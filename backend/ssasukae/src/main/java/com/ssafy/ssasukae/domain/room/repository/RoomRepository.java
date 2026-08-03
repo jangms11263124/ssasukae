@@ -27,4 +27,8 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
 
     @Query("SELECT r FROM Room r WHERE r.openViduSessionId = :s")
     Optional<Room> findByOpenViduSessionId(String s);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM Room r WHERE r.openViduSessionId = :sessionId")
+    Optional<Room> findByOpenViduSessionIdForUpdate(@Param("sessionId") String sessionId);
 }

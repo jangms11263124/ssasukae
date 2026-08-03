@@ -43,7 +43,7 @@ public class RedisPerformanceStore implements PerformanceStore {
 
     // 공연 세션의 Redis 저장 유지 시간
     private static final Duration SESSION_TTL =
-            Duration.ofHours(6);
+            Duration.ofMinutes(20);
 
     // 활성 공연 키의 현재 값이 전달받은 공연 ID와 일치할 때만 해당 키를 삭제하는 Lua 스크립트
     private static final DefaultRedisScript<Long>
@@ -52,6 +52,39 @@ public class RedisPerformanceStore implements PerformanceStore {
                     "if redis.call('get', KEYS[1]) == ARGV[1] "
                             + "then return redis.call('del', KEYS[1]) "
                             + "else return 0 end",
+                    Long.class
+            );
+
+    private static final DefaultRedisScript<Long> CREATE_SCRIPT =
+            new DefaultRedisScript<>(
+                    "if redis.call('exists', KEYS[1]) == 1 then return 0 end "
+                            + "redis.call('psetex', KEYS[1], ARGV[3], ARGV[1]) "
+                            + "redis.call('psetex', KEYS[2], ARGV[3], ARGV[2]) return 1",
+                    Long.class
+            );
+
+    private static final DefaultRedisScript<Long> SAVE_ACTIVE_SCRIPT =
+            new DefaultRedisScript<>(
+                    "if redis.call('get', KEYS[1]) ~= ARGV[1] then return 0 end "
+                            + "redis.call('psetex', KEYS[2], ARGV[3], ARGV[2]) "
+                            + "redis.call('pexpire', KEYS[1], ARGV[3]) return 1",
+                    Long.class
+            );
+
+    private static final DefaultRedisScript<Long> REPLACE_IF_UNCHANGED_SCRIPT =
+            new DefaultRedisScript<>(
+                    "if redis.call('get', KEYS[1]) ~= ARGV[1] then return -1 end "
+                            + "if redis.call('get', KEYS[2]) ~= ARGV[2] then return 0 end "
+                            + "redis.call('psetex', KEYS[2], ARGV[4], ARGV[3]) "
+                            + "redis.call('pexpire', KEYS[1], ARGV[4]) return 1",
+                    Long.class
+            );
+
+    private static final DefaultRedisScript<Long> DELETE_SESSION_SCRIPT =
+            new DefaultRedisScript<>(
+                    "local deleted = redis.call('del', KEYS[2]) "
+                            + "if redis.call('get', KEYS[1]) == ARGV[1] then "
+                            + "deleted = deleted + redis.call('del', KEYS[1]) end return deleted",
                     Long.class
             );
 
@@ -79,100 +112,50 @@ public class RedisPerformanceStore implements PerformanceStore {
     @Override
     public boolean create(PerformanceSnapShot session) {
         String activeRoomKey = activeRoomKey(session.roomId());
-
         String performanceId = session.performanceId().toString();
-
         String serializedSession = serialize(session);
-
-        /*
-         * 해당 방에 활성 공연 키가 존재하지 않을 때만 저장한다.
-         *
-         * 여러 서버에서 동시에 공연 생성을 요청해도
-         * 하나의 요청만 활성 공연 키를 선점할 수 있다.
-         */
-        Boolean reserved = redisTemplate
-                        .opsForValue()
-                        .setIfAbsent(
-                                activeRoomKey,
-                                performanceId,
-                                SESSION_TTL
-                        );
-        if (!Boolean.TRUE.equals(reserved)) {
-            return false;
-        }
-
-        try {
-            /*
-             * 활성 공연 키 선점에 성공한 뒤
-             * 실제 공연 Snapshot을 저장한다.
-             */
-            redisTemplate
-                    .opsForValue()
-                    .set(
-                            sessionKey(session.performanceId()),
-                            serializedSession,
-                            SESSION_TTL
-                    );
-
-            return true;
-        } catch (RuntimeException exception) {
-            /*
-             * Snapshot 저장에 실패했는데 활성 공연 키만 남으면
-             * 이후 공연 생성이 계속 거부될 수 있다.
-             *
-             * 현재 활성 공연 ID가 방금 선점한 ID와 일치할 때만
-             * 활성 공연 키를 제거한다.
-             */
-            releaseActiveRoom(
-                    activeRoomKey,
-                    performanceId
-            );
-
-            throw exception;
-        }
+        Long created = redisTemplate.execute(
+                CREATE_SCRIPT,
+                java.util.List.of(activeRoomKey, sessionKey(session.performanceId())),
+                performanceId,
+                serializedSession,
+                Long.toString(SESSION_TTL.toMillis())
+        );
+        return Long.valueOf(1L).equals(created);
     }
 
     // 현재 활성화된 공연 Snapshot을 갱신한다.
     @Override
     public void save(PerformanceSnapShot session) {
         String activeRoomKey = activeRoomKey(session.roomId());
-
         String performanceId = session.performanceId().toString();
-
-        String currentActiveId = redisTemplate
-                        .opsForValue()
-                        .get(activeRoomKey);
-
-        /*
-         * 현재 방의 활성 공연 ID와 저장하려는 공연 ID가 다르면
-         * 해당 Snapshot을 저장하지 않는다.
-         *
-         * currentActiveId가 null인 경우에도 equals() 결과가 false이므로
-         * 종료된 공연을 다시 활성화하지 않는다.
-         */
-        if (!performanceId.equals(currentActiveId)) {
-            throw new IllegalStateException(
-                    "현재 활성화된 공연 세션이 아닙니다."
-            );
+        Long saved = redisTemplate.execute(
+                SAVE_ACTIVE_SCRIPT,
+                java.util.List.of(activeRoomKey, sessionKey(session.performanceId())),
+                performanceId,
+                serialize(session),
+                Long.toString(SESSION_TTL.toMillis())
+        );
+        if (!Long.valueOf(1L).equals(saved)) {
+            throw new IllegalStateException("현재 활성화된 공연 세션이 아닙니다.");
         }
+    }
 
-        /*
-         * 현재 활성 공연의 Snapshot만 갱신한다.
-         */
-        redisTemplate
-                .opsForValue().set(
-                        sessionKey(session.performanceId()),
-                        serialize(session),
-                        SESSION_TTL
-                );
-
-        /*
-         * 공연 요청이 계속 처리되는 동안 활성 공연 키가
-         * Snapshot보다 먼저 만료되지 않도록 TTL을 연장한다.
-         *
-         * 활성 공연 키의 값은 다시 저장하지 않고 만료 시간만 갱신한다.
-         */
-        redisTemplate.expire(activeRoomKey, SESSION_TTL);
+    @Override
+    public boolean replace(PerformanceSnapShot expected, PerformanceSnapShot changed) {
+        if (!expected.performanceId().equals(changed.performanceId())
+                || !expected.roomId().equals(changed.roomId())) {
+            throw new IllegalArgumentException("같은 공연 스냅샷끼리만 교체할 수 있습니다.");
+        }
+        Long replaced = redisTemplate.execute(
+                REPLACE_IF_UNCHANGED_SCRIPT,
+                java.util.List.of(activeRoomKey(changed.roomId()), sessionKey(changed.performanceId())),
+                changed.performanceId().toString(),
+                serialize(expected),
+                serialize(changed),
+                Long.toString(SESSION_TTL.toMillis())
+        );
+        return Long.valueOf(1L).equals(replaced);
     }
 
     // 공연 ID를 기준으로 공연 Snapshot을 조회한다.
@@ -262,12 +245,9 @@ public class RedisPerformanceStore implements PerformanceStore {
     // 공연 Snapshot과 방별 활성 공연 연결 정보를 삭제한다.
     @Override
     public void delete(PerformanceSnapShot session) {
-        redisTemplate.delete(
-                sessionKey(session.performanceId())
-        );
-
-        releaseActiveRoom(
-                activeRoomKey(session.roomId()),
+        redisTemplate.execute(
+                DELETE_SESSION_SCRIPT,
+                java.util.List.of(activeRoomKey(session.roomId()), sessionKey(session.performanceId())),
                 session.performanceId().toString()
         );
     }

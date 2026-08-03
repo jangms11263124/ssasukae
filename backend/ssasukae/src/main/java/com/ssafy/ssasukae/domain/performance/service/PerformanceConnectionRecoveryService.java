@@ -1,6 +1,5 @@
 package com.ssafy.ssasukae.domain.performance.service;
 
-import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
@@ -11,8 +10,6 @@ import com.ssafy.ssasukae.domain.card.service.CardService;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectEndReason;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
-import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
-import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventPublisher;
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventType;
@@ -40,8 +37,6 @@ public class PerformanceConnectionRecoveryService {
   private final PerformanceTransactionSupport transactionSupport;
   private final PerformanceWebSocketEventPublisher eventPublisher;
   private final CardService cardService;
-  private final PerformanceRecoveryDeadlineStore deadlineStore;
-  private final PerformanceRecoveryProperties recoveryProperties;
 
   @Transactional
   public void suspendForPerformerDisconnect(RoomParticipant participant) {
@@ -50,6 +45,14 @@ public class PerformanceConnectionRecoveryService {
     }
 
     Room room = roomRepository.findByIdForUpdate(participant.getRoom().getId()).orElse(null);
+    suspendForPerformerDisconnectWithLockedRoom(room, participant);
+  }
+
+  /** 호출자가 동일 트랜잭션에서 Room 쓰기 락을 이미 보유한 경우 사용한다. */
+  public void suspendForPerformerDisconnectWithLockedRoom(Room room, RoomParticipant participant) {
+    if (participant == null || !participant.isPerformer()) {
+      return;
+    }
     if (room == null || room.getStatus() != RoomStatus.PLAYING) {
       return;
     }
@@ -67,9 +70,6 @@ public class PerformanceConnectionRecoveryService {
     OffsetDateTime suspendedAt = now();
     PerformanceSnapShot suspended = cardRestored.suspendForPerformerDisconnect(suspendedAt);
     transactionSupport.saveWithRollback(previous, suspended);
-    Instant deadline = suspendedAt.toInstant().plus(recoveryProperties.getPerformerDisconnectGrace());
-    deadlineStore.save(suspended.performanceId(), deadline);
-    transactionSupport.restoreOnRollback(() -> deadlineStore.delete(suspended.performanceId()));
     transactionSupport.afterCommit(
         () ->
             eventPublisher.publish(
@@ -120,13 +120,6 @@ public class PerformanceConnectionRecoveryService {
     OffsetDateTime resumeAt = now();
     PerformanceSnapShot resumed = suspended.resumeAfterPerformerReconnect(resumeAt);
     transactionSupport.saveWithRollback(suspended, resumed);
-    deadlineStore.delete(resumed.performanceId());
-    transactionSupport.restoreOnRollback(
-        () ->
-            deadlineStore.save(
-                suspended.performanceId(),
-                suspended.suspendedAt().toInstant()
-                    .plus(recoveryProperties.getPerformerDisconnectGrace())));
     transactionSupport.afterCommit(
         () ->
             eventPublisher.publish(

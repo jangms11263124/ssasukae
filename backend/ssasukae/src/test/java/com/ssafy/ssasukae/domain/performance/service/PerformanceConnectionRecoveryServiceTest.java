@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -22,7 +24,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.ssafy.ssasukae.domain.card.service.CardService;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectEndReason;
 import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryDeadlineStore;
-import com.ssafy.ssasukae.domain.performance.recovery.PerformanceRecoveryProperties;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
@@ -46,7 +47,6 @@ class PerformanceConnectionRecoveryServiceTest {
   @Mock private PerformanceRecoveryDeadlineStore deadlineStore;
   @Mock private PerformanceWebSocketEventPublisher eventPublisher;
   @Mock private CardService cardService;
-  private PerformanceRecoveryProperties recoveryProperties;
 
   private PerformanceConnectionRecoveryService service;
   private Room room;
@@ -55,9 +55,9 @@ class PerformanceConnectionRecoveryServiceTest {
 
   @BeforeEach
   void setUp() {
+    lenient().when(performanceStore.replace(any(), any())).thenReturn(true);
     PerformanceTransactionSupport transactionSupport =
         new PerformanceTransactionSupport(performanceStore, deadlineStore);
-    recoveryProperties = new PerformanceRecoveryProperties();
     service =
         new PerformanceConnectionRecoveryService(
             roomRepository,
@@ -65,9 +65,7 @@ class PerformanceConnectionRecoveryServiceTest {
             performanceStore,
             transactionSupport,
             eventPublisher,
-            cardService,
-            deadlineStore,
-            recoveryProperties);
+            cardService);
 
     User user =
         User.builder()
@@ -107,10 +105,11 @@ class PerformanceConnectionRecoveryServiceTest {
     service.suspendForPerformerDisconnect(performer);
 
     ArgumentCaptor<PerformanceSnapShot> captor = ArgumentCaptor.forClass(PerformanceSnapShot.class);
-    verify(performanceStore).save(captor.capture());
+    verify(performanceStore).replace(any(), captor.capture());
     assertThat(captor.getValue().status()).isEqualTo(PerformanceStatus.SUSPENDED);
     verify(eventPublisher)
         .publish(eq(10L), eq(PerformanceWebSocketEventType.PERFORMANCE_SUSPENDED), any());
+    verifyNoInteractions(deadlineStore);
   }
 
   @Test
@@ -125,9 +124,10 @@ class PerformanceConnectionRecoveryServiceTest {
     service.resumeAfterPerformerReady(1L, 10L, 30L);
 
     ArgumentCaptor<PerformanceSnapShot> captor = ArgumentCaptor.forClass(PerformanceSnapShot.class);
-    verify(performanceStore).save(captor.capture());
+    verify(performanceStore).replace(any(), captor.capture());
     assertThat(captor.getValue().status()).isEqualTo(PerformanceStatus.PLAYING);
     verify(eventPublisher)
         .publish(eq(10L), eq(PerformanceWebSocketEventType.PERFORMANCE_RESUMED), any());
+    verifyNoInteractions(deadlineStore);
   }
 }
