@@ -15,6 +15,11 @@ const FALLBACK_SOCKET: RoomSocketApi = {
   sendPlaybackFinish: noop,
   sendSettings: noop,
   sendCancel: noop,
+  sendCardActivate: noop,
+  sendResumeReady: noop,
+  sendChat: noop,
+  sendHostChange: noop,
+  sendKick: noop,
 };
 
 const RoomSocketContext = createContext<RoomSocketApi>(FALLBACK_SOCKET);

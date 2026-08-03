@@ -1,19 +1,29 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { getRoomSnapshot, terminateRoom, useRoomStore } from '@/entities/room';
+import type { RoomParticipant } from '@/entities/participant';
+import {
+  getRoomSnapshot,
+  leaveRoom as requestLeaveRoom,
+  terminateRoom,
+  useRoomStore,
+} from '@/entities/room';
 import { useAuth } from '@/entities/user';
 import { ApiError } from '@/shared/api/client';
 import { showToast } from '@/shared/model/toastStore';
 
+import { hydrateCardsFromRoomSnapshot } from '../model/cardStore';
 import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
 import { RoomSocketProvider } from '../model/RoomSocketContext';
+import { useCardEffectSideEffects } from '../model/useCardEffectSideEffects';
 import { useOpenViduSession } from '../model/useOpenViduSession';
 import { useRoomSocket } from '../model/useRoomSocket';
 import { useStageStore } from '../model/stageStore';
 import { AudioEnginePanel } from './audio-engine/AudioEnginePanel';
+import { ActiveEffectPanel } from './cards/ActiveEffectPanel';
+import { MyCardDock } from './cards/MyCardDock';
 import { CenterStage } from './center-stage/CenterStage';
 import { RoomHelpFloatingButton } from './help/RoomHelpFloatingButton';
 import { MediaControlDock } from './media-controls/MediaControlDock';
@@ -29,6 +39,7 @@ export function GeneralRoomScreen() {
   const session = useRoomStore((state) => state.session);
   const participants = useRoomStore((state) => state.participants);
   const hostParticipantId = useRoomStore((state) => state.hostParticipantId);
+  const leaderboard = useRoomStore((state) => state.leaderboard);
   const leaveRoomStore = useRoomStore((state) => state.leaveRoom);
   const hydrateFromSnapshot = useRoomStore((state) => state.hydrateFromSnapshot);
 
@@ -38,13 +49,22 @@ export function GeneralRoomScreen() {
   const socket = useRoomSocket(session?.roomId ?? null);
   const media = useOpenViduSession();
 
+  // 수성전 MIC_OPEN 카드: 내가 대상이면 효과 시간 동안 마이크를 강제 개방한다.
+  useCardEffectSideEffects(session?.myParticipantId ?? null);
+
   // 방 세션 없이 직접 URL로 접근(새로고침 포함)하면 홈으로 돌려보낸다.
   // 방 정보 조회 응답에 초대 코드·OpenVidu 토큰이 없어 세션 전체는 복구할 수 없다.
+  // 강퇴·방 종료로 세션이 비워진 경우는 소켓 핸들러가 이미 안내했으므로 조용히 이동만 한다.
+  const hadSessionRef = useRef(session !== null);
   useEffect(() => {
-    if (session === null) {
-      showToast('방 정보가 없습니다. 다시 입장해 주세요.', 'error');
-      router.replace('/lobby');
+    if (session !== null) {
+      hadSessionRef.current = true;
+      return;
     }
+    if (!hadSessionRef.current) {
+      showToast('방 정보가 없습니다. 다시 입장해 주세요.', 'error');
+    }
+    router.replace('/lobby');
   }, [session, router]);
 
   // 입장 시 방 정보를 조회해 기존 참가자 목록·방장·방 메타를 서버 기준으로 맞춘다.
@@ -61,6 +81,8 @@ export function GeneralRoomScreen() {
       .then((snapshot) => {
         if (!cancelled) {
           hydrateFromSnapshot(snapshot);
+          // 수성전 재접속: 내 카드·참가자별 카드 사용 상태를 스냅샷 기준으로 복원한다.
+          hydrateCardsFromRoomSnapshot(snapshot);
         }
       })
       .catch((error: unknown) => {
@@ -111,24 +133,25 @@ export function GeneralRoomScreen() {
     await navigator.clipboard.writeText(session.inviteCode);
   };
 
-  // 방장 위임·강퇴는 WebSocket SEND 명세가 백엔드 미완성이라 아직 연동 대상이 아니다.
-  const handleDelegateHost = () => {
-    showToast('방장 위임 기능은 준비 중입니다.', 'info');
+  const handleDelegateHost = (participant: RoomParticipant) => {
+    socket.sendHostChange(participant.id);
   };
 
-  const handleKickParticipant = () => {
-    showToast('강제 퇴장 기능은 준비 중입니다.', 'info');
+  const handleKickParticipant = (participant: RoomParticipant) => {
+    socket.sendKick(participant.id);
   };
 
   const handleLeaveRoom = async () => {
     try {
-      // 방장은 방 종료 API를 호출한다. 참가자 퇴장 SEND는 백엔드 미완성이라 로컬 정리만 한다.
+      // 방장은 방을 종료하고, 일반 참가자는 본인만 퇴장한다.
       if (session.isHost) {
         await terminateRoom(session.roomId);
+      } else {
+        await requestLeaveRoom(session.roomId);
       }
     } catch (error) {
       const message =
-        error instanceof ApiError ? error.message : '방 종료에 실패했습니다.';
+        error instanceof ApiError ? error.message : '방 나가기에 실패했습니다.';
       showToast(message, 'error');
     } finally {
       endStage();
@@ -148,7 +171,7 @@ export function GeneralRoomScreen() {
               participants={stagedParticipants}
               currentUserId={currentUserId}
               hostParticipantId={hostParticipantId ?? -1}
-              leaderboard={[]}
+              leaderboard={leaderboard}
               canManageParticipants={canManageParticipants}
               onCopyInviteCode={handleCopyInviteCode}
               onDelegateHost={handleDelegateHost}
@@ -165,10 +188,12 @@ export function GeneralRoomScreen() {
 
               <ParticipantVideoGrid currentUserId={currentUserId} participants={stagedParticipants} />
               <MediaControlDock />
+              <MyCardDock />
             </section>
 
             <section className="flex flex-col gap-4" aria-label="우측 제어 영역">
               <NowPlayingCard />
+              <ActiveEffectPanel />
               <AudioEnginePanel />
               <div className="min-h-0 flex-1">
                 <TalkPanel />

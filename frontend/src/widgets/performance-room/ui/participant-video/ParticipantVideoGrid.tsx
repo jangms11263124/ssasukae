@@ -2,9 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 
+import { HoloMiniCard } from '@/entities/card';
 import type { RoomParticipant } from '@/entities/participant';
 import { cn } from '@/shared/lib/cn';
 
+import { useCardStore, type ParticipantCardState } from '../../model/cardStore';
 import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
 import type { RemoteMedia } from '../../model/useOpenViduSession';
 
@@ -61,17 +63,28 @@ function RemoteVideo({ media, nickname }: RemoteVideoProps) {
 function ParticipantVideoTile({
   participant,
   media,
+  cardState,
 }: {
   participant: RoomParticipant;
   media: RemoteMedia | undefined;
+  cardState: ParticipantCardState | undefined;
 }) {
   return (
-    <div className="flex w-[calc((100%-2rem)/3)] min-w-0 flex-col border border-white/10 bg-[#1c1c1f] p-2">
-      <div className="relative grid aspect-video place-items-center border border-white/5 bg-[#242428]">
-        {media !== undefined ? <RemoteVideo media={media} nickname={participant.nickname} /> : null}
-        {media === undefined || !media.videoActive ? <PersonIcon /> : null}
+    <div className="flex w-[calc((100%-2rem)/3)] min-w-0 flex-col">
+      <div className="flex flex-col border border-white/10 bg-[#1c1c1f] p-2">
+        <div className="relative grid aspect-video place-items-center border border-white/5 bg-[#242428]">
+          {media !== undefined ? (
+            <RemoteVideo media={media} nickname={participant.nickname} />
+          ) : null}
+          {media === undefined || !media.videoActive ? <PersonIcon /> : null}
+        </div>
+        <p className="truncate pt-1.5 text-xs text-zinc-300">{participant.nickname}</p>
       </div>
-      <p className="truncate pt-1.5 text-xs text-zinc-300">{participant.nickname}</p>
+      {cardState !== undefined ? (
+        <div className="flex justify-center pt-2" aria-label="공격 카드 보유 상태">
+          <HoloMiniCard used={cardState === 'USED'} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -83,6 +96,7 @@ interface ParticipantVideoGridProps {
 
 export function ParticipantVideoGrid({ currentUserId, participants }: ParticipantVideoGridProps) {
   const { remoteStreams } = useOpenViduSessionContext();
+  const cardHolders = useCardStore((state) => state.cardHolders);
   const others = participants.filter(({ userId }) => userId !== currentUserId);
 
   return (
@@ -92,6 +106,7 @@ export function ParticipantVideoGrid({ currentUserId, participants }: Participan
           key={participant.id}
           participant={participant}
           media={remoteStreams.get(participant.id)}
+          cardState={cardHolders[participant.id]}
         />
       ))}
     </div>

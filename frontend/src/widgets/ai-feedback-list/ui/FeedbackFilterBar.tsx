@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import type {
   FeedbackGradeFilter,
   FeedbackPeriod,
@@ -22,7 +24,7 @@ const GRADE_OPTIONS: readonly NeonSelectOption[] = [
 ];
 
 const SORT_OPTIONS: readonly NeonSelectOption[] = [
-  { value: 'recently', label: 'NEWEST_FIRST' },
+  { value: 'recently', label: 'NEWEST' },
   { value: 'high-score', label: 'HIGHEST_SCORE' },
 ];
 
@@ -35,7 +37,8 @@ interface FeedbackFilterBarProps {
   onSortChange: (sort: FeedbackSort) => void;
 }
 
-export function FeedbackFilterBar({
+// 필터 값이 그대로면 무한 스크롤 페칭 등 부모 리렌더에 따라올 이유가 없어 memo.
+export const FeedbackFilterBar = memo(function FeedbackFilterBar({
   period,
   grade,
   sort,
@@ -71,4 +74,4 @@ export function FeedbackFilterBar({
       />
     </div>
   );
-}
+});

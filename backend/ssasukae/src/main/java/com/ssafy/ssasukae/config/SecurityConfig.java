@@ -70,7 +70,7 @@ public class SecurityConfig {
                                 "/api/auth/signup",
                                 "/api/auth/refresh",
                                 "/api/users/nickname/check",
-                                "/internal/api/performances/**",
+                                "/internal/api/performance-result/**",
                                 "/internal/api/songs/**",
                                 "/internal/openvidu/webhook",
                                 "/ws",

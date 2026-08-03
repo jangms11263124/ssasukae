@@ -12,4 +12,6 @@ export {
   type PerformanceCancelledPayload,
   type PerformanceStateChangedPayload,
   type LeaderboardUpdatedPayload,
+  type PerformanceSuspendedPayload,
+  type PerformanceResumedPayload,
 } from './wsEvents';

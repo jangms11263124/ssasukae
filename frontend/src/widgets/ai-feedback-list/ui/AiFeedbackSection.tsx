@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 
@@ -18,7 +18,6 @@ import { FeedbackFilterBar } from './FeedbackFilterBar';
 import { FeedbackSummaryCards } from './FeedbackSummaryCards';
 import { FeedbackTrackItem } from './FeedbackTrackItem';
 
-// 백엔드 페이지 크기(10)와 무관하게, 첫 로딩 자리를 채울 스켈레톤 개수
 const SKELETON_COUNT = 4;
 
 function TrackSkeleton() {
@@ -62,7 +61,7 @@ export function AiFeedbackSection() {
     Boolean(hasNextPage) && !isFetchingNextPage,
   );
 
-  const items = data?.pages.flatMap((page) => page.feedbacks) ?? [];
+  const items = useMemo(() => data?.pages.flatMap((page) => page.feedbacks) ?? [], [data]);
   const total = data?.pages[0]?.total ?? 0;
 
   return (
@@ -115,7 +114,7 @@ export function AiFeedbackSection() {
         <ul
           className={cn(
             'mt-6 space-y-3 transition-opacity',
-            // 필터 변경 직후 이전 목록을 보여주는 동안엔 낡은 데이터임을 시각적으로 알린다
+            // 필터 변경 직후 이전 데이터를 보여주는 동안은 흐리게
             isPlaceholderData && 'opacity-50',
           )}
         >
@@ -132,7 +131,7 @@ export function AiFeedbackSection() {
           LOADING_MORE...
         </p>
       ) : null}
-      {/* IntersectionObserver는 높이 0짜리 요소를 교차로 판정하지 않으므로 최소 높이를 준다. */}
+      {/* 높이 0이면 IntersectionObserver가 교차를 감지하지 못한다 */}
       <div ref={sentinelRef} aria-hidden="true" className="h-px" />
     </section>
   );

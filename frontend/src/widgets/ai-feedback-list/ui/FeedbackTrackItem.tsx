@@ -1,21 +1,12 @@
+import { memo } from 'react';
 import Link from 'next/link';
 
 import type { FeedbackItem } from '@/entities/feedback';
 import { SongThumbnail } from '@/entities/song';
 import { cn } from '@/shared/lib/cn';
-import { getScoreGrade, GRADE_CLASS, type ScoreGrade } from '@/shared/lib/scoreGrade';
+import { getScoreGrade, GRADE_CLASS } from '@/shared/lib/scoreGrade';
 
 import { formatSingAt } from '../lib/formatSingAt';
-
-/** GRADE_CLASS는 테두리·글자색 조합이라, 왼쪽 액센트 바에 쓸 배경색만 따로 둔다. */
-const GRADE_BAR_CLASS: Record<ScoreGrade, string> = {
-  S: 'bg-cyan-300/70',
-  A: 'bg-fuchsia-400/60',
-  B: 'bg-amber-300/60',
-  C: 'bg-zinc-300/40',
-  D: 'bg-[#9C6B30]/50',
-  F: 'bg-white/10',
-};
 
 function BoltIcon() {
   return (
@@ -49,11 +40,16 @@ function ChevronRightIcon() {
 
 interface FeedbackTrackItemProps {
   item: FeedbackItem;
-  /** 전체 목록 기준 0부터 시작하는 순번 */
+  /** 전체 목록 기준 순번(0부터) */
   index: number;
 }
 
-export function FeedbackTrackItem({ item, index }: FeedbackTrackItemProps) {
+// 무한 스크롤로 페이지가 쌓여도 기존 항목은 리렌더되지 않도록 memo.
+// 캐시된 페이지의 item 참조가 유지되므로 얕은 비교로 충분하다.
+export const FeedbackTrackItem = memo(function FeedbackTrackItem({
+  item,
+  index,
+}: FeedbackTrackItemProps) {
   const singAt = formatSingAt(item.singAt);
   const grade = getScoreGrade(item.score);
 
@@ -65,13 +61,10 @@ export function FeedbackTrackItem({ item, index }: FeedbackTrackItemProps) {
         'hover:border-cyan-300/40 hover:bg-[#15151a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300',
       )}
     >
-      {/* 등급색 액센트 바 — 스크롤하며 등급을 훑어볼 수 있게 한다 */}
-      <span
-        aria-hidden="true"
-        className={cn('absolute inset-y-0 left-0 w-0.5', GRADE_BAR_CLASS[grade])}
-      />
+      {/* 액센트 바 */}
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-0.5 bg-cyan-300/70" />
 
-      <SongThumbnail src={null} className="size-[4.5rem]" />
+      <SongThumbnail src={item.thumbnail ?? null} className="size-[4.5rem]" />
 
       <div className="min-w-0">
         <p className="font-mono text-[0.58rem] font-bold tracking-[0.24em] text-fuchsia-400">
@@ -132,7 +125,6 @@ export function FeedbackTrackItem({ item, index }: FeedbackTrackItemProps) {
         >
           {grade}
         </span>
-        {/* 상세로 이동한다는 어포던스 — 호버 시 시안색으로 밀려 나온다 */}
         <span
           aria-hidden="true"
           className="text-zinc-700 transition-all group-hover:translate-x-0.5 group-hover:text-cyan-300"
@@ -142,4 +134,4 @@ export function FeedbackTrackItem({ item, index }: FeedbackTrackItemProps) {
       </div>
     </Link>
   );
-}
+});
