@@ -3,10 +3,10 @@ import Link from 'next/link';
 import type { RecentPerformance } from '@/entities/user';
 import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
+import { getScoreGrade, GRADE_CLASS } from '@/shared/lib/scoreGrade';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
 import { formatPerformedAt } from '../lib/formatters';
-import { getScoreGrade, GRADE_CLASS } from '../lib/scoreGrade';
 import { ChevronRightIcon, HistoryIcon } from './icons';
 import { TrackThumbnail } from './TrackThumbnail';
 
