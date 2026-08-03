@@ -1,5 +1,20 @@
 ﻿import re
+from statistics import pstdev
 from typing import Any
+
+from app.services.performance_rules import (
+    MAX_PITCH_ERROR_SEMITONES,
+    MAX_STABILITY_STD,
+    LOW_COVERAGE_RATIO,
+    PITCH_TOLERANCE_SEMITONES,
+    STABILITY_STD_TOLERANCE,
+    TIMING_TOLERANCE_SECONDS,
+    coverage_ratio,
+    exceeds_tolerance,
+    intervals_overlap,
+    onset_matches,
+    score_with_tolerance,
+)
 
 
 def _clamp(value: float, minimum: float, maximum: float) -> float:
@@ -155,7 +170,9 @@ def calculate_score_details(
     pitch_scores: list[float] = []
     rhythm_hits = 0
     stability_total = 0.0
-    matched_note_count = 0
+    has_pitch_issue = False
+    has_rhythm_issue = False
+    has_stability_issue = False
 
     for reference_note in reference_notes:
         # 가창자 MIDI는 정답 MIDI보다 훨씬 촘촘할 수 있습니다.
@@ -164,50 +181,84 @@ def calculate_score_details(
         overlapping_notes = [
             singer_note
             for singer_note in singer_notes
-            if (
-                singer_note["start_ms"] < reference_note["end_ms"]
-                and singer_note["end_ms"] > reference_note["start_ms"]
+            if intervals_overlap(
+                singer_note["start_ms"],
+                singer_note["end_ms"],
+                reference_note["start_ms"],
+                reference_note["end_ms"],
             )
         ]
 
         if not overlapping_notes:
             pitch_scores.append(0)
+            has_pitch_issue = True
+            has_rhythm_issue = True
+            has_stability_issue = True
             continue
 
-        matched_note_count += 1
+        coverage = coverage_ratio(
+            reference_note["start_ms"],
+            reference_note["end_ms"],
+            [
+                (note["start_ms"], note["end_ms"])
+                for note in overlapping_notes
+            ],
+        )
+        if coverage < LOW_COVERAGE_RATIO:
+            pitch_scores.append(0)
+            has_pitch_issue = True
+            has_rhythm_issue = True
+            has_stability_issue = True
+            continue
 
         # 음정 점수: 구간 안 피치의 대표값이 정답 MIDI와 가까울수록 높습니다.
         # 단순 평균보다 노이즈에 덜 흔들리도록 중앙값을 사용합니다.
         representative_midi = _median([note["midi"] for note in overlapping_notes])
         pitch_error = abs(reference_note["midi"] - representative_midi)
-        pitch_scores.append(100 * (1 - _clamp(pitch_error / 3.0, 0, 1)))
+        if exceeds_tolerance(
+            pitch_error,
+            PITCH_TOLERANCE_SEMITONES,
+        ):
+            has_pitch_issue = True
+        pitch_scores.append(
+            score_with_tolerance(
+                pitch_error,
+                PITCH_TOLERANCE_SEMITONES,
+                MAX_PITCH_ERROR_SEMITONES,
+            )
+        )
 
         # 박자 점수: 정답 음표가 시작되는 시점 근처에 어떤 음이든 냈으면 통과입니다.
         # 음높이는 보지 않고, 시작 타이밍만 확인합니다.
-        onset_tolerance_ms = 180
+        onset_tolerance_ms = TIMING_TOLERANCE_SECONDS * 1000
         reference_start_ms = reference_note["start_ms"]
         has_onset_near_reference = any(
-            (
-                abs(note["start_ms"] - reference_start_ms) <= onset_tolerance_ms
-                or note["start_ms"] <= reference_start_ms <= note["end_ms"]
+            onset_matches(
+                note["start_ms"],
+                note["end_ms"],
+                reference_start_ms,
+                onset_tolerance_ms,
             )
             for note in overlapping_notes
         )
         if has_onset_near_reference:
             rhythm_hits += 1
+        else:
+            has_rhythm_issue = True
 
-        # 안정성 점수: 같은 정답 음표 구간 안에서 정답 음정 근처에 머문 비율을 봅니다.
+        # 안정성 점수: 피드백과 같게 구간 안 음높이의 표준편차를 사용합니다.
+        midi_values = [note["midi"] for note in overlapping_notes]
+        pitch_std = pstdev(midi_values) if len(midi_values) > 1 else 0.0
+        if exceeds_tolerance(pitch_std, STABILITY_STD_TOLERANCE):
+            has_stability_issue = True
         stability_total += (
-            sum(
-                1 if abs(note["midi"] - reference_note["midi"]) <= 0.6
-                else 1 - _clamp((abs(note["midi"] - reference_note["midi"]) - 0.6) / 1.4, 0, 1)
-                for note in overlapping_notes
+            score_with_tolerance(
+                pitch_std,
+                STABILITY_STD_TOLERANCE,
+                MAX_STABILITY_STD,
             )
-            / len(overlapping_notes)
+            / 100
         )
-
-    # 정답 음표 중 실제로 가창자 MIDI가 겹친 구간의 비율입니다.
-    coverage_score = matched_note_count / len(reference_notes)
 
     pitch_score = sum(pitch_scores) / len(reference_notes)
     rhythm_score = (rhythm_hits / len(reference_notes)) * 100
@@ -218,14 +269,32 @@ def calculate_score_details(
         + rhythm_score * 0.30
         + lyrics_score * 0.25
         + stability_score * 0.10
-    ) * coverage_score
+    )
 
     final_score = base_score + (difficulty_score / 10)
 
+    rounded_pitch_score = round(_clamp(pitch_score, 0, 100))
+    rounded_rhythm_score = round(_clamp(rhythm_score, 0, 100))
+    rounded_stability_score = round(_clamp(stability_score, 0, 100))
+
+    if has_pitch_issue and rounded_pitch_score == 100:
+        rounded_pitch_score = 99
+    if has_rhythm_issue and rounded_rhythm_score == 100:
+        rounded_rhythm_score = 99
+    if has_stability_issue and rounded_stability_score == 100:
+        rounded_stability_score = 99
+
+    rounded_final_score = round(_clamp(final_score, 0, 100))
+    if (
+        rounded_final_score == 100
+        and (has_pitch_issue or has_rhythm_issue or has_stability_issue)
+    ):
+        rounded_final_score = 99
+
     return {
-        "finalScore": round(_clamp(final_score, 0, 100)),
-        "pitchScore": round(_clamp(pitch_score, 0, 100)),
-        "rhythmScore": round(_clamp(rhythm_score, 0, 100)),
-        "stabilityScore": round(_clamp(stability_score, 0, 100)),
+        "finalScore": rounded_final_score,
+        "pitchScore": rounded_pitch_score,
+        "rhythmScore": rounded_rhythm_score,
+        "stabilityScore": rounded_stability_score,
         "lyricsScore": round(_clamp(lyrics_score, 0, 100)),
     }
