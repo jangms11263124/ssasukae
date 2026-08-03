@@ -5,6 +5,7 @@ import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
+import { MYPAGE_PREVIEW_COUNT } from '../config/preview';
 import { formatCount } from '../lib/formatters';
 import { ChevronRightIcon, HeartIcon } from './icons';
 import { TrackThumbnail } from './TrackThumbnail';
@@ -15,6 +16,8 @@ interface FavoritesCardProps {
 }
 
 export function FavoritesCard({ count, items }: FavoritesCardProps) {
+  const previewItems = items.slice(0, MYPAGE_PREVIEW_COUNT);
+
   return (
     <SettingsPanel title="FAVORITES" icon={<HeartIcon />}>
       {/* 나머지 두 패널과 같은 자리에 둬야 세 카드의 액션이 한 줄로 맞는다. */}
@@ -45,7 +48,7 @@ export function FavoritesCard({ count, items }: FavoritesCardProps) {
         </span>
       </div>
 
-      {items.length === 0 ? (
+      {previewItems.length === 0 ? (
         <p
           className={cn(
             jetBrainsMono.className,
@@ -56,7 +59,7 @@ export function FavoritesCard({ count, items }: FavoritesCardProps) {
         </p>
       ) : (
         <ul>
-          {items.map((song) => (
+          {previewItems.map((song) => (
             <li
               key={song.songId}
               className="flex items-center gap-4 border-b border-white/[0.04] py-3.5 last:border-b-0"
