@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Publisher, Session, StreamManager } from 'openvidu-browser';
 
@@ -27,6 +27,30 @@ export interface OpenViduSessionApi {
   localStream: MediaStream | null;
   /** participantId → 원격 미디어 */
   remoteStreams: ReadonlyMap<number, RemoteMedia>;
+  /**
+   * 송출 오디오 트랙 교체. track을 주면 원본 마이크 대신 그 트랙을 내보내고
+   * null이면 원본 마이크로 원복한다. publisher가 없으면(시청 전용) 조용히 무시한다.
+   */
+  replaceAudioTrack: (track: MediaStreamTrack | null) => Promise<void>;
+}
+
+/** 반주 송출용 오디오 비트레이트 상한. 기본 음성 채팅 프리셋으로는 반주가 뭉개진다 */
+const MUSIC_AUDIO_MAX_BITRATE = 128_000;
+
+// 인코딩 상향 실패는 음질 저하일 뿐 송출 자체는 유지되므로 조용히 기본값으로 둔다.
+function tuneAudioSender(publisher: Publisher, track: MediaStreamTrack) {
+  try {
+    const senders = publisher.stream.getRTCPeerConnection().getSenders();
+    const sender = senders.find((candidate) => candidate.track === track);
+    if (sender === undefined) return;
+
+    const parameters = sender.getParameters();
+    const encodings = parameters.encodings.length > 0 ? parameters.encodings : [{}];
+    encodings[0].maxBitrate = MUSIC_AUDIO_MAX_BITRATE;
+    sender.setParameters({ ...parameters, encodings }).catch(() => undefined);
+  } catch {
+    // getRTCPeerConnection 미지원 등 — 무시
+  }
 }
 
 // 백엔드가 토큰 serverData에 {"participantId":N}을 심는다.
@@ -62,6 +86,10 @@ export function useOpenViduSession(): OpenViduSessionApi {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<ReadonlyMap<number, RemoteMedia>>(new Map());
   const publisherRef = useRef<Publisher | null>(null);
+  /** 공연 믹스 송출 중 여부. 이때 마이크 토글이 트랙을 끄면 MR까지 꺼진다 */
+  const isBroadcastingMixRef = useRef(false);
+  /** 원복용 원본 마이크 트랙. 공연 중에도 정지하지 않고 유지한다 */
+  const originalAudioTrackRef = useRef<MediaStreamTrack | null>(null);
 
   useEffect(() => {
     if (roomId === null) {
@@ -205,6 +233,8 @@ export function useOpenViduSession(): OpenViduSessionApi {
     return () => {
       cancelled = true;
       publisherRef.current = null;
+      isBroadcastingMixRef.current = false;
+      originalAudioTrackRef.current = null;
       activeSession?.disconnect();
       setIsConnected(false);
       setLocalStream(null);
@@ -214,6 +244,8 @@ export function useOpenViduSession(): OpenViduSessionApi {
 
   // 토글 시점에 publisher가 아직 없으면 생성 시 스토어 값을 읽으므로 놓치지 않는다.
   useEffect(() => {
+    // 공연 믹스 송출 중에는 끄지 않는다 — 목소리 음소거는 엔진 마이크가 담당한다.
+    if (isBroadcastingMixRef.current) return;
     publisherRef.current?.publishAudio(micOn);
   }, [micOn]);
 
@@ -221,5 +253,31 @@ export function useOpenViduSession(): OpenViduSessionApi {
     publisherRef.current?.publishVideo(camOn);
   }, [camOn]);
 
-  return { isConnected, localStream, remoteStreams };
+  const replaceAudioTrack = useCallback(async (track: MediaStreamTrack | null) => {
+    const publisher = publisherRef.current;
+    if (publisher === null) return;
+
+    if (track !== null) {
+      if (originalAudioTrackRef.current === null) {
+        originalAudioTrackRef.current =
+          publisher.stream.getMediaStream()?.getAudioTracks()[0] ?? null;
+      }
+      await publisher.replaceTrack(track);
+      isBroadcastingMixRef.current = true;
+      // 믹스 트랙에는 MR이 포함되므로 마이크 토글 상태와 무관하게 항상 내보낸다.
+      publisher.publishAudio(true);
+      tuneAudioSender(publisher, track);
+      return;
+    }
+
+    isBroadcastingMixRef.current = false;
+    const original = originalAudioTrackRef.current;
+    originalAudioTrackRef.current = null;
+    if (original !== null && original.readyState === 'live') {
+      await publisher.replaceTrack(original);
+    }
+    publisher.publishAudio(useStageStore.getState().micOn);
+  }, []);
+
+  return { isConnected, localStream, remoteStreams, replaceAudioTrack };
 }
