@@ -99,13 +99,17 @@ export function RoomJoinForm() {
           inviteCode: response.inviteCode,
           // 방 상세 조회 API가 없어 입장 응답만으로는 방 이름을 알 수 없다.
           name: '',
-          mode: 'GENERAL',
+          mode: response.mode ?? 'GENERAL',
           isHost: false,
           openViduSessionId: response.openViduSessionId,
           openViduToken: response.openViduToken,
           me: { userId: user?.id ?? 0, nickname: user?.nickname ?? '나' },
         });
-        router.push(`/rooms/general?roomId=${response.roomId}`);
+        router.push(
+          response.mode === 'LOW_LATENCY'
+            ? `/rooms/low-latency?roomId=${response.roomId}`
+            : `/rooms/general?roomId=${response.roomId}`,
+        );
       },
       onError: (error) => {
         const message =

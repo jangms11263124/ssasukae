@@ -71,6 +71,8 @@ export interface RoomSessionResponse {
   roomId: number;
   participantId: number;
   inviteCode: string;
+  /** 백엔드 저지연 방 모드 API 반영 전에는 없을 수 있다. */
+  mode?: RoomMode;
   openViduSessionId: string;
   openViduToken: string;
 }

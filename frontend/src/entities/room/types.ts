@@ -1,4 +1,4 @@
-export type RoomMode = 'GENERAL' | 'BATTLE';
+export type RoomMode = 'GENERAL' | 'BATTLE' | 'LOW_LATENCY';
 
 export interface RoomSummary {
   id: number;

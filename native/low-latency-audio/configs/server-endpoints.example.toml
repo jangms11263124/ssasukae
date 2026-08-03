@@ -1,0 +1,6 @@
+# Server 1: currently implemented UDP rendezvous for direct P2P audio.
+p2p_udp_server = "127.0.0.1:50000"
+
+# Server 2: reserved control-plane address. The server and client integration are
+# intentionally not implemented yet.
+mr_control_server = "http://localhost:8080"

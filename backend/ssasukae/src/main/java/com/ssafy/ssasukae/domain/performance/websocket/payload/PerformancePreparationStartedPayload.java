@@ -6,6 +6,8 @@ public record PerformancePreparationStartedPayload(
     Long performerParticipantId,
     Long songId,
     String songTitle,
+    String artist,
+    Integer durationSeconds,
     Integer difficultyLevel,
     String thumbnailImageUrl,
     String mrDownloadUrl,

@@ -20,7 +20,7 @@ export function GuestOnlyGuard({ children, redirectTo = '/lobby' }: GuestOnlyGua
     }
   }, [isAuthenticated, isLoading, redirectTo, router]);
 
-  if (isLoading || isAuthenticated) {
+  if (isAuthenticated) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-[#0a0a12]">
         <div className="space-y-3 text-center">

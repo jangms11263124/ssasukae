@@ -135,6 +135,18 @@ public record PerformanceSnapShot(
         playbackPositionAt(finishedAt));
   }
 
+  public PerformanceSnapShot finishWithoutAnalysis(OffsetDateTime finishedAt) {
+    requireStatus("재생 중인 공연만 정상 종료할 수 있습니다.", PerformanceStatus.PLAYING);
+    requireTimeNotBefore(finishedAt, startedAt, "finishedAt", "startedAt");
+    return copy(
+        PerformanceStatus.FINISHED,
+        settings,
+        startedAt,
+        finishedAt,
+        accumulatedPausedDurationMs,
+        playbackPositionAt(finishedAt));
+  }
+
   public PerformanceSnapShot suspendForPerformerDisconnect(OffsetDateTime at) {
     requireStatus(
         "가창자 연결 종료로 중단할 수 없는 공연 상태입니다.",

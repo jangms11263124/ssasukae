@@ -10,7 +10,7 @@ export function useUserQuery(enabled = true) {
 
   return useQuery({
     queryKey: userQueryKeys.me(),
-    queryFn: getCurrentUser,
+    queryFn: ({ signal }) => getCurrentUser(signal),
     enabled: enabled && Boolean(accessToken),
   });
 }
