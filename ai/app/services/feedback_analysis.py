@@ -1,7 +1,17 @@
 from collections import Counter
-from statistics import mean, pstdev
+from statistics import median, pstdev
 
 from app.schemas.feedback import NoteEvent
+from app.services.performance_rules import (
+    LOW_COVERAGE_RATIO,
+    PITCH_TOLERANCE_SEMITONES,
+    STABILITY_STD_TOLERANCE,
+    TIMING_TOLERANCE_SECONDS,
+    coverage_ratio,
+    exceeds_tolerance,
+    intervals_overlap,
+    onset_matches,
+)
 
 
 NOTE_TO_SEMITONE = {
@@ -24,10 +34,6 @@ NOTE_TO_SEMITONE = {
     "B": 11,
 }
 
-PITCH_TOLERANCE_SEMITONES = 0.7
-TIMING_TOLERANCE_SECONDS = 0.18
-LOW_COVERAGE_RATIO = 0.35
-UNSTABLE_PITCH_STD = 0.75
 MAX_ISSUES = 20
 
 
@@ -61,6 +67,13 @@ def midi_to_note_name(midi: float) -> str:
     rounded = round(midi)
     octave = (rounded // 12) - 1
     return f"{names[rounded % 12]}{octave}"
+
+
+def _note_event_midi(note: NoteEvent) -> float | None:
+    """원본 MIDI 값을 우선 사용하고, 없으면 음 이름을 변환합니다."""
+    if note.midi is not None:
+        return note.midi
+    return note_name_to_midi(note.note)
 
 
 def _severity_from_pitch_error(error: float) -> str:
@@ -107,13 +120,18 @@ def _user_notes_in_reference_note(
     reference_note: NoteEvent,
     user_notes: list[NoteEvent],
 ) -> list[NoteEvent]:
-    """정답 음표의 시작~종료 구간 안에서 시작된 사용자 음표만 골라 반환합니다."""
+    """정답 음표와 시간 구간이 겹치는 사용자 음표를 모두 반환합니다."""
     reference_start = reference_note.start
     reference_end = reference_note.start + reference_note.duration
     return [
         note
         for note in user_notes
-        if reference_start <= note.start <= reference_end
+        if intervals_overlap(
+            note.start,
+            note.start + note.duration,
+            reference_start,
+            reference_end,
+        )
     ]
 
 
@@ -122,8 +140,14 @@ def _coverage(
     matched_user_notes: list[NoteEvent],
 ) -> float:
     """정답 음표 길이 대비 매칭된 사용자 음표 길이의 비율을 0~1로 계산합니다."""
-    voiced_duration = sum(note.duration for note in matched_user_notes)
-    return min(1, voiced_duration / max(reference_note.duration, 0.001))
+    return coverage_ratio(
+        reference_note.start,
+        reference_note.start + reference_note.duration,
+        [
+            (note.start, note.start + note.duration)
+            for note in matched_user_notes
+        ],
+    )
 
 
 def _analyze_reference_note(
@@ -152,42 +176,45 @@ def _analyze_reference_note(
         )
         return issues
 
-    target_midi = note_name_to_midi(reference_note.note)
+    target_midi = _note_event_midi(reference_note)
     user_midi_values = [
         midi
-        for midi in (note_name_to_midi(note.note) for note in matched_user_notes)
+        for midi in (_note_event_midi(note) for note in matched_user_notes)
         if midi is not None
     ]
     if target_midi is None or not user_midi_values:
         return issues
 
-    avg_midi = mean(user_midi_values)
-    avg_error = avg_midi - target_midi
+    representative_midi = median(user_midi_values)
+    pitch_error = representative_midi - target_midi
     pitch_std = pstdev(user_midi_values) if len(user_midi_values) > 1 else 0
-    avg_user_note = midi_to_note_name(avg_midi)
+    representative_user_note = midi_to_note_name(representative_midi)
 
-    if abs(avg_error) > PITCH_TOLERANCE_SEMITONES:
+    if exceeds_tolerance(
+        abs(pitch_error),
+        PITCH_TOLERANCE_SEMITONES,
+    ):
         issues.append(
             _issue(
                 reference_note,
-                "pitch_sharp" if avg_error > 0 else "pitch_flat",
+                "pitch_sharp" if pitch_error > 0 else "pitch_flat",
                 reference_note.note,
-                avg_user_note,
-                _severity_from_pitch_error(abs(avg_error)),
+                representative_user_note,
+                _severity_from_pitch_error(abs(pitch_error)),
                 {
-                    "average_pitch_error": round(avg_error, 3),
+                    "pitch_error": round(pitch_error, 3),
                     "coverage": round(coverage, 3),
                 },
             )
         )
 
-    if pitch_std > UNSTABLE_PITCH_STD:
+    if exceeds_tolerance(pitch_std, STABILITY_STD_TOLERANCE):
         issues.append(
             _issue(
                 reference_note,
                 "unstable_pitch",
                 reference_note.note,
-                avg_user_note,
+                representative_user_note,
                 "high" if pitch_std > 1.2 else "medium",
                 {
                     "pitch_std": round(pitch_std, 3),
@@ -196,15 +223,27 @@ def _analyze_reference_note(
             )
         )
 
-    first_user_note_start = matched_user_notes[0].start
-    timing_error = first_user_note_start - reference_note.start
-    if abs(timing_error) > TIMING_TOLERANCE_SECONDS:
+    has_matching_onset = any(
+        onset_matches(
+            note.start,
+            note.start + note.duration,
+            reference_note.start,
+            TIMING_TOLERANCE_SECONDS,
+        )
+        for note in matched_user_notes
+    )
+    if not has_matching_onset:
+        nearest_user_note = min(
+            matched_user_notes,
+            key=lambda note: abs(note.start - reference_note.start),
+        )
+        timing_error = nearest_user_note.start - reference_note.start
         issues.append(
             _issue(
                 reference_note,
                 "rhythm_late" if timing_error > 0 else "rhythm_early",
                 f"{reference_note.start:.2f}s",
-                f"{first_user_note_start:.2f}s",
+                f"{nearest_user_note.start:.2f}s",
                 _severity_from_time_error(abs(timing_error)),
                 {"timing_error": round(timing_error, 3)},
             )
