@@ -82,9 +82,8 @@ export function useStageAudioEngine(isPerformer: boolean): VocalAudioEngineState
   const { getBroadcastStream } = engine;
   const isBroadcastingMix = isPerformer && phase === 'PERFORMING';
 
-  // 공연 중에는 송출 오디오를 원본 마이크 대신 엔진 믹스(목소리+에코+MR)로 교체한다.
-  // 원본 마이크는 청자에게 MR이 안 들릴 뿐 아니라, AEC가 모니터링되는 자기 목소리를
-  // 에코로 오인해 상쇄하는 문제(MR 볼륨을 줄이면 목소리가 사라짐)가 있다.
+  // 공연 중 송출 오디오를 원본 마이크 대신 엔진 믹스(목소리+에코+MR)로 교체한다.
+  // 원본 마이크는 AEC가 모니터링되는 자기 목소리를 에코로 오인해 상쇄한다 (MR 볼륨↓ 시 목소리 소실).
   useEffect(() => {
     if (!isBroadcastingMix) return;
     const track = getBroadcastStream()?.getAudioTracks()[0];
