@@ -71,7 +71,7 @@ export function FeedbackTrackItem({ item, index }: FeedbackTrackItemProps) {
         className={cn('absolute inset-y-0 left-0 w-0.5', GRADE_BAR_CLASS[grade])}
       />
 
-      <SongThumbnail src={null} className="size-[4.5rem]" />
+      <SongThumbnail src={item.thumbnail ?? null} className="size-[4.5rem]" />
 
       <div className="min-w-0">
         <p className="font-mono text-[0.58rem] font-bold tracking-[0.24em] text-fuchsia-400">

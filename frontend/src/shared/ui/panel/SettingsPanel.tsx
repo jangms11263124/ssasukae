@@ -22,7 +22,8 @@ export function SettingsPanel({ title, icon, children, className }: SettingsPane
         className="pointer-events-none absolute inset-0 opacity-40 [background-image:repeating-linear-gradient(135deg,transparent_0,transparent_4px,rgba(255,255,255,0.012)_5px)]"
       />
 
-      <div className="relative">
+      {/* flex-col: 자식이 flex-1/mt-auto로 하단 고정을 쓸 수 있게 한다. 블록 스택과 시각 결과는 동일 */}
+      <div className="relative flex h-full flex-col">
         <h2 className="flex items-center gap-2.5 text-[0.72rem] font-bold tracking-[0.14em] text-zinc-100">
           <span aria-hidden="true" className="text-cyan-400">
             {icon}
