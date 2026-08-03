@@ -38,3 +38,6 @@ venv/
 # Logs
 *.log
 npm-debug.log*
+
+# low-latency
+native/*

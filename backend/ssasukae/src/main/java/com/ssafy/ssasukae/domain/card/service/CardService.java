@@ -307,6 +307,10 @@ public class CardService {
     return cardStateStore.findAssignment(roomId, performanceId, participantId);
   }
 
+  public List<CardAssignmentSnapshot> findAssignments(Long roomId, Long performanceId) {
+    return cardStateStore.findAssignments(roomId, performanceId);
+  }
+
   public Optional<RoomCardSnapshot> findActiveCard(Long roomId) {
     return cardStateStore.findRoomCard(roomId);
   }
