@@ -12,12 +12,19 @@ import static org.mockito.Mockito.when;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
 import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.card.redis.CardAssignmentSnapshot;
+import com.ssafy.ssasukae.domain.card.redis.CardAssignmentStatus;
+import com.ssafy.ssasukae.domain.card.type.CardTier;
+import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectTargetType;
+import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
+import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +51,7 @@ import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 import com.ssafy.ssasukae.integration.aws.S3StorageService;
 import com.ssafy.ssasukae.domain.song.repository.SongRepository;
+import com.ssafy.ssasukae.domain.song.entity.Song;
 
 @ExtendWith(MockitoExtension.class)
 class RoomInfoGetTest {
@@ -121,6 +129,48 @@ class RoomInfoGetTest {
   }
 
   @Test
+  @DisplayName("방 스냅샷은 모든 참가자의 카드 사용 상태를 반환한다")
+  void getRoomSnapshotReturnsEveryParticipantCardUsageStatus() {
+    Room room = room();
+    RoomParticipant hostParticipant =
+        participant(room, room.getHost(), 100L, ConnectionStatus.CONNECTED);
+    RoomParticipant requester =
+        participant(room, user(REQUESTER_USER_ID), 200L, ConnectionStatus.CONNECTED);
+    OffsetDateTime preparedAt = OffsetDateTime.parse("2026-08-03T08:59:00+09:00");
+    PerformanceSnapShot performance =
+        PerformanceSnapShot.prepare(300L, ROOM_ID, 100L, 1L, 400L, preparedAt);
+    CardAssignmentSnapshot hostCard = assignment(300L, 100L, 1L, CardAssignmentStatus.USED);
+    CardAssignmentSnapshot requesterCard =
+        assignment(300L, 200L, REQUESTER_USER_ID, CardAssignmentStatus.ASSIGNED);
+
+    when(roomRepository.findById(ROOM_ID)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByRoomIdAndUserId(ROOM_ID, REQUESTER_USER_ID))
+        .thenReturn(Optional.of(requester));
+    when(roomParticipantRepository
+            .findAllByRoomIdAndConnectionStatusInOrderByJoinedAtAsc(eq(ROOM_ID), any()))
+        .thenReturn(List.of(hostParticipant, requester));
+    when(performanceStore.findActiveByRoomId(ROOM_ID)).thenReturn(Optional.of(performance));
+    when(songRepository.findById(400L)).thenReturn(Optional.of(Song.create("Song", "Artist")));
+    when(cardService.findAssignment(ROOM_ID, 300L, 200L))
+        .thenReturn(Optional.of(requesterCard));
+    when(cardService.findAssignments(ROOM_ID, 300L))
+        .thenReturn(List.of(hostCard, requesterCard));
+
+    RoomSnapshotResponse response = roomService.getRoomSnapshot(REQUESTER_USER_ID, ROOM_ID);
+
+    assertThat(response.myCard().cardCode()).isEqualTo("TEST_CARD");
+    assertThat(response.cardUsageStatuses())
+        .extracting(
+            status -> status.participantId(),
+            status -> status.status(),
+            status -> status.usedAt())
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(
+                100L, CardAssignmentStatus.USED, preparedAt.plusSeconds(30)),
+            org.assertj.core.groups.Tuple.tuple(200L, CardAssignmentStatus.ASSIGNED, null));
+  }
+
+  @Test
   @DisplayName("퇴장한 참가자는 방 정보를 조회할 수 없다")
   void getRoomSnapshotRejectsInactiveParticipant() {
     Room room = room();
@@ -186,5 +236,30 @@ class RoomInfoGetTest {
             .build();
     ReflectionTestUtils.setField(user, "id", userId);
     return user;
+  }
+
+  private CardAssignmentSnapshot assignment(
+      Long performanceId,
+      Long participantId,
+      Long userId,
+      CardAssignmentStatus status) {
+    OffsetDateTime assignedAt = OffsetDateTime.parse("2026-08-03T08:59:00+09:00");
+    return new CardAssignmentSnapshot(
+        ROOM_ID,
+        performanceId,
+        participantId,
+        userId,
+        500L + participantId,
+        "TEST_CARD",
+        "Test card",
+        "Test description",
+        CardEffectType.MR_KEY_CHANGE,
+        CardEffectTargetType.PERFORMER,
+        -3,
+        15,
+        CardTier.G,
+        status,
+        assignedAt,
+        status == CardAssignmentStatus.USED ? assignedAt.plusSeconds(30) : null);
   }
 }

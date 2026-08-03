@@ -196,6 +196,12 @@ public class RoomService {
                                         roomId, performance.performanceId(), requester.getId())
                                 .map(MyCardSnapshotResponse::from)
                                 .orElse(null);
+        List<CardUsageStatusResponse> cardUsageStatuses =
+                performance == null || cardService == null
+                        ? List.of()
+                        : cardService.findAssignments(roomId, performance.performanceId()).stream()
+                                .map(CardUsageStatusResponse::from)
+                                .toList();
         ActiveCardSnapshotResponse activeCard = performance == null || cardService == null
                 ? null
                 : cardService
@@ -221,6 +227,7 @@ public class RoomService {
                 performanceResponse,
                 playback,
                 myCard,
+                cardUsageStatuses,
                 activeCard);
     }
 
