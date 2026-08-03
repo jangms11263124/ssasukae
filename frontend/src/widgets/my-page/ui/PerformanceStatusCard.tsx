@@ -5,8 +5,9 @@ import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
+import { getScoreGrade, GRADE_CLASS, NO_SCORE_LABEL } from '@/shared/lib/scoreGrade';
+
 import { formatCount, formatUpdatedAt } from '../lib/formatters';
-import { getScoreGrade, GRADE_CLASS, NO_SCORE_LABEL } from '../lib/scoreGrade';
 import { ChartIcon, RefreshIcon } from './icons';
 
 const EMPTY_VALUE = '--';
