@@ -8,6 +8,7 @@ public record RoomParticipantResponse(
     Long participantId,
     Long userId,
     String nickname,
+    String profileImageUrl,
     ParticipantRole stageRole,
     ConnectionStatus connectionStatus,
     boolean host) {
@@ -19,6 +20,7 @@ public record RoomParticipantResponse(
         participant.getId(),
         userId,
         participant.getUser().getNickname(),
+        participant.getUser().getProfileImageUrl(),
         participant.getStageRole(),
         participant.getConnectionStatus(),
         participant.getRoom().isHost(userId));
