@@ -18,6 +18,11 @@ export interface VocalAudioEngine {
   /** offsetSeconds부터 재생한다 (공연 재개용). 생략하면 처음부터 */
   startMr(offsetSeconds?: number): void;
   stopMr(): void;
+  /**
+   * MR이 끝까지 재생돼 스스로 멈추면 호출된다. stopMr()·dispose()로 멈춘 경우는 제외 —
+   * 정상 종료와 중도 취소를 구분해야 하는 쪽(공연 종료 전송)이 이 신호를 쓴다.
+   */
+  setOnMrEnded(callback: (() => void) | null): void;
   /** deviceId가 빈 문자열이면 시스템 기본 장치를 연다 */
   openMic(deviceId: string): Promise<void>;
   closeMic(): void;
