@@ -8,23 +8,65 @@ import { cn } from '@/shared/lib/cn';
 
 import { useCardStore, type ParticipantCardState } from '../../model/cardStore';
 import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
+import { useStageStore } from '../../model/stageStore';
 import type { RemoteMedia } from '../../model/useOpenViduSession';
 
-function PersonIcon() {
+function toProfileSrc(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return /^https?:\/\//.test(url) ? url : null;
+}
+
+function ProfilePlaceholder({
+  nickname,
+  profileImageUrl,
+}: {
+  nickname: string;
+  profileImageUrl: string | null;
+}) {
+  const imageSrc = toProfileSrc(profileImageUrl);
+
+  if (imageSrc) {
+    return (
+      <img
+        src={imageSrc}
+        alt=""
+        className="size-14 rounded-full object-cover ring-1 ring-white/15"
+      />
+    );
+  }
+
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      className="size-10 text-zinc-600"
-    >
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="9.5" r="3" />
-      <path d="M6.6 18.3c1.2-2.3 3.2-3.5 5.4-3.5s4.2 1.2 5.4 3.5" />
-    </svg>
+    <div className="grid size-14 place-items-center rounded-full bg-zinc-800 ring-1 ring-white/10">
+      <span className="font-mono text-sm font-semibold text-zinc-400">
+        {nickname.trim().charAt(0) || '?'}
+      </span>
+    </div>
+  );
+}
+
+interface LocalVideoProps {
+  stream: MediaStream;
+  nickname: string;
+}
+
+function LocalVideo({ stream, nickname }: LocalVideoProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      muted
+      aria-label={`${nickname} 캠 화면`}
+      className="absolute inset-0 size-full -scale-x-100 object-cover"
+    />
   );
 }
 
@@ -58,27 +100,49 @@ function RemoteVideo({ media, nickname }: RemoteVideoProps) {
   );
 }
 
-// 캠 타일. 스트림이 없거나 상대가 캠을 끄면 아바타 아이콘을 보여준다.
+// 캠 타일. 스트림이 없거나 상대가 캠을 끄면 프로필/플레이스홀더를 보여준다.
 // 타일 폭은 항상 3열 기준(1/3)으로 고정해 참가자 수가 줄어도 비율이 유지된다.
 function ParticipantVideoTile({
   participant,
+  isSelf,
+  localStream,
   media,
+  camOn,
   cardState,
 }: {
   participant: RoomParticipant;
+  isSelf: boolean;
+  localStream: MediaStream | null;
   media: RemoteMedia | undefined;
+  camOn: boolean;
   cardState: ParticipantCardState | undefined;
 }) {
+  const showLocalVideo = isSelf && camOn && localStream !== null;
+  const showRemoteVideo = !isSelf && media !== undefined && media.videoActive;
+  const keepRemoteAudioElement = !isSelf && media !== undefined;
+  const showPlaceholder = !showLocalVideo && !showRemoteVideo;
+
   return (
     <div className="flex w-[calc((100%-2rem)/3)] min-w-0 flex-col">
       <div className="flex flex-col border border-white/10 bg-[#1c1c1f] p-2">
         <div className="relative grid aspect-video place-items-center border border-white/5 bg-[#242428]">
-          {media !== undefined ? (
+          {showLocalVideo ? (
+            <LocalVideo stream={localStream} nickname={participant.nickname} />
+          ) : null}
+          {keepRemoteAudioElement ? (
             <RemoteVideo media={media} nickname={participant.nickname} />
           ) : null}
-          {media === undefined || !media.videoActive ? <PersonIcon /> : null}
+          {showPlaceholder ? (
+            <ProfilePlaceholder
+              nickname={participant.nickname}
+              profileImageUrl={participant.profileImageUrl}
+            />
+          ) : null}
         </div>
-        <p className="truncate pt-1.5 text-xs text-zinc-300">{participant.nickname}</p>
+        <p className="truncate pt-1.5 text-xs text-zinc-300">
+          {participant.nickname}
+          {isSelf ? ' (나)' : ''}
+        </p>
       </div>
       {cardState !== undefined ? (
         <div className="flex justify-center pt-2" aria-label="공격 카드 보유 상태">
@@ -95,20 +159,30 @@ interface ParticipantVideoGridProps {
 }
 
 export function ParticipantVideoGrid({ currentUserId, participants }: ParticipantVideoGridProps) {
-  const { remoteStreams } = useOpenViduSessionContext();
+  const { localStream, remoteStreams } = useOpenViduSessionContext();
+  const camOn = useStageStore((state) => state.camOn);
   const cardHolders = useCardStore((state) => state.cardHolders);
-  const others = participants.filter(({ userId }) => userId !== currentUserId);
+  const activeParticipants = participants.filter(
+    ({ connectionStatus }) => connectionStatus !== 'LEFT' && connectionStatus !== 'KICKED',
+  );
 
   return (
     <div className="flex justify-center gap-4" aria-label="참가자 캠 화면">
-      {others.map((participant) => (
-        <ParticipantVideoTile
-          key={participant.id}
-          participant={participant}
-          media={remoteStreams.get(participant.id)}
-          cardState={cardHolders[participant.id]}
-        />
-      ))}
+      {activeParticipants.map((participant) => {
+        const isSelf = participant.userId === currentUserId;
+
+        return (
+          <ParticipantVideoTile
+            key={participant.id}
+            participant={participant}
+            isSelf={isSelf}
+            localStream={localStream}
+            media={remoteStreams.get(participant.id)}
+            camOn={camOn}
+            cardState={cardHolders[participant.id]}
+          />
+        );
+      })}
     </div>
   );
 }

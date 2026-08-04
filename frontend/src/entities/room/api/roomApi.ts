@@ -14,6 +14,7 @@ export interface RoomSnapshotParticipant {
   participantId: number;
   userId: number;
   nickname: string;
+  profileImageUrl: string | null;
   stageRole: ParticipantStageRole;
   connectionStatus: ParticipantConnectionStatus;
   host: boolean;
