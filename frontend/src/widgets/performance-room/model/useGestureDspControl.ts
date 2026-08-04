@@ -1,8 +1,9 @@
 import { type RefObject, useCallback, useRef, useState } from 'react';
 
 import { useGestureControl, type GestureControlState } from '@/features/gesture-control';
+import { useRoomStore } from '@/entities/room';
 
-import { DSP_ROWS, ZERO_SNAP_RANGE } from '../config/dspParams';
+import { resolveDspRows, ZERO_SNAP_RANGE } from '../config/dspParams';
 import { useSettingsPublisher } from './useSettingsPublisher';
 import { useStageStore } from './stageStore';
 
@@ -30,6 +31,9 @@ export function useGestureDspControl(
   options: UseGestureDspControlOptions,
 ): GestureDspControlState {
   const publishSettings = useSettingsPublisher();
+  // 수성전은 음정·템포를 제외한다.
+  const isBattleMode = useRoomStore((state) => state.session?.mode === 'BATTLE');
+  const rows = resolveDspRows(isBattleMode);
   const [activeRowIndex, setActiveRowIndex] = useState<number | null>(0);
   const [grabbedRowIndex, setGrabbedRowIndex] = useState<number | null>(null);
   // 잡은 순간의 값. 이 값을 기준으로 델타를 더해야 드래그가 누적되지 않는다.
@@ -39,17 +43,20 @@ export function useGestureDspControl(
     setActiveRowIndex(rowIndex);
   }, []);
 
-  const handleGrabStart = useCallback((rowIndex: number) => {
-    const row = DSP_ROWS[rowIndex];
+  const handleGrabStart = useCallback(
+    (rowIndex: number) => {
+      const row = rows[rowIndex];
 
-    if (!row) return;
-    dragStartValueRef.current = row.read(useStageStore.getState().settings);
-    setGrabbedRowIndex(rowIndex);
-  }, []);
+      if (!row) return;
+      dragStartValueRef.current = row.read(useStageStore.getState().settings);
+      setGrabbedRowIndex(rowIndex);
+    },
+    [rows],
+  );
 
   const handleDrag = useCallback(
     (rowIndex: number, deltaX: number) => {
-      const row = DSP_ROWS[rowIndex];
+      const row = rows[rowIndex];
 
       if (!row) return;
 
@@ -64,7 +71,7 @@ export function useGestureDspControl(
       if (next === row.read(useStageStore.getState().settings)) return;
       publishSettings(row.write(next));
     },
-    [publishSettings],
+    [publishSettings, rows],
   );
 
   const handleGrabEnd = useCallback(() => {
@@ -77,7 +84,7 @@ export function useGestureDspControl(
     cursorRef: options.cursorRef,
     enabled: options.enabled,
     isPanelOpen: options.isPanelOpen,
-    rowCount: DSP_ROWS.length,
+    rowCount: rows.length,
     onOpenPanel: options.onOpenPanel,
     onClosePanel: options.onClosePanel,
     onCancelHold: options.onCancelPerformance,
