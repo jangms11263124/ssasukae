@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { useRoomStore, type RoomMode } from '@/entities/room';
+import { buildRoomPath, useRoomStore, type RoomMode } from '@/entities/room';
 import { useAuth } from '@/entities/user';
 import { ApiError } from '@/shared/api/client';
 import { cn } from '@/shared/lib/cn';
@@ -64,7 +64,7 @@ export function RoomCreateForm() {
               profileImageUrl: user?.profileImageUrl ?? null,
             },
           });
-          router.push(`/rooms/general?roomId=${response.roomId}`);
+          router.push(buildRoomPath(mode, response.roomId));
         },
         onError: (error) => {
           const message =
