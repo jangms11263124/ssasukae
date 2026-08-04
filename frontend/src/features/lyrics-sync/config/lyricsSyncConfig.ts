@@ -1,0 +1,47 @@
+export const LRCLIB_BASE_URL = 'https://lrclib.net';
+
+/**
+ * LRCLIB는 API 키가 없는 무료 서비스라, 문서가 클라이언트 식별을 요구한다.
+ * 라우트 핸들러(서버)에서 부르므로 User-Agent를 그대로 지정할 수 있다.
+ *
+ * 반드시 ASCII만 쓴다 — HTTP 헤더 값은 Latin-1(ByteString)이라 한글이 들어가면
+ * fetch가 TypeError로 즉시 실패한다.
+ *
+ * TODO: 배포 전 프로젝트 페이지 주소나 연락 가능한 이메일을 괄호 안에 채운다 (문서 권장 형식).
+ */
+export const LRCLIB_CLIENT = 'SSASUKAE/0.1.0 (SSAFY 15th team project D206)';
+
+/** 곡 길이 일치 허용 오차. LRCLIB 자체도 ±2초를 매칭 기준으로 쓴다 */
+export const DURATION_TOLERANCE_SEC = 2;
+
+/**
+ * 검증에 쓸 후보 개수. 검색 결과에는 라이브·리메이크 버전이 섞여 오므로
+ * 1위만 보지 않고 몇 개를 백엔드 가사와 대조해 고른다.
+ */
+export const MAX_CANDIDATES = 3;
+
+/** 문서 권장: 연속 요청 사이에 200~500ms 간격을 둔다 */
+export const SEARCH_DELAY_MS = 300;
+
+/** 가사는 바뀌지 않는다. 외부 요청을 하루에 곡당 한 번으로 줄인다 */
+export const LYRICS_CACHE_SECONDS = 86_400;
+
+/**
+ * LRCLIB 후보를 같은 곡으로 인정할 최소 본문 겹침 비율.
+ * 제목만으로 검색하면 동명이곡이 걸리는데, 백엔드가 주는 가사 원문과 대조하면
+ * 엉뚱한 곡의 타임스탬프로 진행하는 사고를 막을 수 있다.
+ */
+export const MIN_OVERLAP_RATIO = 0.5;
+
+/**
+ * 소절이 실제 발성보다 살짝 먼저 떠야 따라 부를 수 있다.
+ * LRC 타임스탬프에서 이만큼 당겨 표시한다.
+ */
+export const LYRICS_LEAD_MS = 200;
+
+/**
+ * LRC 타임스탬프는 원곡 음원 기준이라, MR의 인트로 길이가 다르면 곡 전체가 일정하게 밀린다.
+ * 곡마다 다른 값이라 여기서 일괄로 맞출 수는 없고, 전반적으로 밀려 보일 때 조정하는 손잡이다.
+ * 양수면 가사가 더 빨리, 음수면 더 늦게 넘어간다.
+ */
+export const LYRICS_SYNC_OFFSET_MS = 0;

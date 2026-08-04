@@ -175,6 +175,15 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           stageStore.applyPreparationStarted(
             event.payload as PerformancePreparationStartedPayload,
           );
+          // 이벤트에는 곡 제목만 있어 가사 싱크 조회에 필요한 가수·길이가 없다.
+          // 선곡한 가창자는 이미 알고 있지만 나머지 참가자는 스냅샷으로만 알 수 있다.
+          getRoomSnapshot(event.roomId ?? roomId)
+            .then((snapshot) => {
+              useStageStore.getState().hydrateFromRoomSnapshot(snapshot);
+            })
+            .catch(() => {
+              // 가수·길이 없이도 제목만으로 가사를 찾는다 (정확도만 떨어진다).
+            });
           break;
         case 'PLAYBACK_STARTED':
           stageStore.applyPlaybackStarted();
