@@ -76,6 +76,8 @@ interface StageStore {
   applyPlaybackFinished: () => void;
   applySettingsChanged: (settings: PerformanceSettings) => void;
   applyPerformanceCancelled: () => void;
+  /** 가창자가 시작 전에 공연을 취소했다(노래 바꾸기). 가창자를 유지한 채 선곡으로 돌아간다 */
+  applySongChangeCancelled: (performerParticipantId: number) => void;
   /** AI 채점 결과 수신 (LEADERBOARD_UPDATED의 updatedFinalScore) */
   applyScore: (score: number) => void;
   applyScoringFailed: () => void;
@@ -171,6 +173,9 @@ export const useStageStore = create<StageStore>((set) => ({
     set((state) => ({ settings: { ...state.settings, ...settings } })),
 
   applyPerformanceCancelled: () => set(INITIAL_PERFORMANCE_STATE),
+
+  applySongChangeCancelled: (performerParticipantId) =>
+    set({ ...INITIAL_PERFORMANCE_STATE, phase: 'SONG_SELECT', performerParticipantId }),
 
   applyScore: (score) => set({ phase: 'SCORE', score, scoringFailed: false }),
 
