@@ -14,17 +14,17 @@ function parseRoomId(raw: string | null): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function GeneralRoomPageContent() {
+function BattleRoomPageContent() {
   const searchParams = useSearchParams();
   const roomIdFromUrl = parseRoomId(searchParams.get('roomId'));
 
   return <PerformanceRoomScreen roomIdFromUrl={roomIdFromUrl} />;
 }
 
-export default function GeneralRoomPage() {
+export default function BattleRoomPage() {
   return (
     <Suspense fallback={null}>
-      <GeneralRoomPageContent />
+      <BattleRoomPageContent />
     </Suspense>
   );
 }

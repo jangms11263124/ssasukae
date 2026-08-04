@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import { useRoomStore } from '@/entities/room';
+import { buildRoomPath, useRoomStore, type RoomMode } from '@/entities/room';
 import { useAuth } from '@/entities/user';
 import { ApiError } from '@/shared/api/client';
 import { showToast } from '@/shared/model/toastStore';
@@ -96,24 +96,25 @@ export function RoomJoinForm() {
     }
 
     joinRoom(inviteCode, {
-      onSuccess: (response) => {
+      onSuccess: ({ session, snapshot }) => {
+        // 스냅샷을 못 받은 경우 GENERAL로 폴백 — 방 화면 부트스트랩이 다시 동기화한다.
+        const mode: RoomMode = snapshot?.mode ?? 'GENERAL';
         enterRoom({
-          roomId: response.roomId,
-          participantId: response.participantId,
-          inviteCode: response.inviteCode,
-          // 방 상세 조회 API가 없어 입장 응답만으로는 방 이름을 알 수 없다.
-          name: '',
-          mode: 'GENERAL',
+          roomId: session.roomId,
+          participantId: session.participantId,
+          inviteCode: session.inviteCode,
+          name: snapshot?.name ?? '',
+          mode,
           isHost: false,
-          openViduSessionId: response.openViduSessionId,
-          openViduToken: response.openViduToken,
+          openViduSessionId: session.openViduSessionId,
+          openViduToken: session.openViduToken,
           me: {
             userId: user?.id ?? 0,
             nickname: user?.nickname ?? '나',
             profileImageUrl: user?.profileImageUrl ?? null,
           },
         });
-        router.push(`/rooms/general?roomId=${response.roomId}`);
+        router.push(buildRoomPath(mode, session.roomId));
       },
       onError: (error) => {
         const message =
