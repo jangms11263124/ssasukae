@@ -1,5 +1,3 @@
-'use client';
-
 import { useRoomStore } from '@/entities/room';
 
 import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
