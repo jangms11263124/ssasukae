@@ -124,11 +124,14 @@ export function AudioEnginePanel({ variant = 'inline' }: { variant?: 'inline' | 
 
   const mrVolume = settings.mrVolumePercent;
   const echo = settings.echoLevel;
+  const monitorVoice = settings.monitorVoicePercent;
   const pitchShift = settings.keyOffset;
   const tempoShift = Math.round((settings.tempoPercent - 100) / TEMPO_STEP_PERCENT);
 
   const setMrVolume = (value: number) => publishSettings({ mrVolumePercent: value });
   const setEcho = (value: number) => publishSettings({ echoLevel: value });
+  // 로컬 전용 값 — 서버 계약(4필드)에 없어 전송 시 걸러지고, 가창자 이어폰에만 반영된다.
+  const setMonitorVoice = (value: number) => publishSettings({ monitorVoicePercent: value });
   const setPitchShift = (value: number) => publishSettings({ keyOffset: value });
   const setTempoShift = (value: number) =>
     publishSettings({ tempoPercent: 100 + value * TEMPO_STEP_PERCENT });
@@ -137,6 +140,7 @@ export function AudioEnginePanel({ variant = 'inline' }: { variant?: 'inline' | 
     <div className="space-y-4 px-4 pb-4 pt-3">
       <SliderRow label="MR VOLUME" value={mrVolume} onChange={setMrVolume} disabled={locked} />
       <SliderRow label="ECHO" value={echo} onChange={setEcho} disabled={locked} />
+      <SliderRow label="MY VOICE" value={monitorVoice} onChange={setMonitorVoice} disabled={locked} />
       {!isBattleMode ? (
         <>
           <StepperRow
