@@ -119,7 +119,8 @@ export async function proxyToBackend(
   };
 
   if (request.method !== 'GET' && request.method !== 'HEAD') {
-    init.body = await request.text();
+    // text()는 UTF-8로 디코딩해 JPEG/PNG 등 multipart 바이너리를 손상시킨다.
+    init.body = await request.arrayBuffer();
   }
 
   const backendResponse = await fetch(targetUrl, init);
