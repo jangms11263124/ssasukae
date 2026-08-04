@@ -58,7 +58,11 @@ export function RoomCreateForm() {
             isHost: true,
             openViduSessionId: response.openViduSessionId,
             openViduToken: response.openViduToken,
-            me: { userId: user?.id ?? 0, nickname: user?.nickname ?? '나' },
+            me: {
+              userId: user?.id ?? 0,
+              nickname: user?.nickname ?? '나',
+              profileImageUrl: user?.profileImageUrl ?? null,
+            },
           });
           router.push(`/rooms/general?roomId=${response.roomId}`);
         },

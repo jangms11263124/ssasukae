@@ -29,10 +29,11 @@ export interface PongPayload {
 
 // ── Room 이벤트 payload ──────────────────────────────────────
 
-/** userId가 없어 목록 반영 후 방 스냅샷 조회로 보정해야 한다 */
 export interface ParticipantJoinedPayload {
   participantId: number;
+  userId: number;
   nickname: string;
+  profileImageUrl: string | null;
 }
 
 export interface ParticipantLeftPayload {
