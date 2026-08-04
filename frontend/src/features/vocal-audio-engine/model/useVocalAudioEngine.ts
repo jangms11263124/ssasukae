@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { VocalAudioEngine, VocalDspValues } from './types';
 
@@ -15,6 +15,8 @@ export interface UseVocalAudioEngineOptions {
   /** 빈 문자열이면 시스템 기본 장치 */
   micDeviceId: string;
   speakerDeviceId: string;
+  /** MR이 끝까지 재생돼 스스로 멈추면 호출된다. 정지/정리로 멈춘 경우는 제외 */
+  onMrEnded?: () => void;
 }
 
 export interface VocalAudioEngineState {
@@ -44,6 +46,7 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
     micDeviceId,
     speakerDeviceId,
     dsp,
+    onMrEnded,
   } = options;
   const { keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent } = dsp;
 
@@ -80,6 +83,22 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
       setError(null);
     };
   }, [enabled]);
+
+  // 자연 종료 콜백. 엔진 생성마다 한 번만 등록하고 최신 콜백은 ref로 따라간다 —
+  // 콜백 아이덴티티가 바뀔 때마다 재등록하지 않는다.
+  const onMrEndedRef = useRef(onMrEnded);
+  useEffect(() => {
+    onMrEndedRef.current = onMrEnded;
+  });
+  useEffect(() => {
+    if (engine === null) return;
+
+    engine.setOnMrEnded(() => onMrEndedRef.current?.());
+
+    return () => {
+      engine.setOnMrEnded(null);
+    };
+  }, [engine]);
 
   // MR 로딩 (READY 단계 선로딩 — 공연 시작 시 바로 재생되도록)
   useEffect(() => {

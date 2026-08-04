@@ -37,6 +37,11 @@ interface StageStore {
   selectedSong: StageSong | null;
   // ── 서버 공연 세션 상태 ──
   performanceId: number | null;
+  /**
+   * 시작하기를 눌러 MR 다운로드를 요청한 상태. 노래 바꾸기로 선곡이 반복될 수 있어
+   * 선곡만으로는 내려받지 않는다 — 시작 요청 후 다운로드가 끝나면 재생 시작을 보낸다.
+   */
+  mrLoadRequested: boolean;
   mrDownloadUrl: string | null;
   midiJsonDownloadUrl: string | null;
   /** 가사 파일 URL. AI 분석 파이프라인의 파일 포맷 확정 후 가사 싱크에 사용한다 */
@@ -53,6 +58,7 @@ interface StageStore {
   confirmSinger: (participantId: number) => void;
   confirmSong: (song: StageSong) => void;
   changeSong: () => void;
+  requestMrLoad: () => void;
   startPerformance: () => void;
   finishPerformance: (score: number) => void;
   endStage: () => void;
@@ -83,6 +89,7 @@ const INITIAL_PERFORMANCE_STATE = {
   score: null,
   selectedSong: null,
   performanceId: null,
+  mrLoadRequested: false,
   mrDownloadUrl: null,
   midiJsonDownloadUrl: null,
   lyricsDownloadUrl: null,
@@ -110,7 +117,8 @@ export const useStageStore = create<StageStore>((set) => ({
   confirmSinger: (participantId) =>
     set({ performerParticipantId: participantId, phase: 'SONG_SELECT' }),
   confirmSong: (song) => set({ phase: 'READY', selectedSong: song }),
-  changeSong: () => set({ phase: 'SONG_SELECT', selectedSong: null }),
+  changeSong: () => set({ phase: 'SONG_SELECT', selectedSong: null, mrLoadRequested: false }),
+  requestMrLoad: () => set({ mrLoadRequested: true }),
   startPerformance: () => set({ phase: 'PERFORMING' }),
   finishPerformance: (score) => set({ phase: 'SCORE', score }),
   endStage: () => set(INITIAL_PERFORMANCE_STATE),

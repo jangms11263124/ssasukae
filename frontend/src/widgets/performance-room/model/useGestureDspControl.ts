@@ -14,8 +14,8 @@ interface UseGestureDspControlOptions {
   isPanelOpen: boolean;
   onOpenPanel: () => void;
   onClosePanel: () => void;
-  /** 양손 X자 3초 유지 완료 → 공연 종료 */
-  onFinishPerformance: () => void;
+  /** 양손 X자 3초 유지 완료 → 공연 취소 */
+  onCancelPerformance: () => void;
 }
 
 export interface GestureDspControlState extends GestureControlState {
@@ -80,7 +80,7 @@ export function useGestureDspControl(
     rowCount: DSP_ROWS.length,
     onOpenPanel: options.onOpenPanel,
     onClosePanel: options.onClosePanel,
-    onCancelHold: options.onFinishPerformance,
+    onCancelHold: options.onCancelPerformance,
     onRowChange: handleRowChange,
     onGrabStart: handleGrabStart,
     onDrag: handleDrag,

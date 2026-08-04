@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 
 import { useDeviceSettingsStore } from '@/entities/media-device';
 import { useVocalAudioEngine, type VocalAudioEngineState } from '@/features/vocal-audio-engine';
@@ -6,6 +6,7 @@ import { useVocalAudioEngine, type VocalAudioEngineState } from '@/features/voca
 import { TEMPO_STEP_PERCENT } from '../config/dspParams';
 import { useCardStore } from './cardStore';
 import { useOpenViduSessionContext } from './OpenViduSessionContext';
+import { useRoomSocketContext } from './RoomSocketContext';
 import { useStageStore } from './stageStore';
 
 const KEY_OFFSET_MIN = -6;
@@ -24,6 +25,7 @@ function clamp(value: number, min: number, max: number): number {
  */
 export function useStageAudioEngine(isPerformer: boolean): VocalAudioEngineState {
   const phase = useStageStore((state) => state.phase);
+  const mrLoadRequested = useStageStore((state) => state.mrLoadRequested);
   const mrDownloadUrl = useStageStore((state) => state.mrDownloadUrl);
   const settings = useStageStore((state) => state.settings);
   const micOn = useStageStore((state) => state.micOn);
@@ -60,9 +62,24 @@ export function useStageAudioEngine(isPerformer: boolean): VocalAudioEngineState
     if (!isHydrated) hydrate();
   }, [isHydrated, hydrate]);
 
+  const socket = useRoomSocketContext();
+
+  // MR이 끝까지 재생되면 가창자가 정상 종료를 알리고 채점 단계로 전이한다.
+  // 중도 취소(버튼·제스처)는 cancel을 보내므로 playback/finish는 여기서만 나간다.
+  // 조건은 전송 시점 기준이어야 해서 스토어를 구독하지 않고 직접 읽는다.
+  const handleMrEnded = useCallback(() => {
+    const stage = useStageStore.getState();
+    if (stage.phase !== 'PERFORMING' || stage.isSuspended) return;
+
+    socket.sendPlaybackFinish();
+    stage.applyPlaybackFinished();
+  }, [socket]);
+
   const engine = useVocalAudioEngine({
     enabled: isPerformer && (phase === 'READY' || phase === 'PERFORMING'),
-    mrUrl: mrDownloadUrl,
+    // 노래 바꾸기로 선곡이 반복될 수 있어 READY 진입만으로는 MR을 내려받지 않는다.
+    // 시작 요청 후에 받고, 재접속 복원(PERFORMING 진입)은 재개에 필요하므로 바로 받는다.
+    mrUrl: mrLoadRequested || phase === 'PERFORMING' ? mrDownloadUrl : null,
     // 일시 중지 동안 MR을 멈췄다가 재개 이벤트가 오면 서버가 준 위치부터 이어 재생한다.
     playing: phase === 'PERFORMING' && !isSuspended,
     startOffsetMs: resumeOffsetMs,
@@ -76,6 +93,7 @@ export function useStageAudioEngine(isPerformer: boolean): VocalAudioEngineState
     },
     micDeviceId: deviceSettings.microphoneId,
     speakerDeviceId: deviceSettings.speakerId,
+    onMrEnded: handleMrEnded,
   });
 
   const { replaceAudioTrack } = useOpenViduSessionContext();
