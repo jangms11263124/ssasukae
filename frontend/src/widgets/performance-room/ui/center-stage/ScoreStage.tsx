@@ -11,7 +11,7 @@ import { StageBackdrop } from './StageBackdrop';
 /** 점수(또는 실패 안내)를 보여준 뒤 자동으로 다음 단계로 넘어가기까지의 시간 */
 const SCORE_DISPLAY_MS = 5000;
 
-/** WaitingStage의 시작 최소 인원과 같은 기준 — 그 아래로 줄면 대기 화면으로 돌아간다 */
+/** WaitingControls의 시작 최소 인원과 같은 기준 — 그 아래로 줄면 대기 화면으로 돌아간다 */
 const MIN_PARTICIPANTS_TO_CONTINUE = 2;
 
 function scoreLabel(score: number) {

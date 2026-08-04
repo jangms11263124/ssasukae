@@ -1,62 +1,36 @@
 'use client';
 
-import type { RoomParticipant } from '@/entities/participant';
-
-import { useStageAudioEngine } from '../../model/useStageAudioEngine';
-import { useStageScoring } from '../../model/useStageScoring';
 import { useStageStore, type StagePhase } from '../../model/stageStore';
 import { ActiveEffectBanner } from '../cards/ActiveEffectBanner';
 import { CardCountdownOverlay } from '../cards/CardCountdownOverlay';
 import { CardDealOverlay } from '../cards/CardDealOverlay';
 import { PerformingStage } from './PerformingStage';
-import { ReadyStage } from './ReadyStage';
 import { ScoreStage } from './ScoreStage';
-import { SingerSelectStage } from './SingerSelectStage';
-import { SongSelectStage } from './SongSelectStage';
+import { SelfCameraStage } from './SelfCameraStage';
 import { SuspendedOverlay } from './SuspendedOverlay';
-import { WaitingStage } from './WaitingStage';
 
 interface CenterStageProps {
   currentParticipantId: number;
-  isHost: boolean;
-  participants: RoomParticipant[];
 }
 
-export function CenterStage({ currentParticipantId, isHost, participants }: CenterStageProps) {
+// 진행 안내·버튼은 우측 무대 진행 패널(StageControlPanel)이 맡는다.
+// 무대는 공연 전에는 내 캠, 공연 중에는 가창자 캠, 채점 중에는 점수만 비춘다.
+// 오디오 엔진은 StageAudioProvider(화면 레벨)가 소유한다 — READY의 MR 선로딩이
+// PERFORMING까지 이어져야 하고, 진행 패널도 로딩 상태를 읽어야 하기 때문이다.
+export function CenterStage({ currentParticipantId }: CenterStageProps) {
   const phase = useStageStore((state) => state.phase);
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
-  const selectedSong = useStageStore((state) => state.selectedSong);
   const isSuspended = useStageStore((state) => state.isSuspended);
-  const performanceId = useStageStore((state) => state.performanceId);
 
   const isPerformer = performerParticipantId === currentParticipantId;
-  const performer = participants.find(({ id }) => id === performerParticipantId) ?? null;
-
-  // READY에서 시작 요청 후 받은 MR이 PERFORMING까지 이어져야 해서 단계별 뷰가 아니라 여기 둔다.
-  // 송출 스트림(getBroadcastStream)은 OpenVidu publisher 연동 시 여기서 꺼내 넘긴다.
-  const audioEngine = useStageAudioEngine(isPerformer);
-
-  // 채점 입력(STT·음정) 수집. 엔진이 연 마이크와 MR 시간축을 그대로 나눠 쓴다.
-  useStageScoring(isPerformer, audioEngine.engine);
 
   const STAGE_VIEWS: Record<StagePhase, React.ReactNode> = {
     PERFORMING: <PerformingStage isPerformer={isPerformer} />,
-    READY: (
-      <ReadyStage
-        isPerformer={isPerformer}
-        performerNickname={performer?.nickname ?? ''}
-        songTitle={selectedSong?.title ?? ''}
-        // PERFORMANCE_PREPARATION_STARTED 수신(performanceId 확정) 전에는 시작을 요청할 수
-        // 없다 — 이벤트 전에 시작하면 서버 전송 없이 화면만 전이된다.
-        canRequestStart={performanceId !== null}
-        isMrLoaded={audioEngine.isMrLoaded}
-        prepareError={audioEngine.error}
-      />
-    ),
+    READY: <SelfCameraStage />,
     SCORE: <ScoreStage />,
-    SINGER_SELECT: <SingerSelectStage isHost={isHost} participants={participants} />,
-    SONG_SELECT: <SongSelectStage isPerformer={isPerformer} />,
-    WAITING: <WaitingStage isHost={isHost} participantCount={participants.length} />,
+    SINGER_SELECT: <SelfCameraStage />,
+    SONG_SELECT: <SelfCameraStage />,
+    WAITING: <SelfCameraStage />,
   };
 
   return (
