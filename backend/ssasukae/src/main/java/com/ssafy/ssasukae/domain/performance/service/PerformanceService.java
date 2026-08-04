@@ -5,6 +5,7 @@ import java.time.ZoneId;
 import java.util.Objects;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -40,6 +41,7 @@ import com.ssafy.ssasukae.global.exception.websocket.WebSocketErrorCode;
 import com.ssafy.ssasukae.integration.aws.S3StorageService;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class PerformanceService {
 
@@ -161,7 +163,15 @@ public class PerformanceService {
               PerformanceWebSocketEventType.PLAYBACK_STARTED,
               new PlaybackStartedPayload(
                   changed.performanceId(), changed.performerParticipantId(), changed.startedAt()));
-          cardService.assignForPlayback(changed);
+          try {
+            cardService.assignForPlayback(changed);
+          } catch (RuntimeException exception) {
+            log.error(
+                "카드 배정 트랜잭션 시작 또는 완료 실패 (roomId={}, performanceId={})",
+                changed.roomId(),
+                changed.performanceId(),
+                exception);
+          }
         });
   }
 
