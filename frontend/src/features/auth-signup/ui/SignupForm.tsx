@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 
-import type { SignupTokenClaims } from '@/entities/user';
 import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
 
@@ -83,11 +82,4 @@ export function SignupForm({
       </Link>
     </form>
   );
-}
-
-export function getSignupDefaults(claims: SignupTokenClaims | null) {
-  return {
-    socialNickname: claims?.nickname ?? '',
-    profileImageUrl: claims?.profileImageUrl ?? undefined,
-  };
 }

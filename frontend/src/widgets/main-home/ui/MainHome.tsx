@@ -1,5 +1,3 @@
-'use client';
-
 import { RoomCreateForm } from '@/features/room-create';
 import { RoomJoinForm } from '@/features/room-join';
 import { cn } from '@/shared/lib/cn';

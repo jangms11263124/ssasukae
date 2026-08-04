@@ -14,7 +14,6 @@ import { useAuth } from '@/entities/user';
 import { ApiError } from '@/shared/api/client';
 import { showToast } from '@/shared/model/toastStore';
 
-import { hydrateCardsFromRoomSnapshot } from '../model/cardStore';
 import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
 import { RoomSocketProvider } from '../model/RoomSocketContext';
 import { useCardEffectSideEffects } from '../model/useCardEffectSideEffects';
@@ -80,9 +79,9 @@ export function GeneralRoomScreen() {
     getRoomSnapshot(roomId)
       .then((snapshot) => {
         if (!cancelled) {
+          // 무대·카드 복원은 구독을 연 뒤 조회하는 useRoomSocket이 담당한다. 여기서 또 반영하면
+          // 구독 이전에 찍힌 스냅샷으로 덮어써 재접속 복원이 한 박자 뒤로 밀릴 수 있다.
           hydrateFromSnapshot(snapshot);
-          // 수성전 재접속: 내 카드·참가자별 카드 사용 상태를 스냅샷 기준으로 복원한다.
-          hydrateCardsFromRoomSnapshot(snapshot);
         }
       })
       .catch((error: unknown) => {
