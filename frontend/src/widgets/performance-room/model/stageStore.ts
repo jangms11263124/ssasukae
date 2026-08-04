@@ -62,6 +62,8 @@ interface StageStore {
   startPerformance: () => void;
   finishPerformance: (score: number) => void;
   endStage: () => void;
+  /** 채점 화면을 마치고 다음 가창자 선택으로 넘어간다. 끝난 공연 상태는 초기화한다 */
+  advanceToSingerSelect: () => void;
   toggleMic: () => void;
   toggleCam: () => void;
   toggleGesture: () => void;
@@ -122,6 +124,7 @@ export const useStageStore = create<StageStore>((set) => ({
   startPerformance: () => set({ phase: 'PERFORMING' }),
   finishPerformance: (score) => set({ phase: 'SCORE', score }),
   endStage: () => set(INITIAL_PERFORMANCE_STATE),
+  advanceToSingerSelect: () => set({ ...INITIAL_PERFORMANCE_STATE, phase: 'SINGER_SELECT' }),
   toggleMic: () => set((state) => ({ micOn: !state.micOn })),
   // 캠을 끄면 손 인식 입력이 사라진다. "켜져 있는데 조작은 안 되는" 상태를 막는다.
   toggleCam: () =>
