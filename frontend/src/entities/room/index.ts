@@ -13,6 +13,8 @@ export {
   type RoomSnapshotCardUsageStatus,
   type RoomSnapshotMyCard,
   type RoomSnapshotParticipant,
+  type RoomSnapshotPerformance,
+  type RoomSnapshotPlayback,
   type RoomSnapshotResponse,
   type RoomStatus,
   type RoomTokenResponse,

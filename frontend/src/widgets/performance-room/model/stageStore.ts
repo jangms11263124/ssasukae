@@ -7,6 +7,7 @@ import {
   type PerformanceSettings,
   type PerformanceStartedPayload,
 } from '@/entities/performance';
+import type { RoomSnapshotResponse } from '@/entities/room';
 
 export type StagePhase =
   | 'WAITING'
@@ -72,6 +73,8 @@ interface StageStore {
   applyScoringFailed: () => void;
   applyPerformanceSuspended: () => void;
   applyPerformanceResumed: (payload: PerformanceResumedPayload) => void;
+  /** 입장 또는 소켓 재연결 시 놓친 공연 이벤트를 서버 스냅샷으로 복원한다. */
+  hydrateFromRoomSnapshot: (snapshot: RoomSnapshotResponse) => void;
 }
 
 const INITIAL_PERFORMANCE_STATE = {
@@ -87,6 +90,13 @@ const INITIAL_PERFORMANCE_STATE = {
   scoringFailed: false,
   isSuspended: false,
   resumeOffsetMs: 0,
+};
+
+// 스냅샷과 로컬 중 어느 쪽이 더 진행됐는지 비교하는 순서. 서버 공연이 존재하는 단계만 다룬다.
+const SERVER_PHASE_ORDER: Partial<Record<StagePhase, number>> = {
+  READY: 1,
+  PERFORMING: 2,
+  SCORE: 3,
 };
 
 // 기기 토글은 INITIAL_PERFORMANCE_STATE에 넣지 않는다. 넣으면 공연마다 초기화된다.
@@ -167,4 +177,61 @@ export const useStageStore = create<StageStore>((set) => ({
       settings: { ...state.settings, ...payload.settings },
       phase: payload.currentStatus === 'PLAYING' ? 'PERFORMING' : 'READY',
     })),
+
+  hydrateFromRoomSnapshot: (snapshot) =>
+    set((state) => {
+      const performance = snapshot.performance;
+
+      // 서버에 공연이 없다. 가창자·곡 선택은 아직 공연이 만들어지기 전 단계라 로컬 진행이
+      // 유일한 기준이므로 보존하고, 취소·종료된 공연의 잔여 상태만 정리한다.
+      if (performance === null) {
+        return state.performanceId === null ? state : INITIAL_PERFORMANCE_STATE;
+      }
+
+      // 스냅샷 요청 도중 더 최신 공연 이벤트가 도착했다면 과거 공연으로 되돌리지 않는다.
+      if (state.performanceId !== null && state.performanceId > performance.performanceId) {
+        return state;
+      }
+
+      const isSuspended = performance.status === 'SUSPENDED';
+      const effectiveStatus = isSuspended
+        ? (performance.suspendedFromStatus ?? 'PREPARING')
+        : performance.status;
+      const snapshotPhase: StagePhase =
+        effectiveStatus === 'PLAYING'
+          ? 'PERFORMING'
+          : effectiveStatus === 'ANALYZING' ||
+              effectiveStatus === 'ANALYSIS_FAILED' ||
+              effectiveStatus === 'FINISHED'
+            ? 'SCORE'
+            : 'READY';
+      // 같은 공연인데 로컬이 더 진행돼 있다면(이벤트가 스냅샷 응답보다 먼저 도착) 되돌리지 않는다.
+      const localIsAhead =
+        state.performanceId === performance.performanceId &&
+        (SERVER_PHASE_ORDER[state.phase] ?? 0) > (SERVER_PHASE_ORDER[snapshotPhase] ?? 0);
+      const phase = localIsAhead ? state.phase : snapshotPhase;
+
+      return {
+        performanceId: performance.performanceId,
+        performerParticipantId: performance.performerParticipantId,
+        selectedSong: {
+          id: performance.songId,
+          title: performance.songTitle,
+          thumbnailUrl: performance.thumbnailImageUrl,
+          difficultyLevel: performance.difficultyLevel,
+        },
+        mrDownloadUrl: performance.mrDownloadUrl,
+        midiJsonDownloadUrl: performance.midiJsonDownloadUrl,
+        lyricsDownloadUrl: performance.lyricsDownloadUrl,
+        settings: { ...state.settings, ...performance.settings },
+        phase,
+        score: phase === 'SCORE' ? state.score : null,
+        scoringFailed: performance.status === 'ANALYSIS_FAILED',
+        // 로컬이 더 진행된 경우 스냅샷의 낡은 정지 상태·재생 위치로 덮어쓰지 않는다.
+        isSuspended: localIsAhead ? state.isSuspended : isSuspended,
+        resumeOffsetMs: localIsAhead
+          ? state.resumeOffsetMs
+          : (snapshot.playback?.playbackPositionMs ?? 0),
+      };
+    }),
 }));
