@@ -36,7 +36,7 @@ import { ParticipantVideoStrip } from './participant-video/ParticipantVideoStrip
 import { RemoteAudioSink } from './participant-video/RemoteAudioSink';
 import { RoomTopBar } from './RoomTopBar';
 
-interface GeneralRoomScreenProps {
+interface PerformanceRoomScreenProps {
   roomIdFromUrl: number | null;
 }
 
@@ -52,7 +52,7 @@ function RoomBootstrapLoading() {
 }
 
 /** session 복구가 끝난 뒤에만 마운트 — OpenVidu·소켓 이중 연결을 막는다 */
-function GeneralRoomContent() {
+function PerformanceRoomContent() {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -231,7 +231,7 @@ function GeneralRoomContent() {
   );
 }
 
-export function GeneralRoomScreen({ roomIdFromUrl }: GeneralRoomScreenProps) {
+export function PerformanceRoomScreen({ roomIdFromUrl }: PerformanceRoomScreenProps) {
   const bootstrap = useRoomBootstrap(roomIdFromUrl);
   const session = useRoomStore((state) => state.session);
 
@@ -243,5 +243,5 @@ export function GeneralRoomScreen({ roomIdFromUrl }: GeneralRoomScreenProps) {
     return null;
   }
 
-  return <GeneralRoomContent />;
+  return <PerformanceRoomContent />;
 }

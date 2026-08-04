@@ -3,7 +3,7 @@
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-import { GeneralRoomScreen } from '@/widgets/performance-room';
+import { PerformanceRoomScreen } from '@/widgets/performance-room';
 
 function parseRoomId(raw: string | null): number | null {
   if (raw === null) {
@@ -18,7 +18,7 @@ function GeneralRoomPageContent() {
   const searchParams = useSearchParams();
   const roomIdFromUrl = parseRoomId(searchParams.get('roomId'));
 
-  return <GeneralRoomScreen roomIdFromUrl={roomIdFromUrl} />;
+  return <PerformanceRoomScreen roomIdFromUrl={roomIdFromUrl} />;
 }
 
 export default function GeneralRoomPage() {
