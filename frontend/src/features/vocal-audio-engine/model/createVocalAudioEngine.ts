@@ -9,6 +9,7 @@ import {
   PITCH_BYPASS_EPSILON,
   PITCH_SHIFT_WINDOW_SIZE,
   SILENCE_DB,
+  VOCAL_ANALYSER_FFT_SIZE,
   VOCAL_CAPTURE_CONSTRAINTS,
 } from '../config/audioEngineConfig';
 import type { VocalAudioEngine, VocalDspValues } from './types';
@@ -16,9 +17,14 @@ import type { VocalAudioEngine, VocalDspValues } from './types';
 /*
  * 오디오 그래프 (모니터/송출 믹스 분리):
  *
- *   mic ──────────→ FeedbackDelay(에코) → micGain ─┬→ monitorBus → 이어폰(ctx.destination)
+ *   mic ─┬────────→ FeedbackDelay(에코) → micGain ─┬→ monitorBus → 이어폰(ctx.destination)
+ *        │                                        │
  *   MR(Player) ──→ PitchShift(음정)    → mrGain  ─┴→ broadcastBus → MediaStreamDestination
- *                                                                    (→ OpenVidu publisher)
+ *        │                                                           (→ OpenVidu publisher)
+ *        └────────→ vocalAnalyser (음정 수집)
+ *        └────────→ vocalTap → MediaStreamDestination (STT 녹음)
+ *
+ * 채점 탭 두 갈래는 에코·음량 이전의 드라이 목소리를 딴다 — 사용자가 만진 이펙트가 점수에 섞이면 안 된다.
  *
  * 모니터링은 WebRTC 루프백이 아니라 로컬 그래프에서 직접 딴다 — 지터 버퍼 지연이 없다.
  * 음정/템포는 MR 전용(PitchShift 지연 100ms가 목소리에 붙으면 노래를 못 부른다),
@@ -72,6 +78,9 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   private readonly mrGain: Tone.Volume;
   private readonly echoDelay: Tone.FeedbackDelay;
   private readonly micGain: Tone.Volume;
+  /** 채점용 드라이 탭. 마이크 노드와 달리 엔진 수명 내내 살아 있다 */
+  private readonly vocalTap: MediaStreamAudioDestinationNode;
+  private readonly vocalAnalyser: AnalyserNode;
 
   private player: Tone.Player | null = null;
   private mrUrl: string | null = null;
@@ -79,6 +88,15 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   private micSource: MediaStreamAudioSourceNode | null = null;
   /** openMic 경합 방지 — 가장 마지막 요청만 살아남는다 */
   private micRequestId = 0;
+
+  /*
+   * MR 시간축 추적: Tone.Player는 재생 위치를 알려주지 않아 직접 잰다.
+   * 배속이 바뀌면 그 시점까지의 진행을 확정하고 앵커를 다시 잡는다 — 카드 효과로 템포가
+   * 오르내려도 누적 위치가 어긋나지 않는다.
+   */
+  private mrAnchorSeconds = 0;
+  private mrAnchorContextTime = 0;
+  private mrPlaying = false;
 
   private lastDsp: VocalDspValues = DEFAULT_DSP;
   private disposed = false;
@@ -119,6 +137,11 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.echoDelay = new Tone.FeedbackDelay({ delayTime: ECHO_DELAY_TIME, feedback: 0, wet: 0 });
     this.echoDelay.connect(this.micGain);
 
+    // 채점 탭. 여기에는 아무것도 연결하지 않아 소리로 나가지 않는다 (분석·녹음 전용).
+    this.vocalTap = context.createMediaStreamDestination();
+    this.vocalAnalyser = context.createAnalyser();
+    this.vocalAnalyser.fftSize = VOCAL_ANALYSER_FFT_SIZE;
+
     // 자동재생 정책으로 suspended면 다음 클릭에서 살린다
     if (context.state !== 'running') {
       document.addEventListener('pointerdown', this.resumeOnPointerDown, { once: true });
@@ -132,6 +155,9 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.player?.dispose();
     this.player = null;
     this.mrUrl = null;
+    // 곡이 바뀌면 이전 곡의 재생 위치는 의미가 없다.
+    this.mrAnchorSeconds = 0;
+    this.mrPlaying = false;
 
     const buffer = await new Tone.ToneAudioBuffer().load(url);
     if (this.disposed) return;
@@ -157,6 +183,9 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
         ? Math.min(offsetSeconds, duration)
         : undefined;
     this.player.start(undefined, offset);
+    this.mrAnchorSeconds = offset ?? 0;
+    this.mrAnchorContextTime = this.context.currentTime;
+    this.mrPlaying = true;
     // 지연 분해 진단용 — base는 브라우저 버퍼, output은 OS 오디오 스택. 실기 검증 후 제거 예정.
     console.info(
       `[vocal-audio-engine] baseLatency=${Math.round(this.context.baseLatency * 1000)}ms outputLatency=${Math.round((this.context.outputLatency || 0) * 1000)}ms`,
@@ -165,7 +194,25 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
 
   stopMr(): void {
     if (this.player === null || this.player.state !== 'started') return;
+    // 멈춘 위치를 확정해 둔다. 일시 중지 뒤에도 마지막 위치를 물어볼 수 있어야 한다.
+    this.mrAnchorSeconds = this.mrPositionSeconds();
+    this.mrPlaying = false;
     this.player.stop();
+  }
+
+  /** 앵커 이후 흐른 컨텍스트 시간에 배속을 곱해 MR 시간축 위치를 낸다 */
+  private mrPositionSeconds(): number {
+    if (!this.mrPlaying || this.player === null) return this.mrAnchorSeconds;
+
+    const elapsed = this.context.currentTime - this.mrAnchorContextTime;
+    const position = this.mrAnchorSeconds + elapsed * this.player.playbackRate;
+
+    // 곡이 끝나도 컨텍스트 시계는 계속 흐른다. 곡 길이를 넘는 위치를 주지 않는다.
+    return Math.min(position, this.player.buffer.duration);
+  }
+
+  getMrPositionMs(): number {
+    return this.mrPositionSeconds() * 1000;
   }
 
   async openMic(deviceId: string): Promise<void> {
@@ -188,6 +235,9 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.micStream = stream;
     this.micSource = this.context.createMediaStreamSource(stream);
     Tone.connect(this.micSource, this.echoDelay);
+    // 채점 탭은 에코 앞에서 갈라진다 — 사용자가 건 이펙트가 STT·음정 분석에 섞이지 않는다.
+    this.micSource.connect(this.vocalAnalyser);
+    this.micSource.connect(this.vocalTap);
   }
 
   closeMic(): void {
@@ -206,6 +256,11 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
 
     const speedMultiplier = safe.tempoPercent / 100;
     if (this.player !== null) {
+      // 배속을 바꾸기 전에 지금까지의 진행을 옛 배속으로 확정해 둔다.
+      if (this.mrPlaying && this.player.playbackRate !== speedMultiplier) {
+        this.mrAnchorSeconds = this.mrPositionSeconds();
+        this.mrAnchorContextTime = this.context.currentTime;
+      }
       this.player.playbackRate = speedMultiplier;
     }
 
@@ -236,6 +291,14 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     return this.broadcastDestination.stream;
   }
 
+  getVocalCaptureStream(): MediaStream {
+    return this.vocalTap.stream;
+  }
+
+  getVocalAnalyser(): AnalyserNode {
+    return this.vocalAnalyser;
+  }
+
   getLatencyMs(): number | null {
     const { baseLatency, outputLatency } = this.context;
     if (typeof baseLatency !== 'number') return null;
@@ -258,6 +321,8 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.monitorBus.dispose();
     this.broadcastBus.dispose();
     this.broadcastDestination.disconnect();
+    this.vocalAnalyser.disconnect();
+    this.vocalTap.disconnect();
     void this.context.close();
   }
 }

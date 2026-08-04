@@ -3,6 +3,7 @@
 import type { RoomParticipant } from '@/entities/participant';
 
 import { useStageAudioEngine } from '../../model/useStageAudioEngine';
+import { useStageScoring } from '../../model/useStageScoring';
 import { useStageStore, type StagePhase } from '../../model/stageStore';
 import { ActiveEffectBanner } from '../cards/ActiveEffectBanner';
 import { CardCountdownOverlay } from '../cards/CardCountdownOverlay';
@@ -34,6 +35,9 @@ export function CenterStage({ currentParticipantId, isHost, participants }: Cent
   // READY의 MR 선로딩이 PERFORMING까지 이어져야 해서 단계별 뷰가 아니라 여기 둔다.
   // 송출 스트림(getBroadcastStream)은 OpenVidu publisher 연동 시 여기서 꺼내 넘긴다.
   const audioEngine = useStageAudioEngine(isPerformer);
+
+  // 채점 입력(STT·음정) 수집. 엔진이 연 마이크와 MR 시간축을 그대로 나눠 쓴다.
+  useStageScoring(isPerformer, audioEngine.engine);
 
   const STAGE_VIEWS: Record<StagePhase, React.ReactNode> = {
     PERFORMING: <PerformingStage isPerformer={isPerformer} />,
