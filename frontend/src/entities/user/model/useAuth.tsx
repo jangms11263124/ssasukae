@@ -11,12 +11,20 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
+import { refreshStoredAccessToken } from '@/shared/api/client';
 import { useAuthStore } from '@/shared/model/authStore';
 
 import { refreshAccessToken } from '../api/authApi';
 import { userQueryKeys } from '../api/queryKeys';
 import { useUserQuery } from '../api/useUserQuery';
+import { decodeJwtPayload } from '../lib/decodeJwtPayload';
 import type { User } from '../types';
+
+const ACCESS_TOKEN_REFRESH_MARGIN_MS = 60_000;
+
+interface AccessTokenClaims {
+  exp?: number;
+}
 
 interface AuthContextValue {
   user: User | null;
@@ -84,6 +92,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       controller.abort();
     };
   }, [clearAccessToken, setAccessToken]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      return;
+    }
+
+    const claims = decodeJwtPayload<AccessTokenClaims>(accessToken);
+    if (!claims?.exp) {
+      return;
+    }
+
+    const refreshDelay = Math.max(
+      0,
+      claims.exp * 1_000 - Date.now() - ACCESS_TOKEN_REFRESH_MARGIN_MS,
+    );
+    const timeoutId = window.setTimeout(() => {
+      void refreshStoredAccessToken().catch(() => {
+        // refreshStoredAccessToken이 인증 상태와 오류 메시지를 공통 처리한다.
+      });
+    }, refreshDelay);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [accessToken]);
 
   const userQuery = useUserQuery(isBootstrapped && hasSession);
 

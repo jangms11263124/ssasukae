@@ -99,7 +99,7 @@ export function MainHome({ className }: MainHomeProps) {
               CORE_STATUS: OPTIMAL &nbsp; LATENCY: 12MS &nbsp; ENCRYPTION: AES_256
             </span>
             <a
-              href="/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi"
+              href="/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi?v=0.1.3"
               download
               className="border border-cyan-300/40 px-3 py-1.5 text-cyan-200 transition-colors hover:border-cyan-200 hover:bg-cyan-300/10 hover:text-white"
             >

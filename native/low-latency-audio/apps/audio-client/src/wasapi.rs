@@ -194,6 +194,7 @@ pub fn start(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_capture(
     stop: Arc<AtomicBool>,
     mut producer: Producer,
