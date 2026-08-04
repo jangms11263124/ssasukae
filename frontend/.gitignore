@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# rnnoise 워클릿/WASM (copy:rnnoise-assets 스크립트가 자동 생성)
+/public/noise-suppressor/
