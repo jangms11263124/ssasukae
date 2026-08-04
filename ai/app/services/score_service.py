@@ -125,15 +125,6 @@ def parse_midi_notes(payload: Any, label: str) -> list[dict[str, float]]:
     return parsed
 
 
-def _median(values: list[float]) -> float:
-    """정렬된 값의 가운데 값 또는 두 가운데 값의 평균으로 중앙값을 계산합니다."""
-    sorted_values = sorted(values)
-    middle = len(sorted_values) // 2
-    if len(sorted_values) % 2:
-        return sorted_values[middle]
-    return (sorted_values[middle - 1] + sorted_values[middle]) / 2
-
-
 def calculate_final_score(
     reference_payload: Any,
     singer_payload: Any,
@@ -160,13 +151,15 @@ def calculate_score_details(
     정답 음표와 시간 구간이 겹치는 가창 음표를 비교하고 가사 점수와 난이도 보정을
     합산합니다. 반환되는 모든 점수는 반올림한 0~100 정수입니다.
     """
-    # 난이도 점수는 프론트에서 0~100 범위로 계산해서 보내는 값입니다.
-    if difficulty_score < 0 or difficulty_score > 100:
-        raise ValueError("difficultyScore must be between 0 and 100.")
+    # 난이도 점수는 1~10 범위로 받아 최종 점수에 그대로 보정합니다.
+    if difficulty_score < 1 or difficulty_score > 10:
+        raise ValueError("difficultyScore must be between 1 and 10.")
 
     reference_notes = parse_midi_notes(reference_payload, "referenceMidi")
     singer_notes = parse_midi_notes(singer_payload, "singerMidi")
 
+    # 정답 음표별 평균을 내지 않고, 실제로 비교된 모든 가창 음표의
+    # 개별 점수를 한 목록에 누적합니다.
     pitch_scores: list[float] = []
     rhythm_hits = 0
     stability_total = 0.0
@@ -190,11 +183,26 @@ def calculate_score_details(
         ]
 
         if not overlapping_notes:
-            pitch_scores.append(0)
-            has_pitch_issue = True
             has_rhythm_issue = True
             has_stability_issue = True
             continue
+
+        # 음정 점수: 겹치는 가창 음표를 각각 채점해 전체 음정 점수 목록에
+        # 바로 누적합니다. 정답 음표별 중간 평균은 계산하지 않습니다.
+        for note in overlapping_notes:
+            pitch_error = abs(reference_note["midi"] - note["midi"])
+            if exceeds_tolerance(
+                pitch_error,
+                PITCH_TOLERANCE_SEMITONES,
+            ):
+                has_pitch_issue = True
+            pitch_scores.append(
+                score_with_tolerance(
+                    pitch_error,
+                    PITCH_TOLERANCE_SEMITONES,
+                    MAX_PITCH_ERROR_SEMITONES,
+                )
+            )
 
         coverage = coverage_ratio(
             reference_note["start_ms"],
@@ -205,28 +213,9 @@ def calculate_score_details(
             ],
         )
         if coverage < LOW_COVERAGE_RATIO:
-            pitch_scores.append(0)
-            has_pitch_issue = True
             has_rhythm_issue = True
             has_stability_issue = True
             continue
-
-        # 음정 점수: 구간 안 피치의 대표값이 정답 MIDI와 가까울수록 높습니다.
-        # 단순 평균보다 노이즈에 덜 흔들리도록 중앙값을 사용합니다.
-        representative_midi = _median([note["midi"] for note in overlapping_notes])
-        pitch_error = abs(reference_note["midi"] - representative_midi)
-        if exceeds_tolerance(
-            pitch_error,
-            PITCH_TOLERANCE_SEMITONES,
-        ):
-            has_pitch_issue = True
-        pitch_scores.append(
-            score_with_tolerance(
-                pitch_error,
-                PITCH_TOLERANCE_SEMITONES,
-                MAX_PITCH_ERROR_SEMITONES,
-            )
-        )
 
         # 박자 점수: 정답 음표가 시작되는 시점 근처에 어떤 음이든 냈으면 통과입니다.
         # 음높이는 보지 않고, 시작 타이밍만 확인합니다.
@@ -260,7 +249,7 @@ def calculate_score_details(
             / 100
         )
 
-    pitch_score = sum(pitch_scores) / len(reference_notes)
+    pitch_score = sum(pitch_scores) / len(pitch_scores) if pitch_scores else 0.0
     rhythm_score = (rhythm_hits / len(reference_notes)) * 100
     stability_score = (stability_total / len(reference_notes)) * 100
 
@@ -271,7 +260,7 @@ def calculate_score_details(
         + stability_score * 0.10
     )
 
-    final_score = base_score + (difficulty_score / 10)
+    final_score = base_score + difficulty_score
 
     rounded_pitch_score = round(_clamp(pitch_score, 0, 100))
     rounded_rhythm_score = round(_clamp(rhythm_score, 0, 100))
