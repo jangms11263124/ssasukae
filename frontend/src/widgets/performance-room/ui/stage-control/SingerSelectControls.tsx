@@ -8,15 +8,15 @@ import { ApiError } from '@/shared/api/client';
 import { showToast } from '@/shared/model/toastStore';
 
 import { useStageStore } from '../../model/stageStore';
-import { StageButton } from './StageButton';
-import { StageMessage } from './StageMessage';
+import { StageButton } from '../center-stage/StageButton';
+import { ControlMessage } from './ControlMessage';
 
-interface SingerSelectStageProps {
+interface SingerSelectControlsProps {
   isHost: boolean;
   participants: RoomParticipant[];
 }
 
-export function SingerSelectStage({ isHost, participants }: SingerSelectStageProps) {
+export function SingerSelectControls({ isHost, participants }: SingerSelectControlsProps) {
   const confirmSinger = useStageStore((state) => state.confirmSinger);
   const roomId = useRoomStore((state) => state.session?.roomId ?? null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -35,8 +35,7 @@ export function SingerSelectStage({ isHost, participants }: SingerSelectStagePro
       // PERFORMER_SELECTED 이벤트로도 전이되지만, 지연에 대비해 즉시 반영한다.
       confirmSinger(selectedId);
     } catch (error) {
-      const message =
-        error instanceof ApiError ? error.message : '가창자 지정에 실패했습니다.';
+      const message = error instanceof ApiError ? error.message : '가창자 지정에 실패했습니다.';
       showToast(message, 'error');
     } finally {
       setIsSubmitting(false);
@@ -45,36 +44,34 @@ export function SingerSelectStage({ isHost, participants }: SingerSelectStagePro
 
   if (!isHost) {
     return (
-      <StageMessage title="가창자를 방장이 선택 중입니다..." subtitle="조금만 기다려 주세요" />
+      <ControlMessage title="가창자를 방장이 선택 중입니다..." subtitle="조금만 기다려 주세요" />
     );
   }
 
   return (
-    <StageMessage
-      title="가창자를 선택하세요..."
-      actions={
-        <div>
-          <div className="flex flex-wrap justify-center gap-4">
-            {participants.map((participant) => (
-              <StageButton
-                key={participant.id}
-                size="sm"
-                selected={selectedId === participant.id}
-                onClick={() => setSelectedId(participant.id)}
-              >
-                {participant.nickname}
-              </StageButton>
-            ))}
-          </div>
+    <div className="space-y-3">
+      <ControlMessage title="가창자를 선택하세요..." />
+      <div className="grid grid-cols-2 gap-2">
+        {participants.map((participant) => (
           <StageButton
-            className="mt-5 min-w-80"
-            disabled={selectedId === null || isSubmitting}
-            onClick={handleConfirm}
+            key={participant.id}
+            size="sm"
+            className="w-full min-w-0 truncate px-2"
+            selected={selectedId === participant.id}
+            onClick={() => setSelectedId(participant.id)}
           >
-            시작하기
+            {participant.nickname}
           </StageButton>
-        </div>
-      }
-    />
+        ))}
+      </div>
+      <StageButton
+        size="sm"
+        className="w-full min-w-0"
+        disabled={selectedId === null || isSubmitting}
+        onClick={handleConfirm}
+      >
+        시작하기
+      </StageButton>
+    </div>
   );
 }
