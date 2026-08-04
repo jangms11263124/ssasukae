@@ -51,6 +51,7 @@ export function StageControlPanel() {
         canRequestStart={performanceId !== null}
         isMrLoaded={audioEngine.isMrLoaded}
         prepareError={audioEngine.error}
+        onRetryPrepare={audioEngine.retryLoadMr}
       />
     ),
     PERFORMING: (

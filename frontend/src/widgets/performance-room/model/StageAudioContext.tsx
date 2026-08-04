@@ -12,6 +12,7 @@ const FALLBACK_AUDIO: VocalAudioEngineState = {
   isEngineReady: false,
   isMrLoaded: false,
   error: null,
+  retryLoadMr: () => undefined,
   getBroadcastStream: () => null,
   engine: null,
 };

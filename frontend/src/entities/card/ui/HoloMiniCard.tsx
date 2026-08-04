@@ -21,7 +21,9 @@ export function HoloMiniCard({ className, used = false }: HoloMiniCardProps) {
         className,
       )}
       style={{
-        background: used
+        // backgroundSize와 같이 쓰므로 축약형(background)이 아니라 backgroundImage를 쓴다 —
+        // 축약형은 backgroundSize를 초기화해서 리렌더 때 둘이 서로를 덮어쓴다.
+        backgroundImage: used
           ? 'linear-gradient(135deg, #3f3f46 0%, #27272a 50%, #3f3f46 100%)'
           : 'linear-gradient(115deg, #f87171 0%, #a855f7 22%, #facc15 45%, #4ade80 68%, #22d3ee 85%, #f87171 100%)',
         backgroundSize: '250% 250%',
