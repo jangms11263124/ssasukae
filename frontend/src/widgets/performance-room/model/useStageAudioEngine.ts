@@ -90,6 +90,7 @@ export function useStageAudioEngine(isPerformer: boolean): VocalAudioEngineState
       echoLevel: settings.echoLevel,
       mrVolumePercent: settings.mrVolumePercent,
       micVolumePercent: settings.micVolumePercent,
+      monitorVoicePercent: settings.monitorVoicePercent,
     },
     micDeviceId: deviceSettings.microphoneId,
     speakerDeviceId: deviceSettings.speakerId,
