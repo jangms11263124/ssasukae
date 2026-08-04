@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { getRoomSnapshot, useRoomStore } from '@/entities/room';
@@ -19,6 +19,7 @@ export function LowLatencyRoomScreen() {
   const participants = useRoomStore((state) => state.participants);
   const hydrateFromSnapshot = useRoomStore((state) => state.hydrateFromSnapshot);
   const launchedRoomIdRef = useRef<number | null>(null);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const roomId = session?.mode === 'LOW_LATENCY' ? session.roomId : null;
   const socket = useRoomSocket(roomId);
 
@@ -47,7 +48,11 @@ export function LowLatencyRoomScreen() {
 
   useEffect(() => {
     if (roomId === null || !accessToken || launchedRoomIdRef.current === roomId) return;
-    if (launchLowLatencyApp(roomId)) {
+    if (
+      launchLowLatencyApp(roomId, {
+        onUnavailable: () => setIsInstallModalOpen(true),
+      })
+    ) {
       launchedRoomIdRef.current = roomId;
     }
   }, [accessToken, roomId]);
@@ -58,7 +63,12 @@ export function LowLatencyRoomScreen() {
       return;
     }
 
-    if (!launchLowLatencyApp(roomId)) {
+    setIsInstallModalOpen(false);
+    if (
+      !launchLowLatencyApp(roomId, {
+        onUnavailable: () => setIsInstallModalOpen(true),
+      })
+    ) {
       showToast('로그인 정보를 확인한 뒤 다시 시도해주세요.', 'error');
     }
   };
@@ -86,7 +96,11 @@ export function LowLatencyRoomScreen() {
           </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">
-            <StatusCard label="AUDIO APP" value="실행 요청 완료" active />
+            <StatusCard
+              label="AUDIO APP"
+              value={isInstallModalOpen ? '설치 확인 필요' : '실행 요청 완료'}
+              active={!isInstallModalOpen}
+            />
             <StatusCard label="ROOM SERVER" value={socket.isConnected ? '연결됨' : '연결 중'} active={socket.isConnected} />
             <StatusCard label="MR" value="각자 로컬 재생" active />
           </div>
@@ -113,6 +127,60 @@ export function LowLatencyRoomScreen() {
           </button>
         </section>
       </main>
+      {isInstallModalOpen ? (
+        <AudioAppInstallModal
+          onClose={() => setIsInstallModalOpen(false)}
+          onRetry={reopenAudioApp}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function AudioAppInstallModal({ onClose, onRetry }: { onClose: () => void; onRetry: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4" onMouseDown={onClose}>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="audio-app-install-title"
+        className="w-full max-w-lg border border-cyan-300/35 bg-[#17191c] p-7 shadow-[0_24px_90px_rgba(0,0,0,0.7)]"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <p className="font-mono text-[10px] tracking-[0.25em] text-cyan-300">
+          LOW LATENCY AUDIO · WINDOWS
+        </p>
+        <h2 id="audio-app-install-title" className="mt-4 text-2xl font-black text-white">
+          전용 오디오 앱이 필요합니다
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-zinc-400">
+          앱 실행을 확인하지 못했습니다. 설치 파일을 실행하면 고급 모드용 앱과
+          ssafystar:// 연결이 함께 등록됩니다.
+        </p>
+        <div className="mt-7 grid gap-3 sm:grid-cols-2">
+          <a
+            href="/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi"
+            download
+            className="grid h-12 place-items-center border border-cyan-300/60 bg-cyan-300/10 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-300/20"
+          >
+            Windows 앱 다운로드
+          </a>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="h-12 border border-white/15 bg-white/[0.04] text-sm font-semibold text-zinc-200 transition-colors hover:bg-white/[0.08]"
+          >
+            이미 설치함 · 다시 실행
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-5 w-full py-2 text-xs text-zinc-500 hover:text-zinc-300"
+        >
+          닫기
+        </button>
+      </section>
     </div>
   );
 }
