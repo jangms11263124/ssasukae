@@ -4,10 +4,10 @@ import { useEffect, useRef } from 'react';
 
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { useStageStore } from '../../model/stageStore';
-import { StageButton } from './StageButton';
-import { StageMessage } from './StageMessage';
+import { StageButton } from '../center-stage/StageButton';
+import { ControlMessage } from './ControlMessage';
 
-interface ReadyStageProps {
+interface ReadyControlsProps {
   isPerformer: boolean;
   performerNickname: string;
   songTitle: string;
@@ -19,14 +19,14 @@ interface ReadyStageProps {
   prepareError: string | null;
 }
 
-export function ReadyStage({
+export function ReadyControls({
   isPerformer,
   performerNickname,
   songTitle,
   canRequestStart,
   isMrLoaded,
   prepareError,
-}: ReadyStageProps) {
+}: ReadyControlsProps) {
   const changeSong = useStageStore((state) => state.changeSong);
   const performanceId = useStageStore((state) => state.performanceId);
   const mrLoadRequested = useStageStore((state) => state.mrLoadRequested);
@@ -62,23 +62,30 @@ export function ReadyStage({
   }, [isPerformer, mrLoadRequested, isMrLoaded, socket]);
 
   if (!isPerformer) {
-    return <StageMessage title={title} subtitle="곧 공연이 시작됩니다. 조금만 기다려 주세요" />;
+    return <ControlMessage title={title} subtitle="곧 공연이 시작됩니다. 조금만 기다려 주세요" />;
   }
 
   const isDownloading = mrLoadRequested && !isMrLoaded && prepareError === null;
 
   return (
-    <StageMessage
-      title={title}
-      subtitle={prepareError ?? (isDownloading ? 'MR 음원을 내려받는 중입니다...' : undefined)}
-      actions={
-        <div className="flex flex-wrap justify-center gap-4">
-          <StageButton onClick={handleChangeSong}>노래 바꾸기</StageButton>
-          <StageButton onClick={handleStart} disabled={!canRequestStart || mrLoadRequested}>
-            {mrLoadRequested ? '준비 중...' : '시작하기'}
-          </StageButton>
-        </div>
-      }
-    />
+    <div className="space-y-3">
+      <ControlMessage
+        title={title}
+        subtitle={prepareError ?? (isDownloading ? 'MR 음원을 내려받는 중입니다...' : undefined)}
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <StageButton size="sm" className="w-full min-w-0" onClick={handleChangeSong}>
+          노래 바꾸기
+        </StageButton>
+        <StageButton
+          size="sm"
+          className="w-full min-w-0"
+          onClick={handleStart}
+          disabled={!canRequestStart || mrLoadRequested}
+        >
+          {mrLoadRequested ? '준비 중...' : '시작하기'}
+        </StageButton>
+      </div>
+    </div>
   );
 }

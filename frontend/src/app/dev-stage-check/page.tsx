@@ -6,9 +6,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { RoomParticipant } from '@/entities/participant';
+import { useRoomStore } from '@/entities/room';
+import { StageAudioProvider } from '@/widgets/performance-room/model/StageAudioContext';
 import { useStageStore } from '@/widgets/performance-room/model/stageStore';
 import { AudioEnginePanel } from '@/widgets/performance-room/ui/audio-engine/AudioEnginePanel';
 import { CenterStage } from '@/widgets/performance-room/ui/center-stage/CenterStage';
+import { StageControlPanel } from '@/widgets/performance-room/ui/stage-control/StageControlPanel';
 
 const MY_PARTICIPANT_ID = 1;
 
@@ -48,6 +51,7 @@ export default function StageCheckPage() {
   const mrObjectUrlRef = useRef<string | null>(null);
 
   const phase = useStageStore((state) => state.phase);
+  const performerParticipantId = useStageStore((state) => state.performerParticipantId);
   const startSingerSelect = useStageStore((state) => state.startSingerSelect);
   const confirmSinger = useStageStore((state) => state.confirmSinger);
   const confirmSong = useStageStore((state) => state.confirmSong);
@@ -55,6 +59,31 @@ export default function StageCheckPage() {
   const finishPerformance = useStageStore((state) => state.finishPerformance);
   const applyPlaybackFinished = useStageStore((state) => state.applyPlaybackFinished);
   const endStage = useStageStore((state) => state.endStage);
+
+  const isPerformer = performerParticipantId === MY_PARTICIPANT_ID;
+
+  // 무대 진행 패널이 roomStore 세션을 읽으므로 dev에서만 목 세션을 채운다.
+  // isHost 토글이 패널의 방장 시점을 바꾼다.
+  useEffect(() => {
+    useRoomStore.setState({
+      session: {
+        roomId: 0,
+        myParticipantId: MY_PARTICIPANT_ID,
+        inviteCode: 'DEV000',
+        name: 'DEV STAGE CHECK',
+        mode: 'GENERAL',
+        maxParticipants: 6,
+        isHost,
+        openViduSessionId: 'dev',
+        openViduToken: 'dev',
+      },
+      participants: MOCK_PARTICIPANTS,
+    });
+
+    return () => {
+      useRoomStore.setState({ session: null, participants: [] });
+    };
+  }, [isHost]);
 
   // 언마운트 시 마지막 오브젝트 URL을 회수한다
   useEffect(() => {
@@ -81,75 +110,89 @@ export default function StageCheckPage() {
 
   const controls = [
     { label: '① 시작하기 (가창자 선택으로)', onClick: startSingerSelect },
-    { label: '② 가창자: 나로 확정', onClick: () => confirmSinger(MY_PARTICIPANT_ID) },
+    {
+      label: '② 가창자: 나로 확정',
+      onClick: () => confirmSinger(MY_PARTICIPANT_ID),
+    },
     { label: '② 가창자: 다른 참가자로 확정', onClick: () => confirmSinger(2) },
-    { label: '③ 곡 확정 (목 데이터, DB 우회)', onClick: () => confirmSong(MOCK_SONG) },
+    {
+      label: '③ 곡 확정 (목 데이터, DB 우회)',
+      onClick: () => confirmSong(MOCK_SONG),
+    },
     { label: '④ 공연 시작', onClick: startPerformance },
     { label: '⑤ 채점 화면 (97점)', onClick: () => finishPerformance(97) },
-    { label: '⑤ 채점 화면 (점수 없음/채점 중)', onClick: applyPlaybackFinished },
+    {
+      label: '⑤ 채점 화면 (점수 없음/채점 중)',
+      onClick: applyPlaybackFinished,
+    },
     { label: '⑥ 무대 종료 (처음으로)', onClick: endStage },
   ];
 
   return (
     <div className="min-h-dvh bg-[#0b0b0d] p-8 text-zinc-100">
-      <div className="mx-auto flex max-w-[1200px] gap-6">
-        <aside className="flex w-64 shrink-0 flex-col gap-2 border border-white/10 bg-[#151517] p-4">
-          <p className="font-mono text-xs tracking-wide text-cyan-300">
-            [DEV] STAGE FLOW :: {phase}
-          </p>
-
-          <label className="mt-2 flex items-center gap-2 text-sm text-zinc-300">
-            <input
-              type="checkbox"
-              checked={isHost}
-              onChange={(event) => setIsHost(event.target.checked)}
-            />
-            방장 시점으로 보기
-          </label>
-
-          <div className="mt-2 flex flex-col gap-1.5">
-            {controls.map(({ label, onClick }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={onClick}
-                className="border border-white/15 bg-black/40 px-3 py-2 text-left text-xs text-zinc-300 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-            ③은 곡 검색 모달을 거치지 않고 바로 READY 단계로 넘어갑니다. 곡 검색 모달 UI 자체를
-            보려면 ②에서 &lsquo;나로 확정&rsquo;을 누르세요.
-          </p>
-
-          <div className="mt-4 border-t border-white/10 pt-3">
-            <p className="font-mono text-xs tracking-wide text-cyan-300">[DEV] 오디오 엔진</p>
-            <label className="mt-2 block cursor-pointer border border-white/15 bg-black/40 px-3 py-2 text-xs text-zinc-300 transition-colors hover:border-cyan-300/60 hover:text-cyan-200">
-              MR 파일 선택 (서버 URL 대신)
-              <input type="file" accept="audio/*" onChange={handleMrFileChange} className="hidden" />
-            </label>
-            <p className="mt-1.5 break-all text-[11px] leading-relaxed text-zinc-500">
-              {mrFileName === null
-                ? '파일을 고르고 ①~④ 순서로 진행하면 공연 시작 시 재생됩니다. 이어폰 착용을 권장합니다(에코 테스트 시 하울링 방지).'
-                : `MR: ${mrFileName}`}
+      <StageAudioProvider isPerformer={isPerformer}>
+        <div className="mx-auto flex max-w-[1400px] gap-6">
+          <aside className="flex w-64 shrink-0 flex-col gap-2 border border-white/10 bg-[#151517] p-4">
+            <p className="font-mono text-xs tracking-wide text-cyan-300">
+              [DEV] STAGE FLOW :: {phase}
             </p>
-            <div className="mt-3">
-              <AudioEnginePanel />
-            </div>
-          </div>
-        </aside>
 
-        <div className="min-w-0 flex-1">
-          <CenterStage
-            currentParticipantId={MY_PARTICIPANT_ID}
-            isHost={isHost}
-            participants={MOCK_PARTICIPANTS}
-          />
+            <label className="mt-2 flex items-center gap-2 text-sm text-zinc-300">
+              <input
+                type="checkbox"
+                checked={isHost}
+                onChange={(event) => setIsHost(event.target.checked)}
+              />
+              방장 시점으로 보기
+            </label>
+
+            <div className="mt-2 flex flex-col gap-1.5">
+              {controls.map(({ label, onClick }) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={onClick}
+                  className="border border-white/15 bg-black/40 px-3 py-2 text-left text-xs text-zinc-300 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
+              ③은 곡 검색 모달을 거치지 않고 바로 READY 단계로 넘어갑니다. 곡 검색 모달 UI 자체를
+              보려면 ②에서 &lsquo;나로 확정&rsquo;을 누르세요.
+            </p>
+
+            <div className="mt-4 border-t border-white/10 pt-3">
+              <p className="font-mono text-xs tracking-wide text-cyan-300">[DEV] 오디오 엔진</p>
+              <label className="mt-2 block cursor-pointer border border-white/15 bg-black/40 px-3 py-2 text-xs text-zinc-300 transition-colors hover:border-cyan-300/60 hover:text-cyan-200">
+                MR 파일 선택 (서버 URL 대신)
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleMrFileChange}
+                  className="hidden"
+                />
+              </label>
+              <p className="mt-1.5 break-all text-[11px] leading-relaxed text-zinc-500">
+                {mrFileName === null
+                  ? '파일을 고르고 ①~④ 순서로 진행하면 공연 시작 시 재생됩니다. 이어폰 착용을 권장합니다(에코 테스트 시 하울링 방지).'
+                  : `MR: ${mrFileName}`}
+              </p>
+            </div>
+          </aside>
+
+          <div className="min-w-0 flex-1">
+            <CenterStage currentParticipantId={MY_PARTICIPANT_ID} />
+          </div>
+
+          <div className="flex w-[300px] shrink-0 flex-col gap-4">
+            <StageControlPanel />
+            <AudioEnginePanel />
+          </div>
         </div>
-      </div>
+      </StageAudioProvider>
     </div>
   );
 }
