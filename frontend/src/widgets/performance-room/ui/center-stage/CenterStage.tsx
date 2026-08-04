@@ -53,7 +53,7 @@ export function CenterStage({ currentParticipantId, isHost, participants }: Cent
         prepareError={audioEngine.error}
       />
     ),
-    SCORE: <ScoreStage canEndStage={isHost || isPerformer} />,
+    SCORE: <ScoreStage />,
     SINGER_SELECT: <SingerSelectStage isHost={isHost} participants={participants} />,
     SONG_SELECT: <SongSelectStage isPerformer={isPerformer} />,
     WAITING: <WaitingStage isHost={isHost} participantCount={participants.length} />,
