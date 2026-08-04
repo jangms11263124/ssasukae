@@ -3,10 +3,12 @@
 import { useEffect, useRef } from 'react';
 
 import type { RoomParticipant } from '@/entities/participant';
+import { useRoomStore } from '@/entities/room';
 
 import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
 import { useStageStore } from '../../model/stageStore';
 import type { RemoteMedia } from '../../model/useOpenViduSession';
+import { StageIdentityBadge } from '../center-stage/StageIdentityBadge';
 
 function toProfileSrc(url: string | null | undefined): string | null {
   if (!url) return null;
@@ -100,12 +102,14 @@ function RemoteVideo({ media, nickname }: RemoteVideoProps) {
 function ParticipantVideoTile({
   participant,
   isSelf,
+  isHost,
   localStream,
   media,
   camOn,
 }: {
   participant: RoomParticipant;
   isSelf: boolean;
+  isHost: boolean;
   localStream: MediaStream | null;
   media: RemoteMedia | undefined;
   camOn: boolean;
@@ -125,11 +129,18 @@ function ParticipantVideoTile({
             profileImageUrl={participant.profileImageUrl}
           />
         ) : null}
+        <div className="absolute bottom-1.5 left-1.5 max-w-[calc(100%-0.75rem)]">
+          <StageIdentityBadge
+            size="sm"
+            identity={{
+              nickname: participant.nickname,
+              isHost,
+              isMe: isSelf,
+              isPerformer: participant.stageRole === 'PERFORMER',
+            }}
+          />
+        </div>
       </div>
-      <p className="truncate pt-1.5 text-xs text-zinc-300">
-        {participant.nickname}
-        {isSelf ? ' (나)' : ''}
-      </p>
     </div>
   );
 }
@@ -147,6 +158,7 @@ export function ParticipantVideoStrip({ currentUserId, participants }: Participa
   const { localStream, remoteStreams } = useOpenViduSessionContext();
   const camOn = useStageStore((state) => state.camOn);
   const phase = useStageStore((state) => state.phase);
+  const hostParticipantId = useRoomStore((state) => state.hostParticipantId);
 
   const visibleParticipants = participants.filter((participant) => {
     if (participant.connectionStatus === 'LEFT' || participant.connectionStatus === 'KICKED') {
@@ -163,7 +175,7 @@ export function ParticipantVideoStrip({ currentUserId, participants }: Participa
   }
 
   return (
-    <div className="flex justify-center gap-4" aria-label="참가자 캠 화면">
+    <div className="flex justify-center gap-3 py-1" aria-label="참가자 캠 화면">
       {visibleParticipants.map((participant) => {
         const isSelf = participant.userId === currentUserId;
 
@@ -172,6 +184,7 @@ export function ParticipantVideoStrip({ currentUserId, participants }: Participa
             key={participant.id}
             participant={participant}
             isSelf={isSelf}
+            isHost={participant.id === hostParticipantId}
             localStream={localStream}
             media={remoteStreams.get(participant.id)}
             camOn={camOn}

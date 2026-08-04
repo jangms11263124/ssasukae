@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+
 import { RoomCreateForm } from '@/features/room-create';
 import { RoomJoinForm } from '@/features/room-join';
 import { cn } from '@/shared/lib/cn';
@@ -69,7 +71,9 @@ export function MainHome({ className }: MainHomeProps) {
               </h2>
             </div>
             <div className="mt-7">
-              <RoomJoinForm />
+              <Suspense fallback={null}>
+                <RoomJoinForm />
+              </Suspense>
             </div>
             <div className="mt-14 border-t border-white/8 pt-6">
               <p className="font-mono text-[9px] tracking-[0.2em] text-zinc-600">

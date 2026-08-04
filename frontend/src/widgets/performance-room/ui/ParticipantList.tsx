@@ -16,7 +16,9 @@ import { RoomPanel } from './RoomPanel';
 
 interface ParticipantListProps {
   canManageParticipants: boolean;
+  compact?: boolean;
   currentUserId: number;
+  hideHeader?: boolean;
   hostParticipantId: number;
   maxParticipants: number;
   onDelegateHost: (participant: RoomParticipant) => void;
@@ -49,7 +51,9 @@ interface PendingAction {
 
 export function ParticipantList({
   canManageParticipants,
+  compact = false,
   currentUserId,
+  hideHeader = false,
   hostParticipantId,
   maxParticipants,
   onDelegateHost,
@@ -81,12 +85,29 @@ export function ParticipantList({
   };
 
   return (
-    <RoomPanel className="min-h-0 px-4 py-4">
-      <h2 className="border-b border-white/15 pb-2 font-mono text-sm tracking-[0.08em] text-zinc-300">
-        STAGE USERS[{activeParticipants.length}/{maxParticipants}]
+    <RoomPanel
+      className={cn(
+        'flex flex-col overflow-hidden',
+        compact ? 'h-auto border-0 bg-transparent px-3 py-2 shadow-none' : 'h-full min-h-0 px-4 py-3',
+      )}
+    >
+      <h2
+        className={cn(
+          'shrink-0 border-b border-white/15 pb-2 text-sm font-medium text-zinc-200',
+          hideHeader && 'sr-only',
+        )}
+      >
+        참가자 [{activeParticipants.length}/{maxParticipants}]
       </h2>
 
-      <ul className="mt-2 space-y-1" aria-label="참가자 목록">
+      <ul
+        className={cn(
+          compact ? 'space-y-0.5' : 'mt-2 space-y-1',
+          !compact &&
+            'min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
+        )}
+        aria-label="참가자 목록"
+      >
         {activeParticipants.map((participant) => {
           const isCurrentUser = participant.userId === currentUserId;
           const isConnected = participant.connectionStatus === 'CONNECTED';
@@ -100,7 +121,8 @@ export function ParticipantList({
             <li
               key={participant.id}
               className={cn(
-                'flex min-h-10 items-center gap-2 px-2.5 py-2 text-sm',
+                'flex items-center gap-2 px-2 py-1.5 text-sm',
+                compact ? 'min-h-9' : 'min-h-10 px-2.5 py-2',
                 isCurrentUser ? 'text-fuchsia-400' : 'text-zinc-300',
                 !isConnected && 'opacity-45',
               )}
@@ -166,6 +188,20 @@ export function ParticipantList({
             </li>
           );
         })}
+
+        {Array.from({ length: Math.max(0, maxParticipants - activeParticipants.length) }, (_, index) => (
+          <li
+            key={`empty-${index}`}
+            className={cn(
+              'flex items-center gap-2 px-2 py-1.5 text-sm text-zinc-600',
+              compact ? 'min-h-9' : 'min-h-10 px-2.5 py-2',
+            )}
+          >
+            <span className="size-2 shrink-0 rounded-full bg-zinc-700" aria-hidden />
+            <span className="size-7 shrink-0 rounded-full border border-dashed border-white/15 bg-white/[0.03]" />
+            <span className="min-w-0 flex-1 truncate">빈 자리</span>
+          </li>
+        ))}
       </ul>
 
       {pendingAction ? (
