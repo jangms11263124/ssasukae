@@ -38,7 +38,7 @@ export function CenterStage({ currentParticipantId }: CenterStageProps) {
 
   return (
     <StageLyricsProvider isPerformer={isPerformer}>
-      <div className="relative grid aspect-video min-h-[430px] overflow-hidden border border-white/10 bg-[#2c2c2f]">
+      <div className="relative h-full min-h-0 w-full overflow-hidden border border-white/10 bg-[#2c2c2f]">
         {STAGE_VIEWS[phase]}
         {isSuspended ? <SuspendedOverlay isPerformer={isPerformer} /> : null}
         <CardDealOverlay />

@@ -10,6 +10,7 @@ import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 
 public record RoomSnapshotResponse(
     String name,
+    String inviteCode,
     RoomMode mode,
     RoomStatus status,
     Long hostUserId,
@@ -37,6 +38,7 @@ public record RoomSnapshotResponse(
       ActiveCardSnapshotResponse activeCard) {
     return new RoomSnapshotResponse(
         room.getName(),
+        room.getInviteCode(),
         room.getMode(),
         room.getStatus(),
         room.getHost().getId(),

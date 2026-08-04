@@ -178,6 +178,7 @@ class RoomServiceMediaSessionTest {
     RoomParticipant participant = participant(room, 100L, ConnectionStatus.CONNECTED);
     when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByRoomIdAndUserId(10L, 2L)).thenReturn(Optional.of(participant));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
     when(mediaSessionGateway.createConnectionToken("openvidu-session-1", 100L))
         .thenReturn("openvidu-token-3");
 
@@ -186,6 +187,26 @@ class RoomServiceMediaSessionTest {
 
     // then
     assertThat(token).isEqualTo("openvidu-token-3");
+    verify(mediaSessionGateway).createConnectionToken("openvidu-session-1", 100L);
+    verify(mediaSessionGateway, never()).disconnect(any(), any());
+  }
+
+  @Test
+  @DisplayName("토큰 재발급 시 기존 OpenVidu connection을 먼저 끊고 새 토큰을 발급한다")
+  void issueConnectionToken_disconnectsExistingConnectionBeforeReissue() {
+    Room room = room(10L, "openvidu-session-1");
+    RoomParticipant participant =
+        connectedParticipant(room, 100L, 2L, "participant-connection");
+    when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByRoomIdAndUserId(10L, 2L)).thenReturn(Optional.of(participant));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
+    when(mediaSessionGateway.createConnectionToken("openvidu-session-1", 100L))
+        .thenReturn("openvidu-token-3");
+
+    String token = roomService.issueConnectionToken(2L, 10L);
+
+    assertThat(token).isEqualTo("openvidu-token-3");
+    verify(mediaSessionGateway).disconnect("openvidu-session-1", "participant-connection");
     verify(mediaSessionGateway).createConnectionToken("openvidu-session-1", 100L);
   }
 
@@ -197,6 +218,7 @@ class RoomServiceMediaSessionTest {
     RoomParticipant participant = participant(room, 100L, ConnectionStatus.LEFT);
     when(roomRepository.findById(10L)).thenReturn(Optional.of(room));
     when(roomParticipantRepository.findByRoomIdAndUserId(10L, 2L)).thenReturn(Optional.of(participant));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
 
     // when & then
     assertThatThrownBy(() -> roomService.issueConnectionToken(2L, 10L))
