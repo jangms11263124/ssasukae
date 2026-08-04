@@ -93,7 +93,7 @@ flowchart LR
     E --> O["Opus 2.5ms Encode"]
     O --> N["Direct UDP P2P"]
     N --> D["Opus Decode / PLC"]
-    D --> J["Peer별 5ms Jitter Buffer"]
+    D --> J["Peer별 10ms Target Jitter Buffer"]
     J --> X["최대 3명 Mixer / Limiter"]
     X --> P["WASAPI Exclusive Event-Driven Playback"]
 ```
@@ -107,7 +107,7 @@ flowchart LR
 | codec | Opus Restricted Low Delay |
 | frame 크기 | 120 samples / 2.5ms |
 | bitrate | 128kbps constrained VBR |
-| jitter buffer | peer별 5ms |
+| jitter buffer | peer별 목표 10ms, 최대 15ms |
 | playback prebuffer | 0ms |
 | 목표 playback queue | 3ms |
 | 최대 참가자 | 4명 |
@@ -141,7 +141,7 @@ PCM보다 전송량을 줄이면서도 일반적인 20ms 음성 frame보다 짧�
 | 접속 순서 ClientId 자동 할당 | AWS 배포 및 검증 완료 |
 | 상대방 실제 닉네임 표시 | AWS 전달 검증 완료 |
 | 최대 4명 Full Mesh 구조 | 구현 완료 |
-| 5ms Opus 직접 P2P 음성 | 구현 완료 |
+| 2.5ms Opus 직접 P2P 음성 | 구현 완료 |
 | Local Monitor, Echo, Reverb | 구현 완료 |
 | 참여자 입장·퇴장 반영 | 구현 완료 |
 | 상세 결과 로그 자동 저장 | 구현 완료 |

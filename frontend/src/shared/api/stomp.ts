@@ -3,6 +3,23 @@ import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs';
 import { WS_URL } from '@/shared/config/env';
 import { getAccessToken } from '@/shared/model/authStore';
 
+import { refreshStoredAccessToken } from './client';
+
+const ACCESS_TOKEN_REFRESH_MARGIN_MS = 60_000;
+
+function tokenNeedsRefresh(token: string): boolean {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return true;
+
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(normalized)) as { exp?: number };
+    return !claims.exp || claims.exp * 1_000 <= Date.now() + ACCESS_TOKEN_REFRESH_MARGIN_MS;
+  } catch {
+    return true;
+  }
+}
+
 export interface StompConnectionCallbacks {
   onConnect?: () => void;
   onDisconnect?: () => void;
@@ -22,8 +39,11 @@ export function createStompClient(callbacks: StompConnectionCallbacks = {}): Cli
     heartbeatIncoming: 10_000,
     heartbeatOutgoing: 10_000,
     reconnectDelay: 3_000,
-    beforeConnect: () => {
-      const accessToken = getAccessToken();
+    beforeConnect: async () => {
+      let accessToken = getAccessToken();
+      if (accessToken && tokenNeedsRefresh(accessToken)) {
+        accessToken = await refreshStoredAccessToken();
+      }
       client.connectHeaders = accessToken
         ? { Authorization: `Bearer ${accessToken}` }
         : {};

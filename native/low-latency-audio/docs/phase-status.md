@@ -146,15 +146,15 @@ trim to:     10ms
 ### 구현된 재생 안정화
 
 - 입력 callback이 한 번에 전달한 완성 frame을 최대 16개까지 즉시 송신 큐로 배출
-- sequence 기반 2.5ms 고정 jitter buffer
-- peer별 2 frame(5ms) 고정으로 지연을 우선하고 late frame은 concealment 처리
+- sequence 기반 2.5ms jitter buffer
+- peer별 목표 4 frame(10ms), 최대 6 frame(15ms)으로 순간 도착 편차를 흡수하고 late frame은 concealment 처리
 - 재생 sequence보다 늦은 frame은 sample ring 진입 전에 폐기
 - 재생 시각에 frame이 없을 때만 zero-lookahead concealment
 - 장치 clock drift와 과도한 출력 큐 회수용 adaptive linear resampling 최대 ±0.3%
 - 최종 출력 ring 30ms 초과 시 15ms 정리는 비상 안전장치로만 유지
 - 누락 frame에 zero-lookahead Opus PLC를 적용하고 실패 시 기존 감쇠 concealment로 fallback
 - late frame 거부와 resync
-- stale frame 기한은 고정 jitter 5ms+30ms로 계산
+- stale frame 기한은 목표 jitter 10ms+30ms로 계산
 - 새 peer는 자신의 jitter prebuffer가 준비된 뒤 기존 전역 재생 시계를 변경하지 않고 mixer에 합류
 - 명시적 `Leave` 또는 ICE `Disconnected`에서만 해당 peer의 live playout buffer와 concealment 상태를 초기화하고 다른 peer 재생은 유지
 - 단순 음성 무수신과 긴 지연은 퇴장으로 판정하지 않고 jitter buffer와 concealment로 처리
@@ -162,7 +162,7 @@ trim to:     10ms
 - frame 정리 직후 1ms crossfade 적용
 - 누락 concealment 후 실제 frame 복귀 시 16 sample crossfade 적용
 - underrun, overflow, trim, speed adjustment 통계
-- peer별 독립 sequence tracker, 고정 jitter buffer, 네트워크 concealment·퇴장 concealment 분리 및 RTT 통계
+- peer별 독립 sequence tracker, jitter buffer, 네트워크 concealment·퇴장 concealment 분리 및 RTT 통계
 - 최대 3개 원격 frame의 동시 mixer
 - 참가자 수에 따른 `1/sqrt(N)` gain과 peak limiter
 - 한 peer의 연결 해제 시 해당 buffer만 초기화
@@ -196,7 +196,7 @@ Reverb time:      1.2s
 
 ### 실제 두 PC Wi-Fi 검증에서 확인한 내용
 
-- P2P 연결 성공 시 bidirectional 5ms Opus 전달
+- P2P 연결 성공 시 bidirectional 2.5ms Opus 전달
 - 반복 테스트에서 corrupt, duplicate, out-of-order가 대부분 0
 - 성공 run의 delivery RTT는 대략 p50 10~15ms, p95 28~45ms 범위
 - network ACK가 main audio loop를 기다리지 않음
@@ -457,7 +457,7 @@ Phase 0~2와 Phase 3의 최대 4명 Full Mesh 구조는 실행 가능한 상태�
 
 1. **Phase 3 최대 4명 실제 장치 검증**
    - local monitor 100%와 40/10ms local queue 확인
-   - remote 30/15ms queue와 capture burst drain 정책 확인
+   - remote 30/15ms queue와 2.5ms capture packet pacing 정책 확인
    - ICE attempt 2 동작 확인
    - 10분 실제 음성 run 확보
    - 구현된 다중 ICE, peer별 jitter buffer, fan-out, mixer 회귀 확인

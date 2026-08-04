@@ -693,7 +693,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
     println!(
         "Codec: Opus Restricted Low Delay, 48kHz mono, 2.5ms, 128kbps constrained VBR, music signal"
     );
-    println!("Fixed jitter buffer: 5ms (2 x 2.5ms frames)");
+    println!("Jitter buffer: 10ms target (4 x 2.5ms frames, 15ms maximum)");
     println!(
         "Playback latency policy: peer jitter owns startup delay, device ring has no independent startup prebuffer, max_queue={:.1}ms, trim_to={:.1}ms, adaptive_speed=+/-{:.1}%",
         RELAY_MAX_QUEUE_SAMPLES as f64 * 1_000.0 / SAMPLE_RATE as f64,
@@ -953,12 +953,14 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             } else {
                 next_send + interval
             };
-        } else if !synthetic {
-            let mut drained_frames = 0;
+        } else if !synthetic && now >= next_send {
+            let missed = now.duration_since(next_send) >= interval;
             if let Some(source) = capture.as_mut() {
-                while source.available() >= SAMPLES_PER_FRAME
-                    && drained_frames < MAX_CAPTURE_BURST_FRAMES
-                {
+                // WASAPI Shared capture can publish a 10 ms block at once. Sending every
+                // resulting 2.5 ms Opus frame in the same loop iteration creates packet
+                // bursts that overrun the receiver's low-latency jitter window. Pace one
+                // frame per media-clock tick instead.
+                if source.available() >= SAMPLES_PER_FRAME {
                     capture_queue_us
                         .push(source.available() as f64 * 1_000_000.0 / SAMPLE_RATE as f64);
                     let mut samples = [0.0_f32; SAMPLES_PER_FRAME];
@@ -981,12 +983,13 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                         sent += 1;
                         sequence = sequence.wrapping_add(1);
                     }
-                    drained_frames += 1;
                 }
             }
-            if now >= next_send {
-                next_send = now + interval;
-            }
+            next_send = if missed {
+                now + interval
+            } else {
+                next_send + interval
+            };
         }
 
         loop {
@@ -2501,12 +2504,12 @@ mod tests {
     }
 
     #[test]
-    fn jitter_buffer_is_fixed_at_five_milliseconds() {
+    fn jitter_buffer_targets_ten_milliseconds() {
         let peer = PeerAudioState::default();
-        assert_eq!(JITTER_PREBUFFER_FRAMES, 2);
-        assert_eq!(JITTER_TARGET_FRAMES, 2);
-        assert_eq!(JITTER_MAX_FRAMES, 2);
-        assert_eq!(peer.jitter_target_frames, 2);
+        assert_eq!(JITTER_PREBUFFER_FRAMES, 4);
+        assert_eq!(JITTER_TARGET_FRAMES, 4);
+        assert_eq!(JITTER_MAX_FRAMES, 6);
+        assert_eq!(peer.jitter_target_frames, 4);
     }
 
     #[test]
