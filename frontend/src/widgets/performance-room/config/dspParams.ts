@@ -70,5 +70,19 @@ export const DSP_ROWS: readonly DspRowDefinition[] = [
   },
 ];
 
+// 수성전은 공격 카드가 키·템포를 흔드는 것이 핵심이라 손으로 되돌리지 못하게 한다.
+// AudioEnginePanel도 같은 모드에서 PITCH/TEMPO SHIFT 스테퍼를 숨긴다.
+const BATTLE_DSP_ROWS: readonly DspRowDefinition[] = DSP_ROWS.filter(
+  (row) => row.key !== 'pitch' && row.key !== 'tempo',
+);
+
+/**
+ * 제스처와 패널이 같은 배열을 써야 한다 — 행 인덱스로 서로를 가리키므로, 한쪽만 필터하면
+ * 강조되는 항목과 실제 조절 대상이 어긋난다. 반환값은 모듈 상수라 렌더마다 바뀌지 않는다.
+ */
+export function resolveDspRows(isBattleMode: boolean): readonly DspRowDefinition[] {
+  return isBattleMode ? BATTLE_DSP_ROWS : DSP_ROWS;
+}
+
 /** 0점 자석 스냅이 걸리는 범위 */
 export const ZERO_SNAP_RANGE = 0.6;
