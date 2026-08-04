@@ -294,6 +294,17 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           setLatencyMs(Number.isFinite(roundTrip) && roundTrip >= 0 ? roundTrip : null);
         });
 
+        // 구독을 먼저 연 뒤 현재 상태를 조회해 초기 연결·재연결 사이에 놓친 공연 이벤트를 복구한다.
+        getRoomSnapshot(roomId)
+          .then((snapshot) => {
+            useRoomStore.getState().hydrateFromSnapshot(snapshot);
+            useStageStore.getState().hydrateFromRoomSnapshot(snapshot);
+            hydrateCardsFromRoomSnapshot(snapshot);
+          })
+          .catch(() => {
+            // 주 화면의 오류 처리와 다음 재연결에 맡긴다.
+          });
+
         // 연결 직후 1회 전송 후 주기적으로 연결 상태를 확인한다.
         stopPing();
         sendPing();
@@ -366,7 +377,14 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
       sendSettings: (settings) => {
         const performanceId = currentPerformanceId();
         if (roomId === null || performanceId === null) return;
-        publish(`/app/rooms/${roomId}/performances/${performanceId}/settings`, settings);
+        // 서버 요청 DTO는 4필드 record라 로컬 전용 필드(micVolumePercent 등)가 섞이면
+        // 역직렬화에서 거부된다(서버 내부 오류). 계약에 있는 필드만 추려 보낸다.
+        publish(`/app/rooms/${roomId}/performances/${performanceId}/settings`, {
+          keyOffset: settings.keyOffset,
+          tempoPercent: settings.tempoPercent,
+          mrVolumePercent: settings.mrVolumePercent,
+          echoLevel: settings.echoLevel,
+        });
       },
       sendCancel: () => {
         const performanceId = currentPerformanceId();

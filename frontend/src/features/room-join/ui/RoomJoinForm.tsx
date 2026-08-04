@@ -103,7 +103,11 @@ export function RoomJoinForm() {
           isHost: false,
           openViduSessionId: response.openViduSessionId,
           openViduToken: response.openViduToken,
-          me: { userId: user?.id ?? 0, nickname: user?.nickname ?? '나' },
+          me: {
+            userId: user?.id ?? 0,
+            nickname: user?.nickname ?? '나',
+            profileImageUrl: user?.profileImageUrl ?? null,
+          },
         });
         router.push(
           response.mode === 'LOW_LATENCY'

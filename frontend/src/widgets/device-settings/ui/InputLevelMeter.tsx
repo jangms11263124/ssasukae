@@ -1,5 +1,3 @@
-'use client';
-
 import { MAX_INPUT_LEVEL_DB, MIN_INPUT_LEVEL_DB } from '@/entities/media-device';
 import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';

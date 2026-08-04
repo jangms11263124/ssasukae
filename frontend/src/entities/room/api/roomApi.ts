@@ -1,4 +1,5 @@
 import type { CardAssignmentStatus, CardEffectType } from '@/entities/card';
+import type { PerformanceSettings, PerformanceStatus } from '@/entities/performance';
 import type {
   ParticipantConnectionStatus,
   ParticipantStageRole,
@@ -13,6 +14,7 @@ export interface RoomSnapshotParticipant {
   participantId: number;
   userId: number;
   nickname: string;
+  profileImageUrl: string | null;
   stageRole: ParticipantStageRole;
   connectionStatus: ParticipantConnectionStatus;
   host: boolean;
@@ -54,6 +56,39 @@ export interface RoomSnapshotActiveCard {
   endsAt: string | null;
 }
 
+export interface RoomSnapshotPerformance {
+  performanceId: number;
+  status: PerformanceStatus;
+  suspendedFromStatus: PerformanceStatus | null;
+  performerParticipantId: number;
+  songId: number;
+  songTitle: string;
+  artist: string;
+  difficultyLevel: number | null;
+  thumbnailImageUrl: string | null;
+  settings: Pick<
+    PerformanceSettings,
+    'keyOffset' | 'tempoPercent' | 'mrVolumePercent' | 'echoLevel'
+  >;
+  preparedAt: string;
+  startedAt: string | null;
+  suspendedAt: string | null;
+  playbackPositionMs: number;
+  songDurationMs: number;
+  mrDownloadUrl: string;
+  midiJsonDownloadUrl: string;
+  lyricsDownloadUrl: string;
+}
+
+export interface RoomSnapshotPlayback {
+  performanceId: number;
+  playbackStatus: 'PLAYING' | 'SUSPENDED' | 'ANALYZING';
+  playbackStartedAt: string;
+  playbackPositionMs: number;
+  accumulatedPausedDurationMs: number;
+  songDurationMs: number;
+}
+
 export interface RoomSnapshotResponse {
   name: string;
   mode: RoomMode;
@@ -62,6 +97,8 @@ export interface RoomSnapshotResponse {
   maxParticipants: number;
   serverNow?: string;
   participants: RoomSnapshotParticipant[];
+  performance: RoomSnapshotPerformance | null;
+  playback: RoomSnapshotPlayback | null;
   myCard?: RoomSnapshotMyCard | null;
   cardUsageStatuses?: RoomSnapshotCardUsageStatus[];
   activeCard?: RoomSnapshotActiveCard | null;

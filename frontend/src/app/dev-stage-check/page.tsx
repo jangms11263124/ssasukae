@@ -13,9 +13,30 @@ import { CenterStage } from '@/widgets/performance-room/ui/center-stage/CenterSt
 const MY_PARTICIPANT_ID = 1;
 
 const MOCK_PARTICIPANTS: RoomParticipant[] = [
-  { connectionStatus: 'CONNECTED', id: 1, nickname: '나(테스트)', stageRole: 'PARTICIPANT', userId: 1 },
-  { connectionStatus: 'CONNECTED', id: 2, nickname: '참가자2', stageRole: 'PARTICIPANT', userId: 2 },
-  { connectionStatus: 'CONNECTED', id: 3, nickname: '참가자3', stageRole: 'PARTICIPANT', userId: 3 },
+  {
+    connectionStatus: 'CONNECTED',
+    id: 1,
+    nickname: '나(테스트)',
+    profileImageUrl: null,
+    stageRole: 'PARTICIPANT',
+    userId: 1,
+  },
+  {
+    connectionStatus: 'CONNECTED',
+    id: 2,
+    nickname: '참가자2',
+    profileImageUrl: null,
+    stageRole: 'PARTICIPANT',
+    userId: 2,
+  },
+  {
+    connectionStatus: 'CONNECTED',
+    id: 3,
+    nickname: '참가자3',
+    profileImageUrl: null,
+    stageRole: 'PARTICIPANT',
+    userId: 3,
+  },
 ];
 
 const MOCK_SONG = { id: 999, title: '테스트 곡 (DB 우회)' };

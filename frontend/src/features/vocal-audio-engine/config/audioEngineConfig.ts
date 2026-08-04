@@ -25,6 +25,12 @@ export const SILENCE_DB = -80;
 export const PITCH_BYPASS_EPSILON = 0.01;
 
 /**
+ * 채점용 음정 분석 창 크기. 48kHz에서 약 43ms로, 남성 저음(E2 ≈ 82Hz)도 두 주기가 들어간다.
+ * McLeod 음정 검출은 창 안에 최소 두 주기가 있어야 음을 잡는다.
+ */
+export const VOCAL_ANALYSER_FFT_SIZE = 2048;
+
+/**
  * 가창자 마이크 캡처 제약 — 3개 모두 false가 사양이다.
  * AEC는 이어폰 모니터링과 충돌해 자기 목소리를 에코로 판단해 지우고,
  * NS는 추후 RNNoise 워크릿이 맡을 자리이며, AGC는 노래 다이내믹을 뭉갠다.

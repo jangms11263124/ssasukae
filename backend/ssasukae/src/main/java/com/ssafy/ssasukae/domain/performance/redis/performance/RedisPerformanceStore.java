@@ -4,8 +4,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Optional;
 
-import lombok.RequiredArgsConstructor;
-
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.serializer.SerializationException;
@@ -13,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.DateTimeFeature;
 
 /**
  * 진행 중인 공연 상태를 Redis에 저장하고 관리하는 저장소.
@@ -27,7 +26,6 @@ import tools.jackson.databind.ObjectMapper;
  * 방별 활성 공연 키를 별도로 관리하여 하나의 방에 여러 공연이 동시에 생성되는 것을 방지한다.
  */
 @Repository
-@RequiredArgsConstructor
 public class RedisPerformanceStore implements PerformanceStore {
 
     // 공연 Snapshot 저장 키
@@ -90,6 +88,21 @@ public class RedisPerformanceStore implements PerformanceStore {
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+
+    public RedisPerformanceStore(
+            StringRedisTemplate redisTemplate,
+            ObjectMapper objectMapper
+    ) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = offsetPreservingMapper(objectMapper);
+    }
+
+    static ObjectMapper offsetPreservingMapper(ObjectMapper objectMapper) {
+        return objectMapper
+                .rebuild()
+                .disable(DateTimeFeature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
+                .build();
+    }
 
     // 새로운 공연 ID를 발급한다.
     @Override
