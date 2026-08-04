@@ -21,6 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.ssasukae.domain.card.redis.CardAssignmentSnapshot;
 import com.ssafy.ssasukae.domain.card.redis.CardAssignmentStatus;
@@ -67,6 +69,17 @@ class CardServiceTest {
   private CardService cardService;
   private PerformanceSnapShot performance;
   private CardAssignmentSnapshot assignment;
+
+  @Test
+  void assignmentStartsInAnIndependentTransaction() throws NoSuchMethodException {
+    Transactional transactional =
+        CardService.class
+            .getMethod("assignForPlayback", PerformanceSnapShot.class)
+            .getAnnotation(Transactional.class);
+
+    assertThat(transactional).isNotNull();
+    assertThat(transactional.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
+  }
 
   @BeforeEach
   void setUp() {
