@@ -28,8 +28,8 @@ import { CenterStage } from './center-stage/CenterStage';
 import { RoomHelpFloatingButton } from './help/RoomHelpFloatingButton';
 import { MediaControlDock } from './media-controls/MediaControlDock';
 import { NowPlayingCard } from './now-playing/NowPlayingCard';
+import { ParticipantVideoStrip } from './participant-video/ParticipantVideoStrip';
 import { RemoteAudioSink } from './participant-video/RemoteAudioSink';
-import { SelfVideoTile } from './participant-video/SelfVideoTile';
 import { RoomLeftSection } from './RoomLeftSection';
 import { StageControlPanel } from './stage-control/StageControlPanel';
 import { TalkPanel } from './talk/TalkPanel';
@@ -46,7 +46,6 @@ export function GeneralRoomScreen() {
   const hydrateFromSnapshot = useRoomStore((state) => state.hydrateFromSnapshot);
 
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
-  const phase = useStageStore((state) => state.phase);
   const endStage = useStageStore((state) => state.endStage);
 
   const socket = useRoomSocket(session?.roomId ?? null);
@@ -118,10 +117,6 @@ export function GeneralRoomScreen() {
   const currentUserId = user?.id ?? 0;
   const canManageParticipants = session.isHost;
   const isPerformer = session.myParticipantId === performerParticipantId;
-  const myNickname =
-    participants.find(({ id }) => id === session.myParticipantId)?.nickname ??
-    user?.nickname ??
-    '나';
 
   const stagedParticipants = participants.map((participant) => ({
     ...participant,
@@ -190,10 +185,10 @@ export function GeneralRoomScreen() {
               <section className="flex min-w-0 flex-col gap-4" aria-label="중앙 공연 영역">
                 <CenterStage currentParticipantId={session.myParticipantId} />
 
-                {/* 공연 중에는 무대가 가창자 캠이라 내 모습은 셀프 뷰로 남긴다 */}
-                {phase === 'PERFORMING' && !isPerformer ? (
-                  <SelfVideoTile nickname={myNickname} />
-                ) : null}
+                <ParticipantVideoStrip
+                  currentUserId={currentUserId}
+                  participants={stagedParticipants}
+                />
                 <MediaControlDock />
                 <MyCardDock />
               </section>
