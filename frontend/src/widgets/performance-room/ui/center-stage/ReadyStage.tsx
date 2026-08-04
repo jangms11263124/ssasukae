@@ -23,7 +23,6 @@ export function ReadyStage({
   prepareError,
 }: ReadyStageProps) {
   const changeSong = useStageStore((state) => state.changeSong);
-  const startPerformance = useStageStore((state) => state.startPerformance);
   const performanceId = useStageStore((state) => state.performanceId);
   const socket = useRoomSocketContext();
 
@@ -37,12 +36,11 @@ export function ReadyStage({
     changeSong();
   };
 
-  // PLAYBACK_STARTED 이벤트가 오면 서버 기준으로 다시 전이되지만,
-  // 이벤트 지연에 대비해 로컬에서도 즉시 PERFORMING으로 넘어간다.
+  // 가창자와 참가자가 같은 PLAYBACK_STARTED 이벤트로 함께 전이되어야 한다.
+  // 로컬에서 먼저 전이하면 전송 실패 시 가창자만 공연 화면으로 넘어갈 수 있다.
   const handleStart = () => {
     if (!canStart) return;
     socket.sendPlaybackStart();
-    startPerformance();
   };
 
   if (!isPerformer) {
