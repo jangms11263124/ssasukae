@@ -45,6 +45,7 @@ pub(crate) fn playback_policy_for_output_period(period_frames: u32) -> PlaybackB
 #[derive(Clone, Default)]
 pub(crate) struct PlaybackStats {
     pub(crate) underrun_events: Arc<AtomicU64>,
+    pub(crate) local_monitor_underrun_events: Arc<AtomicU64>,
     pub(crate) trimmed_samples: Arc<AtomicU64>,
     pub(crate) speed_sum_ppm: Arc<AtomicI64>,
     pub(crate) speed_measurements: Arc<AtomicU64>,
@@ -141,11 +142,40 @@ impl AdaptiveResampler {
 
 pub(crate) struct PlaybackOutputState {
     pub(crate) started: bool,
+    pub(crate) output_period_samples: usize,
     pub(crate) resampler: AdaptiveResampler,
     pub(crate) last_remote_sample: f32,
     pub(crate) trim_crossfade_from: f32,
     pub(crate) trim_crossfade_remaining: usize,
     pub(crate) limiter_gain: f32,
+    pub(crate) local_started: bool,
+    pub(crate) local_resampler: AdaptiveResampler,
+    pub(crate) local_ratio: f64,
+    pub(crate) local_fade_gain: f32,
+    pub(crate) last_local_sample: f32,
+    pub(crate) local_dropout_from: f32,
+    pub(crate) local_dropout_remaining: usize,
+}
+
+impl PlaybackOutputState {
+    pub(crate) fn new(started: bool, output_period_samples: usize) -> Self {
+        Self {
+            started,
+            output_period_samples: output_period_samples.max(1),
+            resampler: AdaptiveResampler::default(),
+            last_remote_sample: 0.0,
+            trim_crossfade_from: 0.0,
+            trim_crossfade_remaining: 0,
+            limiter_gain: 1.0,
+            local_started: false,
+            local_resampler: AdaptiveResampler::default(),
+            local_ratio: 1.0,
+            local_fade_gain: 0.0,
+            last_local_sample: 0.0,
+            local_dropout_from: 0.0,
+            local_dropout_remaining: 0,
+        }
+    }
 }
 
 #[cfg(test)]
