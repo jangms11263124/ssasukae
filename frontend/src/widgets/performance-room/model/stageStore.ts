@@ -119,7 +119,8 @@ const SERVER_PHASE_ORDER: Partial<Record<StagePhase, number>> = {
 // 기기 토글은 INITIAL_PERFORMANCE_STATE에 넣지 않는다. 넣으면 공연마다 초기화된다.
 export const useStageStore = create<StageStore>((set) => ({
   camOn: true,
-  dspPanelOpen: true,
+  // 무대를 가리는 오버레이라 닫힌 상태로 시작한다.
+  dspPanelOpen: false,
   gestureOn: true,
   micOn: true,
   ...INITIAL_PERFORMANCE_STATE,
@@ -129,7 +130,7 @@ export const useStageStore = create<StageStore>((set) => ({
   confirmSong: (song) => set({ phase: 'READY', selectedSong: song }),
   changeSong: () => set({ phase: 'SONG_SELECT', selectedSong: null, mrLoadRequested: false }),
   requestMrLoad: () => set({ mrLoadRequested: true }),
-  startPerformance: () => set({ phase: 'PERFORMING' }),
+  startPerformance: () => set({ phase: 'PERFORMING', dspPanelOpen: false }),
   finishPerformance: (score) => set({ phase: 'SCORE', score }),
   endStage: () => set(INITIAL_PERFORMANCE_STATE),
   advanceToSingerSelect: () => set({ ...INITIAL_PERFORMANCE_STATE, phase: 'SINGER_SELECT' }),
@@ -176,8 +177,9 @@ export const useStageStore = create<StageStore>((set) => ({
     })),
 
   // 처음부터 재생하는 경우이므로 이전 공연의 재개 위치를 버린다.
+  // 패널도 닫아, 앞 순서 가창자가 열어 둔 상태가 다음 곡까지 따라오지 않게 한다.
   applyPlaybackStarted: () =>
-    set({ phase: 'PERFORMING', isSuspended: false, resumeOffsetMs: 0 }),
+    set({ phase: 'PERFORMING', isSuspended: false, resumeOffsetMs: 0, dspPanelOpen: false }),
 
   // 점수는 채점 완료 후 LEADERBOARD_UPDATED가 채운다. 그때까지 "채점 중"으로 표시된다.
   applyPlaybackFinished: () => set({ phase: 'SCORE', score: null, scoringFailed: false }),
