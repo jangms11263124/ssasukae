@@ -145,10 +145,9 @@ impl KaraokeEffects {
             reverb += delayed;
         }
         reverb /= self.comb_buffers.len() as f32;
-        let mixed = (input * self.config.dry
-            + echo * self.config.echo
-            + reverb * self.config.reverb)
-            * self.config.output_gain;
+        let mixed =
+            (input * self.config.dry + echo * self.config.echo + reverb * self.config.reverb)
+                * self.config.output_gain;
         self.limit_sample(mixed)
     }
 
@@ -167,8 +166,8 @@ impl KaraokeEffects {
             // never hard-clipped. This does not add another audio buffer or latency.
             self.limiter_gain = required_gain;
         } else {
-            self.limiter_gain +=
-                (1.0 - self.limiter_gain) * LIMITER_RELEASE_PER_SAMPLE;
+            self.limiter_gain += (1.0 - self.limiter_gain) * LIMITER_RELEASE_PER_SAMPLE;
+            self.limiter_gain = self.limiter_gain.min(required_gain);
         }
         sample * self.limiter_gain
     }

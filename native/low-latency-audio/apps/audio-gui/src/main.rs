@@ -275,7 +275,7 @@ impl Default for PeerMixControl {
     fn default() -> Self {
         Self {
             volume: 100.0,
-            echo: 0.0,
+            echo: 8.0,
             reverb: 0.0,
             muted: false,
         }
@@ -531,10 +531,10 @@ impl App {
             backend_connected: preview,
             mic_gain: 85.0,
             dry: 100.0,
-            echo: 8.0,
+            echo: 0.0,
             echo_delay: 110.0,
             echo_feedback: 18.0,
-            reverb: 8.0,
+            reverb: 0.0,
             reverb_time: 1.2,
             microphone_muted: false,
             peer_mix_controls: BTreeMap::new(),
@@ -921,6 +921,7 @@ impl App {
                     ping_ms,
                     concealment_percent,
                     underruns,
+                    local_monitor_underruns,
                     resyncs,
                 }) => {
                     self.connected_peers = connected_peers;
@@ -937,6 +938,7 @@ impl App {
                                 "pingMs": ping_ms,
                                 "concealmentPercent": concealment_percent,
                                 "underruns": underruns,
+                                "localMonitorUnderruns": local_monitor_underruns,
                                 "resyncs": resyncs,
                             }),
                         );

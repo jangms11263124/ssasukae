@@ -315,14 +315,7 @@ fn run_render(
             playback_policy.target_queue_samples as f64 * 1_000.0 / SAMPLE_RATE as f64,
             negotiation
         )));
-        let mut state = PlaybackOutputState {
-            started: false,
-            resampler: Default::default(),
-            last_remote_sample: 0.0,
-            trim_crossfade_from: 0.0,
-            trim_crossfade_remaining: 0,
-            limiter_gain: 1.0,
-        };
+        let mut state = PlaybackOutputState::new(false, period_frames as usize);
         let mut local_consumer = Some(monitor_consumer);
         let mut previous_event = None;
         let mut event_intervals_us = Vec::new();

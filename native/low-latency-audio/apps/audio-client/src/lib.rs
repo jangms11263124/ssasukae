@@ -61,8 +61,10 @@ pub use wasapi::{
 const RING_SAMPLES: usize = SAMPLE_RATE as usize * 2;
 const MAX_CAPTURE_BURST_FRAMES: usize = 16;
 const LOCAL_MONITOR_MAX_QUEUE_SAMPLES: usize = SAMPLE_RATE as usize * 40 / 1_000;
-const LOCAL_MONITOR_TRIM_TO_SAMPLES: usize = SAMPLE_RATE as usize * 10 / 1_000;
-const LOCAL_MONITOR_GAIN: f32 = 0.35;
+const LOCAL_MONITOR_MAX_SPEED_ADJUSTMENT_PPM: i64 = 500;
+const LOCAL_MONITOR_RATIO_SMOOTHING: f64 = 0.0005;
+const LOCAL_MONITOR_GAIN: f32 = 1.0;
+const LOCAL_MONITOR_FADE_SAMPLES: usize = 48;
 const PLAYBACK_OUTPUT_CEILING: f32 = 0.92;
 const PLAYBACK_LIMITER_RELEASE_PER_SAMPLE: f32 = 0.0005;
 const MAX_CONCEALED_FRAMES_PER_GAP: u64 = 4;
@@ -167,6 +169,7 @@ pub enum EmbeddedEvent {
         ping_ms: Option<f64>,
         concealment_percent: f64,
         underruns: u64,
+        local_monitor_underruns: u64,
         resyncs: u64,
     },
     MrFinished {
@@ -658,6 +661,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
     let mut previous_live_concealed = 0_u64;
     let mut previous_live_resyncs = 0_u64;
     let mut previous_live_underruns = 0_u64;
+    let mut previous_local_monitor_underruns = 0_u64;
     let mut mr_track: Option<MrTrack> = None;
     let mut mr_volume = 0.72_f32;
     let mut cancel_request = None::<u64>;
@@ -1539,6 +1543,9 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             let total_concealed: u64 = peers.values().map(|peer| peer.concealed_frames).sum();
             let total_resyncs: u64 = peers.values().map(|peer| peer.playback_resyncs).sum();
             let total_underruns = playback_stats.underrun_events.load(Ordering::Relaxed);
+            let total_local_monitor_underruns = playback_stats
+                .local_monitor_underrun_events
+                .load(Ordering::Relaxed);
             let incoming_queue_drops: u64 = transports
                 .values()
                 .map(IceTransport::incoming_queue_drops)
@@ -1570,8 +1577,10 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                 -60.0
             };
             println!(
-                "Live status: peers={connected_peers} ping_ms={ping_ms:.1} concealment_percent={concealment_percent:.2} underruns={} resyncs={} input_peak_dbfs={peak_dbfs:.1} clipped_samples={clipped_samples} incoming_queue_drops={incoming_queue_drops} stale_outgoing_drops={stale_outgoing_drops}",
+                "Live status: peers={connected_peers} ping_ms={ping_ms:.1} concealment_percent={concealment_percent:.2} underruns={} local_monitor_underruns={} resyncs={} input_peak_dbfs={peak_dbfs:.1} clipped_samples={clipped_samples} incoming_queue_drops={incoming_queue_drops} stale_outgoing_drops={stale_outgoing_drops}",
                 total_underruns.saturating_sub(previous_live_underruns),
+                total_local_monitor_underruns
+                    .saturating_sub(previous_local_monitor_underruns),
                 total_resyncs.saturating_sub(previous_live_resyncs),
             );
             if let Some(events) = &embedded_events {
@@ -1580,6 +1589,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                     ping_ms: (ping_ms >= 0.0).then_some(ping_ms),
                     concealment_percent,
                     underruns: total_underruns.saturating_sub(previous_live_underruns),
+                    local_monitor_underruns: total_local_monitor_underruns,
                     resyncs: total_resyncs.saturating_sub(previous_live_resyncs),
                 });
                 let _ = events.send(EmbeddedEvent::InputLevel {
@@ -1592,6 +1602,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             previous_live_concealed = total_concealed;
             previous_live_resyncs = total_resyncs;
             previous_live_underruns = total_underruns;
+            previous_local_monitor_underruns = total_local_monitor_underruns;
             while next_live_status <= live_now {
                 next_live_status += Duration::from_secs(1);
             }
@@ -1990,10 +2001,10 @@ fn build_output_stream(
     let (config, format) = supported_config(device, false)?;
     let channels = config.channels as usize;
     let error = |value| eprintln!("audio output error: {value}");
-    let mut state = PlaybackOutputState {
-        started: policy.prebuffer_samples == 0,
-        resampler: AdaptiveResampler::default(),
-    };
+    let mut state = PlaybackOutputState::new(
+        policy.prebuffer_samples == 0,
+        policy.target_queue_samples.max(1),
+    );
     let stream = match format {
         SampleFormat::F32 => device.build_output_stream(
             &config,
@@ -2062,14 +2073,21 @@ fn fill_output<T: Copy>(
     state: &mut PlaybackOutputState,
     convert: impl Fn(f32) -> T,
 ) {
+    let local_device_period_samples = state.output_period_samples.max(SAMPLES_PER_FRAME);
+    let local_target_queue_samples = (local_device_period_samples
+        .saturating_mul(2)
+        .saturating_add(SAMPLES_PER_FRAME))
+    .min(LOCAL_MONITOR_MAX_QUEUE_SAMPLES);
     if let Some(local) = local_consumer.as_mut() {
         if local.available() > LOCAL_MONITOR_MAX_QUEUE_SAMPLES {
-            let discard = local
-                .available()
-                .saturating_sub(LOCAL_MONITOR_TRIM_TO_SAMPLES);
+            let discard = local.available().saturating_sub(local_target_queue_samples);
             for _ in 0..discard {
                 let _ = local.pop();
             }
+            state.local_resampler.reset();
+            state.local_started = false;
+            state.local_ratio = 1.0;
+            state.local_fade_gain = 0.0;
         }
     }
     if policy.max_queue_samples > 0 && consumer.available() > policy.max_queue_samples {
@@ -2099,6 +2117,20 @@ fn fill_output<T: Copy>(
     let adjustment_ppm = playback_speed_adjustment_ppm(policy, consumer.available());
     stats.record_speed(adjustment_ppm);
     let ratio = 1.0 + adjustment_ppm as f64 / 1_000_000.0;
+    let local_available = local_consumer.as_ref().map_or(0, Consumer::available);
+    if !state.local_started && local_available >= local_target_queue_samples {
+        state.local_started = true;
+        state.local_fade_gain = 0.0;
+        state.local_dropout_remaining = 0;
+    }
+    let local_error = local_available as i64 - local_target_queue_samples as i64;
+    let local_response_range = (local_target_queue_samples as i64 / 2).max(1);
+    let local_adjustment_ppm =
+        (local_error * LOCAL_MONITOR_MAX_SPEED_ADJUSTMENT_PPM / local_response_range).clamp(
+            -LOCAL_MONITOR_MAX_SPEED_ADJUSTMENT_PPM,
+            LOCAL_MONITOR_MAX_SPEED_ADJUSTMENT_PPM,
+        );
+    let local_target_ratio = 1.0 + local_adjustment_ppm as f64 / 1_000_000.0;
     for frame in data.chunks_exact_mut(channels) {
         let mut remote = if state.started {
             match state.resampler.render(consumer, ratio) {
@@ -2120,11 +2152,42 @@ fn fill_output<T: Copy>(
             state.trim_crossfade_remaining -= 1;
         }
         state.last_remote_sample = remote;
-        let local = local_consumer
-            .as_mut()
-            .and_then(Consumer::pop)
-            .unwrap_or(0.0)
-            * LOCAL_MONITOR_GAIN;
+        let local_sample = if state.local_started {
+            // Smooth the asynchronous device-clock correction sample by sample.
+            // Abrupt callback-level ratio changes can sound like low-level sizzling.
+            state.local_ratio +=
+                (local_target_ratio - state.local_ratio) * LOCAL_MONITOR_RATIO_SMOOTHING;
+            local_consumer
+                .as_mut()
+                .and_then(|local| state.local_resampler.render(local, state.local_ratio))
+        } else {
+            None
+        };
+        let local = if let Some(sample) = local_sample {
+            state.local_fade_gain =
+                (state.local_fade_gain + 1.0 / LOCAL_MONITOR_FADE_SAMPLES as f32).min(1.0);
+            state.last_local_sample = sample;
+            sample * state.local_fade_gain * LOCAL_MONITOR_GAIN
+        } else {
+            if state.local_started {
+                stats
+                    .local_monitor_underrun_events
+                    .fetch_add(1, Ordering::Relaxed);
+                state.local_started = false;
+                state.local_resampler.reset();
+                state.local_ratio = 1.0;
+                state.local_fade_gain = 0.0;
+                state.local_dropout_from = state.last_local_sample;
+                state.local_dropout_remaining = LOCAL_MONITOR_FADE_SAMPLES;
+            }
+            if state.local_dropout_remaining > 0 {
+                let gain = state.local_dropout_remaining as f32 / LOCAL_MONITOR_FADE_SAMPLES as f32;
+                state.local_dropout_remaining -= 1;
+                state.local_dropout_from * gain * LOCAL_MONITOR_GAIN
+            } else {
+                0.0
+            }
+        };
         let combined = remote + local;
         let required_gain = if combined.abs() > PLAYBACK_OUTPUT_CEILING {
             PLAYBACK_OUTPUT_CEILING / combined.abs()
@@ -2134,8 +2197,8 @@ fn fill_output<T: Copy>(
         if required_gain < state.limiter_gain {
             state.limiter_gain = required_gain;
         } else {
-            state.limiter_gain +=
-                (1.0 - state.limiter_gain) * PLAYBACK_LIMITER_RELEASE_PER_SAMPLE;
+            state.limiter_gain += (1.0 - state.limiter_gain) * PLAYBACK_LIMITER_RELEASE_PER_SAMPLE;
+            state.limiter_gain = state.limiter_gain.min(required_gain);
         }
         frame.fill(convert(combined * state.limiter_gain));
     }
@@ -2195,14 +2258,7 @@ mod tests {
             trim_to_samples: 0,
             max_speed_adjustment_ppm: 0,
         };
-        let mut state = PlaybackOutputState {
-            started: false,
-            resampler: AdaptiveResampler::default(),
-            last_remote_sample: 0.0,
-            trim_crossfade_from: 0.0,
-            trim_crossfade_remaining: 0,
-            limiter_gain: 1.0,
-        };
+        let mut state = PlaybackOutputState::new(false, 1);
         let stats = PlaybackStats::default();
         let mut local_consumer = None;
         let mut output = [0.0; 4];
@@ -2257,14 +2313,7 @@ mod tests {
             trim_to_samples: 0,
             max_speed_adjustment_ppm: 0,
         };
-        let mut state = PlaybackOutputState {
-            started: false,
-            resampler: AdaptiveResampler::default(),
-            last_remote_sample: 0.0,
-            trim_crossfade_from: 0.0,
-            trim_crossfade_remaining: 0,
-            limiter_gain: 1.0,
-        };
+        let mut state = PlaybackOutputState::new(false, 1);
         let stats = PlaybackStats::default();
         let mut local_consumer = None;
         let mut output = [1.0; 4];
@@ -2283,6 +2332,59 @@ mod tests {
         assert_eq!(output, [0.0; 4]);
         assert!(!state.started);
         assert_eq!(stats.underrun_events.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn local_monitor_prebuffers_then_fades_in_at_full_level() {
+        let (_remote_producer, mut remote_consumer) = ring_buffer(16);
+        let (mut local_producer, local_consumer) = ring_buffer(1_024);
+        let local_target = SAMPLES_PER_FRAME * 3;
+        for _ in 0..local_target - 1 {
+            local_producer.push(0.5).unwrap();
+        }
+        let policy = PlaybackBufferPolicy {
+            prebuffer_samples: 0,
+            target_queue_samples: 0,
+            max_queue_samples: 0,
+            trim_to_samples: 0,
+            max_speed_adjustment_ppm: 0,
+        };
+        let stats = PlaybackStats::default();
+        let mut state = PlaybackOutputState::new(false, SAMPLES_PER_FRAME);
+        let mut local_consumer = Some(local_consumer);
+        let mut output = [1.0; 64];
+
+        fill_output(
+            &mut output,
+            1,
+            &mut remote_consumer,
+            &mut local_consumer,
+            policy,
+            &stats,
+            &mut state,
+            |sample| sample,
+        );
+        assert_eq!(output, [0.0; 64]);
+
+        for _ in 0..128 {
+            local_producer.push(0.5).unwrap();
+        }
+        fill_output(
+            &mut output,
+            1,
+            &mut remote_consumer,
+            &mut local_consumer,
+            policy,
+            &stats,
+            &mut state,
+            |sample| sample,
+        );
+
+        assert!(output[0] > 0.0 && output[0] < 0.5);
+        assert!((output[47] - 0.5).abs() < 0.0001);
+        assert!(output[48..]
+            .iter()
+            .all(|sample| (*sample - 0.5).abs() < 0.0001));
     }
 
     #[test]
@@ -2551,9 +2653,28 @@ mod tests {
             effects.process_frame(&mut frame);
             rendered.extend(frame);
         }
-        assert_eq!(rendered[0], 1.0);
+        assert!((rendered[0] - 0.92).abs() < 0.0001);
         assert!(rendered[1..2_400].iter().all(|&sample| sample == 0.0));
-        assert_eq!(rendered[2_400], 0.5);
+        assert!((0.45..=0.5).contains(&rendered[2_400]));
+    }
+
+    #[test]
+    fn effect_gain_is_limited_without_hard_clipping() {
+        let config = EffectsConfig {
+            output_gain: 1.5,
+            dry: 1.0,
+            echo: 0.4,
+            echo_delay_ms: 50.0,
+            echo_feedback: 0.2,
+            reverb: 0.4,
+            reverb_time_seconds: 1.2,
+        };
+        let mut effects = KaraokeEffects::new(config);
+        let mut frame = [1.0; SAMPLES_PER_FRAME];
+        effects.process_frame(&mut frame);
+
+        assert!(frame.iter().all(|sample| sample.is_finite()));
+        assert!(frame.iter().all(|sample| sample.abs() <= 0.92));
     }
 
     #[test]
