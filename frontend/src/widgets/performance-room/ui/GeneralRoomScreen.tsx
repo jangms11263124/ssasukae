@@ -16,6 +16,7 @@ import { showToast } from '@/shared/model/toastStore';
 
 import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
 import { RoomSocketProvider } from '../model/RoomSocketContext';
+import { StageAudioProvider } from '../model/StageAudioContext';
 import { useCardEffectSideEffects } from '../model/useCardEffectSideEffects';
 import { useOpenViduSession } from '../model/useOpenViduSession';
 import { useRoomSocket } from '../model/useRoomSocket';
@@ -27,8 +28,10 @@ import { CenterStage } from './center-stage/CenterStage';
 import { RoomHelpFloatingButton } from './help/RoomHelpFloatingButton';
 import { MediaControlDock } from './media-controls/MediaControlDock';
 import { NowPlayingCard } from './now-playing/NowPlayingCard';
-import { ParticipantVideoGrid } from './participant-video/ParticipantVideoGrid';
+import { RemoteAudioSink } from './participant-video/RemoteAudioSink';
+import { SelfVideoTile } from './participant-video/SelfVideoTile';
 import { RoomLeftSection } from './RoomLeftSection';
+import { StageControlPanel } from './stage-control/StageControlPanel';
 import { TalkPanel } from './talk/TalkPanel';
 
 export function GeneralRoomScreen() {
@@ -43,6 +46,7 @@ export function GeneralRoomScreen() {
   const hydrateFromSnapshot = useRoomStore((state) => state.hydrateFromSnapshot);
 
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
+  const phase = useStageStore((state) => state.phase);
   const endStage = useStageStore((state) => state.endStage);
 
   const socket = useRoomSocket(session?.roomId ?? null);
@@ -113,6 +117,11 @@ export function GeneralRoomScreen() {
 
   const currentUserId = user?.id ?? 0;
   const canManageParticipants = session.isHost;
+  const isPerformer = session.myParticipantId === performerParticipantId;
+  const myNickname =
+    participants.find(({ id }) => id === session.myParticipantId)?.nickname ??
+    user?.nickname ??
+    '나';
 
   const stagedParticipants = participants.map((participant) => ({
     ...participant,
@@ -149,8 +158,7 @@ export function GeneralRoomScreen() {
         await requestLeaveRoom(session.roomId);
       }
     } catch (error) {
-      const message =
-        error instanceof ApiError ? error.message : '방 나가기에 실패했습니다.';
+      const message = error instanceof ApiError ? error.message : '방 나가기에 실패했습니다.';
       showToast(message, 'error');
     } finally {
       endStage();
@@ -162,57 +170,62 @@ export function GeneralRoomScreen() {
   return (
     <RoomSocketProvider value={socket}>
       <OpenViduSessionProvider value={media}>
-        <div className="min-h-dvh bg-[#0b0b0d] text-zinc-100">
-          <main className="mx-auto grid min-h-[calc(100dvh-3rem)] max-w-[1500px] grid-cols-1 gap-4 px-6 py-12 lg:grid-cols-[270px_minmax(0,1fr)_300px]">
-            <RoomLeftSection
-              className="h-[calc(100dvh-6rem)] min-h-[720px]"
-              room={room}
-              participants={stagedParticipants}
-              currentUserId={currentUserId}
-              hostParticipantId={hostParticipantId ?? -1}
-              leaderboard={leaderboard}
-              canManageParticipants={canManageParticipants}
-              onCopyInviteCode={handleCopyInviteCode}
-              onDelegateHost={handleDelegateHost}
-              onKickParticipant={handleKickParticipant}
-              onLeaveRoom={handleLeaveRoom}
-            />
-
-            <section className="flex min-w-0 flex-col gap-4" aria-label="중앙 공연 영역">
-              <CenterStage
-                currentParticipantId={session.myParticipantId}
-                isHost={canManageParticipants}
+        <StageAudioProvider isPerformer={isPerformer}>
+          <div className="min-h-dvh bg-[#0b0b0d] text-zinc-100">
+            <main className="mx-auto grid min-h-[calc(100dvh-3rem)] max-w-[1500px] grid-cols-1 gap-4 px-6 py-12 lg:grid-cols-[270px_minmax(0,1fr)_300px]">
+              <RoomLeftSection
+                className="h-[calc(100dvh-6rem)] min-h-[720px]"
+                room={room}
                 participants={stagedParticipants}
+                currentUserId={currentUserId}
+                hostParticipantId={hostParticipantId ?? -1}
+                leaderboard={leaderboard}
+                canManageParticipants={canManageParticipants}
+                onCopyInviteCode={handleCopyInviteCode}
+                onDelegateHost={handleDelegateHost}
+                onKickParticipant={handleKickParticipant}
+                onLeaveRoom={handleLeaveRoom}
               />
 
-              <ParticipantVideoGrid currentUserId={currentUserId} participants={stagedParticipants} />
-              <MediaControlDock />
-              <MyCardDock />
-            </section>
+              <section className="flex min-w-0 flex-col gap-4" aria-label="중앙 공연 영역">
+                <CenterStage currentParticipantId={session.myParticipantId} />
 
-            <section className="flex flex-col gap-4" aria-label="우측 제어 영역">
-              <NowPlayingCard />
-              <ActiveEffectPanel />
-              <AudioEnginePanel />
-              <div className="min-h-0 flex-1">
-                <TalkPanel />
-              </div>
-            </section>
-          </main>
+                {/* 공연 중에는 무대가 가창자 캠이라 내 모습은 셀프 뷰로 남긴다 */}
+                {phase === 'PERFORMING' && !isPerformer ? (
+                  <SelfVideoTile nickname={myNickname} />
+                ) : null}
+                <MediaControlDock />
+                <MyCardDock />
+              </section>
 
-          <footer className="flex h-12 items-center justify-between border-t border-white/10 bg-[#151517] px-6 font-mono text-[9px] tracking-wide text-zinc-500">
-            <span>
-              [ROOM_SYSTEM] ROOM_{session.roomId} ::{' '}
-              {socket.isConnected ? 'WS_CONNECTED' : 'WS_CONNECTING...'}
-              {socket.isConnected && socket.latencyMs !== null
-                ? ` :: PING ${socket.latencyMs}MS`
-                : ''}
-            </span>
-            <span>INVITE_CODE: {session.inviteCode}</span>
-          </footer>
+              <section className="flex flex-col gap-4" aria-label="우측 제어 영역">
+                <NowPlayingCard />
+                <ActiveEffectPanel />
+                <StageControlPanel />
+                <AudioEnginePanel />
+                <div className="min-h-0 flex-1">
+                  <TalkPanel />
+                </div>
+              </section>
+            </main>
 
-          <RoomHelpFloatingButton />
-        </div>
+            {/* 캠 그리드가 없어도 원격 참가자 음성은 계속 들려야 한다 */}
+            <RemoteAudioSink />
+
+            <footer className="flex h-12 items-center justify-between border-t border-white/10 bg-[#151517] px-6 font-mono text-[9px] tracking-wide text-zinc-500">
+              <span>
+                [ROOM_SYSTEM] ROOM_{session.roomId} ::{' '}
+                {socket.isConnected ? 'WS_CONNECTED' : 'WS_CONNECTING...'}
+                {socket.isConnected && socket.latencyMs !== null
+                  ? ` :: PING ${socket.latencyMs}MS`
+                  : ''}
+              </span>
+              <span>INVITE_CODE: {session.inviteCode}</span>
+            </footer>
+
+            <RoomHelpFloatingButton />
+          </div>
+        </StageAudioProvider>
       </OpenViduSessionProvider>
     </RoomSocketProvider>
   );

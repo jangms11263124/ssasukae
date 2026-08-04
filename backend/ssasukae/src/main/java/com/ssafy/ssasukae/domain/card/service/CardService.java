@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -117,7 +118,7 @@ public class CardService {
   }
 
   // 공연 시작할 때, 공연자 제외 인원들 카드 배정
-  @Transactional
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void assignForPlayback(PerformanceSnapShot performance) {
     try {
       Room room = roomRepository.findByIdForUpdate(performance.roomId()).orElse(null);

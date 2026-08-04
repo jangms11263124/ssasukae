@@ -7,16 +7,17 @@ import { SongSearchModal } from '@/features/song-search';
 
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { useStageStore, type StageSong } from '../../model/stageStore';
-import { StageButton } from './StageButton';
-import { StageMessage } from './StageMessage';
+import { StageButton } from '../center-stage/StageButton';
+import { ControlMessage } from './ControlMessage';
 
-interface SongSelectStageProps {
+interface SongSelectControlsProps {
   isPerformer: boolean;
 }
 
-export function SongSelectStage({ isPerformer }: SongSelectStageProps) {
+export function SongSelectControls({ isPerformer }: SongSelectControlsProps) {
   const confirmSong = useStageStore((state) => state.confirmSong);
   const socket = useRoomSocketContext();
+  // 선곡 단계에 들어오면 곡 검색 모달을 바로 연다.
   const [isModalOpen, setIsModalOpen] = useState(true);
 
   // 서버에 공연 준비를 요청하고, 이벤트 수신 전까지는 로컬 상태로 먼저 전이한다.
@@ -28,20 +29,18 @@ export function SongSelectStage({ isPerformer }: SongSelectStageProps) {
 
   if (!isPerformer) {
     return (
-      <StageMessage title="가창자가 노래를 선택 중입니다..." subtitle="조금만 기다려 주세요" />
+      <ControlMessage title="가창자가 노래를 선택 중입니다..." subtitle="조금만 기다려 주세요" />
     );
   }
 
   return (
-    <>
-      <StageMessage
-        title="부를 노래를 선택하세요..."
-        actions={
-          isModalOpen ? undefined : (
-            <StageButton onClick={() => setIsModalOpen(true)}>곡 목록 열기</StageButton>
-          )
-        }
-      />
+    <div className="space-y-3">
+      <ControlMessage title="부를 노래를 선택하세요..." />
+      {isModalOpen ? null : (
+        <StageButton size="sm" className="w-full min-w-0" onClick={() => setIsModalOpen(true)}>
+          곡 목록 열기
+        </StageButton>
+      )}
       {isModalOpen ? (
         <SongSearchModal
           onClose={() => setIsModalOpen(false)}
@@ -59,6 +58,6 @@ export function SongSelectStage({ isPerformer }: SongSelectStageProps) {
           )}
         />
       ) : null}
-    </>
+    </div>
   );
 }

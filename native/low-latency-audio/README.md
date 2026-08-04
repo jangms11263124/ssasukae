@@ -223,7 +223,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run-spring-integration-tes
 2. `곡 검색`을 눌러 실제 Spring 곡 목록 확인
 3. 모달에서 `이 곡 선택`을 눌러 내 로컬 선곡에만 반영되는지 확인
 4. 메인 화면에서 `공연 준비`를 눌러 모든 참가자가 MR을 개별 다운로드하는지 확인
-5. 오른쪽 위 `재생 중인 노래`의 `LOCAL MR`이 `READY`가 된 뒤 `재생 시작` 실행
+5. 모든 P2P 참가자의 `LOCAL MR` 다운로드와 파일 일치 확인이 끝나 `MR 준비 인원`이 전원 READY가 되면, 곡을 준비한 사용자의 `재생 시작` 버튼이 활성화됨
 
 공연 준비 요청이 성공하려면 입력한 JWT의 사용자가 해당 방에서 온라인 상태인 가창자여야 하며 방 상태가 `PREPARING`이어야 한다. 조건이 다르면 Spring이 반환한 오류가 곡 상태 영역에 표시된다.
 
