@@ -1,9 +1,8 @@
-'use client';
-
-import { DEFAULT_PERFORMANCE_SETTINGS } from '@/entities/performance';
+import { DEFAULT_PERFORMANCE_SETTINGS, type PerformanceSettings } from '@/entities/performance';
+import { useRoomStore } from '@/entities/room';
 import { cn } from '@/shared/lib/cn';
 
-import { DSP_ROWS, SOUND_PANEL_LABEL } from '../../../config/dspParams';
+import { resolveDspRows, SOUND_PANEL_LABEL } from '../../../config/dspParams';
 import { useSettingsPublisher } from '../../../model/useSettingsPublisher';
 import { useStageStore } from '../../../model/stageStore';
 
@@ -38,11 +37,24 @@ export function VocalDspPanel({
 }: VocalDspPanelProps) {
   const settings = useStageStore((state) => state.settings);
   const publishSettings = useSettingsPublisher();
+  const isBattleMode = useRoomStore((state) => state.session?.mode === 'BATTLE');
+  const rows = resolveDspRows(isBattleMode);
+
+  // settings를 통째로 덮으면 패널에 없는 monitorVoicePercent(AUDIO ENGINE의 MY VOICE)까지
+  // 초기화되어, 가창자가 이어폰으로 맞춰 둔 값이 이유 없이 바뀐다.
+  const resetVisibleRows = () => {
+    const patch = rows.reduce<Partial<PerformanceSettings>>(
+      (acc, row) => ({ ...acc, ...row.write(row.read(DEFAULT_PERFORMANCE_SETTINGS)) }),
+      {},
+    );
+
+    publishSettings(patch);
+  };
 
   return (
     <aside
       aria-label={`${SOUND_PANEL_LABEL} 패널`}
-      // 손 인식은 무대 전체를 4등분해 카드 위치와 1:1로 맞지 않는다. 잡은 항목은 강조 색으로 알린다.
+      // 손 인식은 무대 전체를 행 수만큼 나눠 카드 위치와 1:1로 맞지 않는다. 잡은 항목은 강조 색으로 알린다.
       // backdrop-blur는 좌우 반전된 캠 영상과 합성되며 무대 색을 바꿔 버려 쓰지 않는다.
       className="absolute right-4 top-[14%] w-[188px] overflow-hidden rounded-2xl border-[1.5px] border-cyan-300/45 bg-[#0c101e]/85 shadow-[0_15px_50px_rgba(0,0,0,0.65),0_0_25px_rgba(0,243,255,0.35)]"
     >
@@ -53,7 +65,7 @@ export function VocalDspPanel({
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={() => publishSettings(DEFAULT_PERFORMANCE_SETTINGS)}
+            onClick={resetVisibleRows}
             // 높이는 옆 닫기 버튼과 같게 맞춘다. 한글 글자가 줄 상자 위쪽에 붙는
             // 폰트라, 위아래 여백을 같게 주면 떠 보여 위쪽만 조금 더 준다.
             className="flex h-[22px] items-center rounded-md border border-white/25 bg-white/10 px-2 pt-[2px] text-[10px] font-extrabold leading-none text-white transition-colors hover:border-cyan-300/70 hover:text-cyan-200"
@@ -72,7 +84,7 @@ export function VocalDspPanel({
       </div>
 
       <ul className="flex flex-col gap-2 p-3">
-        {DSP_ROWS.map((row, index) => {
+        {rows.map((row, index) => {
           const isGrabbed = index === grabbedRowIndex;
           const isActive = index === activeRowIndex;
 
