@@ -366,7 +366,14 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
       sendSettings: (settings) => {
         const performanceId = currentPerformanceId();
         if (roomId === null || performanceId === null) return;
-        publish(`/app/rooms/${roomId}/performances/${performanceId}/settings`, settings);
+        // 서버 요청 DTO는 4필드 record라 로컬 전용 필드(micVolumePercent 등)가 섞이면
+        // 역직렬화에서 거부된다(서버 내부 오류). 계약에 있는 필드만 추려 보낸다.
+        publish(`/app/rooms/${roomId}/performances/${performanceId}/settings`, {
+          keyOffset: settings.keyOffset,
+          tempoPercent: settings.tempoPercent,
+          mrVolumePercent: settings.mrVolumePercent,
+          echoLevel: settings.echoLevel,
+        });
       },
       sendCancel: () => {
         const performanceId = currentPerformanceId();
