@@ -82,7 +82,9 @@ function seedMockParticipants() {
   [MOCK_ATTACKER, MOCK_DEFENDER].forEach((mock) => {
     applyParticipantJoined({
       participantId: mock.participantId,
+      userId: mock.participantId,
       nickname: mock.nickname,
+      profileImageUrl: null,
     });
   });
 }

@@ -35,7 +35,7 @@ interface EnterRoomInput {
   openViduSessionId: string;
   openViduToken: string;
   /** 방에 들어간 본인 정보 (참가자 목록의 첫 항목이 된다) */
-  me: { userId: number; nickname: string };
+  me: { userId: number; nickname: string; profileImageUrl: string | null };
 }
 
 interface RoomStore {
@@ -81,6 +81,7 @@ export const useRoomStore = create<RoomStore>((set) => ({
           connectionStatus: 'CONNECTED',
           id: participantId,
           nickname: me.nickname,
+          profileImageUrl: me.profileImageUrl,
           stageRole: 'PARTICIPANT',
           userId: me.userId,
         },
@@ -118,6 +119,7 @@ export const useRoomStore = create<RoomStore>((set) => ({
           connectionStatus: participant.connectionStatus,
           id: participant.participantId,
           nickname: participant.nickname,
+          profileImageUrl: participant.profileImageUrl ?? null,
           stageRole: participant.stageRole,
           userId: participant.userId,
         })),
@@ -138,9 +140,9 @@ export const useRoomStore = create<RoomStore>((set) => ({
             connectionStatus: 'CONNECTED',
             id: payload.participantId,
             nickname: payload.nickname,
+            profileImageUrl: payload.profileImageUrl ?? null,
             stageRole: 'PARTICIPANT',
-            // payload에 userId가 없다. 직후 방 스냅샷 조회가 실제 값으로 덮어쓴다.
-            userId: -1,
+            userId: payload.userId,
           },
         ],
       };
