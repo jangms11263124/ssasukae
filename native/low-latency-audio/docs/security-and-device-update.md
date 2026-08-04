@@ -34,7 +34,7 @@
 릴리스 MSI:
 
 ```text
-dist\windows-installer\SSAFYStar-LowLatencyAudio-0.1.0-x64.msi
+dist\windows-installer\SSAFYStar-LowLatencyAudio-0.1.1-x64.msi
 ```
 
 다시 빌드:
