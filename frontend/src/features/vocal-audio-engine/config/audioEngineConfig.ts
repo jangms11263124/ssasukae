@@ -31,6 +31,14 @@ export const MIC_INPUT_LATENCY_ESTIMATE_SECONDS = 0.025;
 /** 송출 MR 보정 딜레이의 상한(초). DelayNode 버퍼 크기라 생성 후 못 늘린다 */
 export const BROADCAST_MR_SYNC_MAX_DELAY_SECONDS = 0.3;
 
+/** RNNoise 워클릿의 내부 프레임 버퍼링(480샘플@48kHz). 송출 MR 보정량에 더한다 */
+export const RNNOISE_LATENCY_SECONDS = 0.01;
+
+/** copy:rnnoise-assets 스크립트가 public에 생성하는 정적 경로 (predev/prebuild 훅) */
+export const RNNOISE_WORKLET_URL = '/noise-suppressor/rnnoiseWorklet.js';
+export const RNNOISE_WASM_URL = '/noise-suppressor/rnnoise.wasm';
+export const RNNOISE_WASM_SIMD_URL = '/noise-suppressor/rnnoise_simd.wasm';
+
 /** 순 피치 변화가 이 미만이면 0으로 보고 PitchShift를 바이패스한다 */
 export const PITCH_BYPASS_EPSILON = 0.01;
 
