@@ -17,6 +17,8 @@ interface ReadyControlsProps {
   isMrLoaded: boolean;
   /** MR 다운로드/엔진 초기화 실패 메시지 */
   prepareError: string | null;
+  /** MR 다운로드 재시도 (실패했을 때만 노출된다) */
+  onRetryPrepare: () => void;
 }
 
 export function ReadyControls({
@@ -26,6 +28,7 @@ export function ReadyControls({
   canRequestStart,
   isMrLoaded,
   prepareError,
+  onRetryPrepare,
 }: ReadyControlsProps) {
   const changeSong = useStageStore((state) => state.changeSong);
   const performanceId = useStageStore((state) => state.performanceId);
@@ -65,26 +68,41 @@ export function ReadyControls({
     return <ControlMessage title={title} subtitle="곧 공연이 시작됩니다. 조금만 기다려 주세요" />;
   }
 
-  const isDownloading = mrLoadRequested && !isMrLoaded && prepareError === null;
+  // 준비 실패는 기다려도 풀리지 않는다. '준비 중...' 대신 재시도 버튼을 내보내
+  // 언제까지 기다려야 하는지 헷갈리지 않게 한다.
+  const hasPrepareError = prepareError !== null;
+  const isDownloading = mrLoadRequested && !isMrLoaded && !hasPrepareError;
 
   return (
     <div className="space-y-3">
       <ControlMessage
         title={title}
-        subtitle={prepareError ?? (isDownloading ? 'MR 음원을 내려받는 중입니다...' : undefined)}
+        subtitle={
+          hasPrepareError
+            ? `${prepareError} 다시 시도하거나 다른 노래를 선택해 주세요.`
+            : isDownloading
+              ? 'MR 음원을 내려받는 중입니다...'
+              : undefined
+        }
       />
       <div className="grid grid-cols-2 gap-2">
         <StageButton size="sm" className="w-full min-w-0" onClick={handleChangeSong}>
           노래 바꾸기
         </StageButton>
-        <StageButton
-          size="sm"
-          className="w-full min-w-0"
-          onClick={handleStart}
-          disabled={!canRequestStart || mrLoadRequested}
-        >
-          {mrLoadRequested ? '준비 중...' : '시작하기'}
-        </StageButton>
+        {hasPrepareError ? (
+          <StageButton size="sm" className="w-full min-w-0" onClick={onRetryPrepare}>
+            다시 시도
+          </StageButton>
+        ) : (
+          <StageButton
+            size="sm"
+            className="w-full min-w-0"
+            onClick={handleStart}
+            disabled={!canRequestStart || mrLoadRequested}
+          >
+            {mrLoadRequested ? '준비 중...' : '시작하기'}
+          </StageButton>
+        )}
       </div>
     </div>
   );
