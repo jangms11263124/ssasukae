@@ -23,6 +23,11 @@ export interface VocalAudioEngineState {
   error: string | null;
   /** 송출 믹스. OpenVidu publisher 연동 시 이 스트림의 오디오 트랙을 넘긴다 */
   getBroadcastStream: () => MediaStream | null;
+  /**
+   * 살아 있는 엔진 인스턴스. 채점 수집처럼 마이크 탭·MR 시간축을 엔진과 같은 수명으로
+   * 붙잡아야 하는 쪽이 의존성으로 쓴다 (엔진이 새로 만들어지면 참조가 바뀐다).
+   */
+  engine: VocalAudioEngine | null;
 }
 
 /**
@@ -139,5 +144,5 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
     [engine],
   );
 
-  return { isEngineReady: engine !== null, isMrLoaded, error, getBroadcastStream };
+  return { isEngineReady: engine !== null, isMrLoaded, error, getBroadcastStream, engine };
 }

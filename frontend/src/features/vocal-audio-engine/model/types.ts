@@ -26,6 +26,18 @@ export interface VocalAudioEngine {
   setOutputDevice(deviceId: string): Promise<void>;
   /** 송출 믹스(목소리 + MR). OpenVidu publisher에 이 스트림의 오디오 트랙을 넘긴다 */
   getBroadcastStream(): MediaStream;
+  /**
+   * 채점용 드라이 목소리 탭 (에코·음량 적용 전). MediaRecorder가 이 스트림을 녹음한다.
+   * 마이크를 껐다 켜도 스트림 객체는 그대로라 녹음을 끊지 않아도 된다 — 닫힌 동안엔 무음이 흐른다.
+   */
+  getVocalCaptureStream(): MediaStream;
+  /** 같은 드라이 목소리를 보는 분석 노드. 음정 수집이 여기서 시간 영역 데이터를 읽는다 */
+  getVocalAnalyser(): AnalyserNode;
+  /**
+   * MR 재생 위치(ms). 정지 중이면 멈춘 위치를 그대로 준다.
+   * 벽시계가 아니라 MR 시간축이라 템포 변경·재개 오프셋이 반영된다 — 정답 MIDI와 이 축이 맞는다.
+   */
+  getMrPositionMs(): number;
   /** 모니터링 지연(ms) = baseLatency + outputLatency. 측정 불가면 null */
   getLatencyMs(): number | null;
   dispose(): void;
