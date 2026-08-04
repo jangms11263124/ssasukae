@@ -2267,12 +2267,22 @@ impl App {
                     ui.label(RichText::new(&self.song_status).size(9.0).color(MUTED));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let can_start = (self.preview || self.backend_connected)
-                        && self.active_performance_id.is_some()
-                        && self.playback_state == PlaybackState::Ready
-                        && self.mr_state == MrState::Ready;
+                    let can_start = self.can_request_playback_start();
+                    let start_label = if !self.preview
+                        && self.controls_active_performance
+                        && self.mr_state == MrState::Ready
+                        && self.mr_total_clients > 0
+                        && self.mr_ready_clients < self.mr_total_clients
+                    {
+                        format!(
+                            "MR 준비 {}/{}",
+                            self.mr_ready_clients, self.mr_total_clients
+                        )
+                    } else {
+                        "재생 시작".into()
+                    };
                     if ui
-                        .add_enabled(can_start, egui::Button::new("재생 시작"))
+                        .add_enabled(can_start, egui::Button::new(start_label))
                         .clicked()
                     {
                         self.request_playback_start();
@@ -2296,6 +2306,23 @@ impl App {
                 });
             });
         });
+    }
+
+    fn can_request_playback_start(&self) -> bool {
+        let performance_is_ready = self.active_performance_id.is_some()
+            && self.playback_state == PlaybackState::Ready
+            && self.mr_state == MrState::Ready;
+        if self.preview {
+            return performance_is_ready;
+        }
+
+        self.backend_connected
+            && self.controls_active_performance
+            && performance_is_ready
+            && self.mr_total_clients > 0
+            && self.mr_ready_clients == self.mr_total_clients
+            && self.mr_waiting_clients.is_empty()
+            && self.mr_mismatched_clients.is_empty()
     }
 
     fn song_search_modal(&mut self, ctx: &egui::Context) {

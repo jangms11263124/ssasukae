@@ -62,6 +62,8 @@ interface StageStore {
   startPerformance: () => void;
   finishPerformance: (score: number) => void;
   endStage: () => void;
+  /** 채점 화면을 마치고 다음 가창자 선택으로 넘어간다. 끝난 공연 상태는 초기화한다 */
+  advanceToSingerSelect: () => void;
   toggleMic: () => void;
   toggleCam: () => void;
   toggleGesture: () => void;
@@ -74,6 +76,8 @@ interface StageStore {
   applyPlaybackFinished: () => void;
   applySettingsChanged: (settings: PerformanceSettings) => void;
   applyPerformanceCancelled: () => void;
+  /** 가창자가 시작 전에 공연을 취소했다(노래 바꾸기). 가창자를 유지한 채 선곡으로 돌아간다 */
+  applySongChangeCancelled: (performerParticipantId: number) => void;
   /** AI 채점 결과 수신 (LEADERBOARD_UPDATED의 updatedFinalScore) */
   applyScore: (score: number) => void;
   applyScoringFailed: () => void;
@@ -122,6 +126,7 @@ export const useStageStore = create<StageStore>((set) => ({
   startPerformance: () => set({ phase: 'PERFORMING' }),
   finishPerformance: (score) => set({ phase: 'SCORE', score }),
   endStage: () => set(INITIAL_PERFORMANCE_STATE),
+  advanceToSingerSelect: () => set({ ...INITIAL_PERFORMANCE_STATE, phase: 'SINGER_SELECT' }),
   toggleMic: () => set((state) => ({ micOn: !state.micOn })),
   // 캠을 끄면 손 인식 입력이 사라진다. "켜져 있는데 조작은 안 되는" 상태를 막는다.
   toggleCam: () =>
@@ -168,6 +173,9 @@ export const useStageStore = create<StageStore>((set) => ({
     set((state) => ({ settings: { ...state.settings, ...settings } })),
 
   applyPerformanceCancelled: () => set(INITIAL_PERFORMANCE_STATE),
+
+  applySongChangeCancelled: (performerParticipantId) =>
+    set({ ...INITIAL_PERFORMANCE_STATE, phase: 'SONG_SELECT', performerParticipantId }),
 
   applyScore: (score) => set({ phase: 'SCORE', score, scoringFailed: false }),
 

@@ -203,7 +203,16 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           break;
         case 'PERFORMANCE_CANCELLED': {
           const payload = event.payload as PerformanceCancelledPayload;
-          stageStore.applyPerformanceCancelled();
+          // 가창자가 재생 시작 전에 취소한 것은 노래 바꾸기다 — 가창자를 유지한 채
+          // 선곡 단계로 돌아간다. 그 외(공연 중 취소·연결 끊김 중단)는 무대를 처음부터 시작한다.
+          if (
+            payload.cancelReason === 'PERFORMER_REQUEST' &&
+            payload.previousPerformanceStatus === 'PREPARING'
+          ) {
+            stageStore.applySongChangeCancelled(payload.performerParticipantId);
+          } else {
+            stageStore.applyPerformanceCancelled();
+          }
           cardStore.resetCards();
           if (payload.cancelReason !== 'PERFORMER_REQUEST') {
             showToast('공연이 중단되었습니다.', 'error');
