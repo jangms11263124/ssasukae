@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { SocialLoginPanel } from '@/features/auth-social-login';
+import { LocalTestAuthPanel } from '@/features/auth-local-test';
 import { cn } from '@/shared/lib/cn';
 
 import { LandingHeader } from './LandingHeader';
@@ -30,7 +30,7 @@ export function LandingSplit({ className, children }: LandingSplitProps) {
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 opacity-30 [background-image:repeating-linear-gradient(135deg,transparent_0,transparent_3px,rgba(255,255,255,0.018)_4px)]"
           />
-          {children ?? <SocialLoginPanel className="relative z-10" />}
+          {children ?? <LocalTestAuthPanel />}
         </section>
       </main>
 

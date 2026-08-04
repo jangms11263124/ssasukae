@@ -68,6 +68,7 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/prometheus",
                                 "/api/auth/signup",
+                                "/api/auth/test/**",
                                 "/api/auth/refresh",
                                 "/api/low-latency/auth/refresh",
                                 "/api/users/nickname/check",
