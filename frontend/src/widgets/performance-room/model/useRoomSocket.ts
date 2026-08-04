@@ -101,7 +101,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
       const cardStore = useCardStore.getState();
 
       // 강퇴·방 종료로 방을 떠날 때의 공통 정리. 세션이 비면
-      // GeneralRoomScreen의 세션 감시 효과가 로비로 되돌린다.
+      // PerformanceRoomScreen의 세션 감시 효과가 로비로 되돌린다.
       const exitRoom = () => {
         stageStore.endStage();
         cardStore.resetCards();

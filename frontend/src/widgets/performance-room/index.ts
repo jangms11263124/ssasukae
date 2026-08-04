@@ -1,1 +1,1 @@
-export { GeneralRoomScreen } from './ui/GeneralRoomScreen';
+export { PerformanceRoomScreen } from './ui/PerformanceRoomScreen';
