@@ -369,6 +369,7 @@ class PerformanceServiceTest {
             ROOM_ID,
             PerformanceWebSocketEventType.PLAYBACK_STARTED,
             new PlaybackStartedPayload(PERFORMANCE_ID, PARTICIPANT_ID, changed.startedAt()));
+    verify(cardService).assignForPlayback(changed);
   }
 
   @Test
