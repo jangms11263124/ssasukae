@@ -22,6 +22,7 @@ export function StageControlPanel() {
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
   const selectedSong = useStageStore((state) => state.selectedSong);
   const performanceId = useStageStore((state) => state.performanceId);
+  const isSuspended = useStageStore((state) => state.isSuspended);
 
   const session = useRoomStore((state) => state.session);
   const participants = useRoomStore((state) => state.participants);
@@ -61,12 +62,27 @@ export function StageControlPanel() {
     SCORE: <ControlMessage title="채점 결과를 기다리는 중입니다..." />,
   };
 
+  // 일시 중지 중에는 진행 조작을 막는다. 무대 위 SuspendedOverlay가 재개를 안내하지만,
+  // 패널은 무대 밖이라 여기서 직접 잠그지 않으면 중지 상태에서도 시작·선곡이 눌린다.
+  const content = isSuspended ? (
+    <ControlMessage
+      title="공연이 일시 중지되었습니다..."
+      subtitle={
+        isPerformer
+          ? '무대의 공연 재개하기 버튼으로 재개할 수 있습니다'
+          : '가창자가 돌아오면 자동으로 재개됩니다'
+      }
+    />
+  ) : (
+    CONTROL_VIEWS[phase]
+  );
+
   return (
     <RoomPanel className="px-4 py-4">
       <h2 className="border-b border-white/15 pb-2 text-sm font-bold tracking-[0.08em] text-cyan-300">
         STAGE CONTROL
       </h2>
-      <div className="mt-4">{CONTROL_VIEWS[phase]}</div>
+      <div className="mt-4">{content}</div>
     </RoomPanel>
   );
 }
