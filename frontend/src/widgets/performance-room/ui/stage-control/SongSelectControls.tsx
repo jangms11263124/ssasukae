@@ -49,7 +49,15 @@ export function SongSelectControls({ isPerformer }: SongSelectControlsProps) {
               <FavoriteToggleButton songId={song.songId} favorite={song.favorite} />
               <button
                 type="button"
-                onClick={() => handleSelectSong({ id: song.songId, title: song.title })}
+                onClick={() =>
+                  handleSelectSong({
+                    id: song.songId,
+                    title: song.title,
+                    // 가사 싱크 조회용 곡 서명. 준비 이벤트에는 없어 여기서 미리 넘긴다.
+                    artist: song.artist,
+                    durationSeconds: song.durationSeconds,
+                  })
+                }
                 className="shrink-0 border border-white/25 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
               >
                 + 노래 부르기
