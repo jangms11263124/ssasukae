@@ -46,7 +46,7 @@ export function RoomCreateForm() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (mode !== 'GENERAL' || trimmedName === '' || isPending) {
+    if (trimmedName === '' || isPending) {
       return;
     }
 
