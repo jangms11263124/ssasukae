@@ -22,6 +22,12 @@ export interface StageSong {
   title: string;
   thumbnailUrl?: string | null;
   difficultyLevel?: number | null;
+  /**
+   * 가사 싱크 조회(LRCLIB)에 쓰는 곡 서명. 공연 준비 이벤트에는 제목만 오고
+   * 가수·길이는 방 스냅샷에만 있어, 선곡한 본인 외에는 스냅샷으로 채워진다.
+   */
+  artist?: string;
+  durationSeconds?: number;
 }
 
 interface StageStore {
@@ -146,7 +152,7 @@ export const useStageStore = create<StageStore>((set) => ({
     }),
 
   applyPreparationStarted: (payload) =>
-    set({
+    set((state) => ({
       performanceId: payload.performanceId,
       performerParticipantId: payload.performerParticipantId,
       selectedSong: {
@@ -154,12 +160,20 @@ export const useStageStore = create<StageStore>((set) => ({
         title: payload.songTitle,
         thumbnailUrl: payload.thumbnailImageUrl,
         difficultyLevel: payload.difficultyLevel,
+        // 이벤트에는 가수·길이가 없다. 선곡할 때 이미 알고 있었다면 그대로 살려
+        // 가창자는 스냅샷을 기다리지 않고 바로 가사를 조회할 수 있게 한다.
+        ...(state.selectedSong?.id === payload.songId
+          ? {
+              artist: state.selectedSong.artist,
+              durationSeconds: state.selectedSong.durationSeconds,
+            }
+          : {}),
       },
       mrDownloadUrl: payload.mrDownloadUrl,
       midiJsonDownloadUrl: payload.midiJsonDownloadUrl,
       lyricsDownloadUrl: payload.lyricsDownloadUrl,
       phase: 'READY',
-    }),
+    })),
 
   // 처음부터 재생하는 경우이므로 이전 공연의 재개 위치를 버린다.
   applyPlaybackStarted: () =>
@@ -235,6 +249,9 @@ export const useStageStore = create<StageStore>((set) => ({
           title: performance.songTitle,
           thumbnailUrl: performance.thumbnailImageUrl,
           difficultyLevel: performance.difficultyLevel,
+          // 가사 싱크 조회에 필요한 값은 스냅샷에만 있다 (공연 준비 이벤트에는 제목뿐).
+          artist: performance.artist,
+          durationSeconds: Math.round(performance.songDurationMs / 1000),
         },
         mrDownloadUrl: performance.mrDownloadUrl,
         midiJsonDownloadUrl: performance.midiJsonDownloadUrl,
