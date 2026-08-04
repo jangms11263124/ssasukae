@@ -27,7 +27,9 @@ export function ToastViewport() {
             toast.exiting ? 'animate-toast-out' : 'animate-toast-in',
             toast.tone === 'error'
               ? 'border-rose-400/35 bg-[#1a0f14]/90 text-rose-100'
-              : 'border-white/15 bg-[#12121a]/90 text-zinc-100',
+              : toast.tone === 'success'
+                ? 'border-emerald-400/35 bg-[#0f1a14]/90 text-emerald-100'
+                : 'border-white/15 bg-[#12121a]/90 text-zinc-100',
           )}
         >
           {toast.message}

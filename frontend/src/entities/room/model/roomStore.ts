@@ -111,6 +111,7 @@ export const useRoomStore = create<RoomStore>((set) => ({
         session: {
           ...state.session,
           name: snapshot.name,
+          inviteCode: snapshot.inviteCode,
           mode: snapshot.mode,
           maxParticipants: snapshot.maxParticipants,
           isHost: host !== null && host.participantId === state.session.myParticipantId,

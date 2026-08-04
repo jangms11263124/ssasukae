@@ -26,7 +26,8 @@ export function ScoreStage() {
   const scoringFailed = useStageStore((state) => state.scoringFailed);
   const advanceToSingerSelect = useStageStore((state) => state.advanceToSingerSelect);
   const endStage = useStageStore((state) => state.endStage);
-  const participantCount = useRoomStore((state) => state.participants.length);
+  const participants = useRoomStore((state) => state.participants);
+  const participantCount = participants.length;
 
   const isScoring = score === null && !scoringFailed;
   const canContinue = participantCount >= MIN_PARTICIPANTS_TO_CONTINUE;
@@ -81,7 +82,7 @@ export function ScoreStage() {
       </div>
 
       {isScoring ? null : (
-        <p className="absolute inset-x-0 bottom-5 text-center font-mono text-xs tracking-[0.18em] text-zinc-400">
+        <p className="absolute inset-x-0 bottom-16 text-center font-mono text-xs tracking-[0.18em] text-zinc-400">
           {canContinue
             ? '잠시 후 가창자 선택으로 넘어갑니다...'
             : '잠시 후 대기 화면으로 돌아갑니다...'}
