@@ -23,8 +23,8 @@ async def report_scoring_result(
 ) -> dict[str, Any]:
     """확정된 채점 결과를 Spring 내부 API에 전달하고 JSON 응답을 반환합니다.
 
-    환경 변수, 네트워크, HTTP 응답, JSON 형식 또는 performanceId가 올바르지 않으면
-    호출자가 구분해 처리할 수 있도록 예외를 발생시킵니다.
+    환경 변수, 네트워크, HTTP 응답 또는 JSON 형식이 올바르지 않으면 호출자가 구분해
+    처리할 수 있도록 예외를 발생시킵니다.
     """
     base_url = os.getenv("SPRING_API_BASE_URL", "").rstrip("/")
     api_key = os.getenv("AI_INTERNAL_API_KEY")
@@ -61,6 +61,4 @@ async def report_scoring_result(
     except ValueError as exc:
         raise SpringApiError("Spring API returned an invalid JSON response.") from exc
 
-    if result.get("performanceId") != performance_id:
-        raise SpringApiError("Spring API returned an unexpected performanceId.")
     return result
