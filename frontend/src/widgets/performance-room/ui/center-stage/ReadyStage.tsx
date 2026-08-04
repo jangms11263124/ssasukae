@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
+
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { useStageStore } from '../../model/stageStore';
 import { StageButton } from './StageButton';
@@ -9,8 +11,10 @@ interface ReadyStageProps {
   isPerformer: boolean;
   performerNickname: string;
   songTitle: string;
-  /** 준비 이벤트 수신 + MR 다운로드 완료 여부. 완료 전에는 시작할 수 없다 */
-  canStart: boolean;
+  /** 준비 이벤트 수신(performanceId 확정) 여부. 수신 전에는 시작을 요청할 수 없다 */
+  canRequestStart: boolean;
+  /** 시작 요청 후 MR 다운로드 완료 여부 */
+  isMrLoaded: boolean;
   /** MR 다운로드/엔진 초기화 실패 메시지 */
   prepareError: string | null;
 }
@@ -19,12 +23,14 @@ export function ReadyStage({
   isPerformer,
   performerNickname,
   songTitle,
-  canStart,
+  canRequestStart,
+  isMrLoaded,
   prepareError,
 }: ReadyStageProps) {
   const changeSong = useStageStore((state) => state.changeSong);
-  const startPerformance = useStageStore((state) => state.startPerformance);
   const performanceId = useStageStore((state) => state.performanceId);
+  const mrLoadRequested = useStageStore((state) => state.mrLoadRequested);
+  const requestMrLoad = useStageStore((state) => state.requestMrLoad);
   const socket = useRoomSocketContext();
 
   const title = `‘${performerNickname}’ 님이 ‘${songTitle}’을 선곡하셨습니다.`;
@@ -37,27 +43,39 @@ export function ReadyStage({
     changeSong();
   };
 
-  // PLAYBACK_STARTED 이벤트가 오면 서버 기준으로 다시 전이되지만,
-  // 이벤트 지연에 대비해 로컬에서도 즉시 PERFORMING으로 넘어간다.
+  // 노래 바꾸기로 선곡이 반복될 수 있어 MR은 선곡이 아니라 시작 요청 시점에 내려받는다.
   const handleStart = () => {
-    if (!canStart) return;
-    socket.sendPlaybackStart();
-    startPerformance();
+    if (!canRequestStart || mrLoadRequested) return;
+    requestMrLoad();
   };
+
+  // 다운로드가 끝나면 재생 시작을 서버에 알린다. 가창자와 참가자가 같은 PLAYBACK_STARTED
+  // 이벤트로 함께 전이되어야 한다 — 로컬에서 먼저 전이하면 전송 실패 시 가창자만 넘어간다.
+  // 소켓 객체는 지연 측정값 갱신으로 주기적으로 바뀌므로 ref로 중복 전송을 막는다.
+  const startSentRef = useRef(false);
+  useEffect(() => {
+    if (!isPerformer || !mrLoadRequested || !isMrLoaded || startSentRef.current) {
+      return;
+    }
+    startSentRef.current = true;
+    socket.sendPlaybackStart();
+  }, [isPerformer, mrLoadRequested, isMrLoaded, socket]);
 
   if (!isPerformer) {
     return <StageMessage title={title} subtitle="곧 공연이 시작됩니다. 조금만 기다려 주세요" />;
   }
 
+  const isDownloading = mrLoadRequested && !isMrLoaded && prepareError === null;
+
   return (
     <StageMessage
       title={title}
-      subtitle={prepareError ?? (canStart ? undefined : 'MR 음원을 준비하는 중입니다...')}
+      subtitle={prepareError ?? (isDownloading ? 'MR 음원을 내려받는 중입니다...' : undefined)}
       actions={
         <div className="flex flex-wrap justify-center gap-4">
           <StageButton onClick={handleChangeSong}>노래 바꾸기</StageButton>
-          <StageButton onClick={handleStart} disabled={!canStart}>
-            {canStart ? '시작하기' : '준비 중...'}
+          <StageButton onClick={handleStart} disabled={!canRequestStart || mrLoadRequested}>
+            {mrLoadRequested ? '준비 중...' : '시작하기'}
           </StageButton>
         </div>
       }
