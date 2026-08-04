@@ -99,6 +99,7 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   private mrPlaying = false;
 
   private lastDsp: VocalDspValues = DEFAULT_DSP;
+  private onMrEnded: (() => void) | null = null;
   private disposed = false;
   private readonly resumeOnPointerDown = () => {
     void this.context.resume();
@@ -167,6 +168,14 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     player.buffer = buffer;
     player.loop = false;
     player.connect(this.pitchShift);
+    // stopMr()·dispose()는 mrPlaying/disposed를 먼저 내리고 멈추므로,
+    // onstop 시점에 아직 재생 중이면 버퍼가 끝까지 소진된 자연 종료다.
+    player.onstop = () => {
+      if (this.disposed || !this.mrPlaying || this.player !== player) return;
+      this.mrAnchorSeconds = player.buffer.duration;
+      this.mrPlaying = false;
+      this.onMrEnded?.();
+    };
     this.player = player;
     this.mrUrl = url;
 
@@ -198,6 +207,10 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.mrAnchorSeconds = this.mrPositionSeconds();
     this.mrPlaying = false;
     this.player.stop();
+  }
+
+  setOnMrEnded(callback: (() => void) | null): void {
+    this.onMrEnded = callback;
   }
 
   /** 앵커 이후 흐른 컨텍스트 시간에 배속을 곱해 MR 시간축 위치를 낸다 */
