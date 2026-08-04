@@ -51,7 +51,7 @@ interface PerformingStageProps {
 }
 
 export function PerformingStage({ isPerformer }: PerformingStageProps) {
-  const applyPlaybackFinished = useStageStore((state) => state.applyPlaybackFinished);
+  const applyPerformanceCancelled = useStageStore((state) => state.applyPerformanceCancelled);
   const camOn = useStageStore((state) => state.camOn);
   const gestureOn = useStageStore((state) => state.gestureOn);
   // 캠을 끄면 스토어가 패널까지 함께 닫으므로 여기서 따로 동기화하지 않는다.
@@ -87,16 +87,18 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
       ? performerMedia.streamManager
       : null;
 
+  // 중도 취소는 정상 종료(playback/finish)가 아니라 취소(cancel)를 보낸다 — 채점 대상이 아니다.
+  // 정상 종료는 MR이 끝까지 재생됐을 때 useStageAudioEngine이 자동으로 보낸다.
   // 서버 브로드캐스트를 기다리지 않고 로컬에도 바로 반영해 전이가 늦어 보이지 않게 한다.
-  const handleFinish = () => {
-    socket.sendPlaybackFinish();
-    applyPlaybackFinished();
+  const handleCancel = () => {
+    socket.sendCancel();
+    applyPerformanceCancelled();
   };
 
-  // 제스처 오작동을 사용자가 알아챌 수 있어야 해서 종료 사유를 알린다.
-  const handleGestureFinish = () => {
-    handleFinish();
-    showToast('제스처로 공연을 종료했습니다.');
+  // 제스처 오작동을 사용자가 알아챌 수 있어야 해서 취소 사유를 알린다.
+  const handleGestureCancel = () => {
+    handleCancel();
+    showToast('제스처로 공연을 취소했습니다.');
   };
 
   const canUseGesture = isPerformer && gestureOn && camOn;
@@ -109,7 +111,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
     isPanelOpen: dspPanelOpen,
     onOpenPanel: () => setDspPanelOpen(true),
     onClosePanel: () => setDspPanelOpen(false),
-    onFinishPerformance: handleGestureFinish,
+    onCancelPerformance: handleGestureCancel,
   });
 
   return (
@@ -171,10 +173,10 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
 
           <button
             type="button"
-            onClick={handleFinish}
+            onClick={handleCancel}
             className="absolute bottom-4 right-4 border border-white/30 bg-black/60 px-5 py-2 font-mono text-xs tracking-[0.18em] text-zinc-400 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
           >
-            공연 종료
+            공연 취소
           </button>
         </>
       ) : null}
