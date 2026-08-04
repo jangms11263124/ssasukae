@@ -1,5 +1,7 @@
 import * as Tone from 'tone';
 
+import type { RnnoiseWorkletNode } from '@sapphi-red/web-noise-suppressor';
+
 import {
   AUDIO_CONTEXT_SAMPLE_RATE,
   BROADCAST_MR_SYNC_MAX_DELAY_SECONDS,
@@ -8,6 +10,10 @@ import {
   ECHO_WET_PER_PERCENT,
   MIC_INPUT_LATENCY_ESTIMATE_SECONDS,
   PARAM_RAMP_SECONDS,
+  RNNOISE_LATENCY_SECONDS,
+  RNNOISE_WASM_SIMD_URL,
+  RNNOISE_WASM_URL,
+  RNNOISE_WORKLET_URL,
   PITCH_BYPASS_EPSILON,
   PITCH_SHIFT_WINDOW_SIZE,
   SILENCE_DB,
@@ -93,6 +99,9 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
 
   private player: Tone.Player | null = null;
   private mrUrl: string | null = null;
+  /** 송출·채점 목소리의 노이즈 제거. 로드 실패 시 null — NS 없이 동작한다 */
+  private readonly rnnoise: RnnoiseWorkletNode | null;
+
   private micStream: MediaStream | null = null;
   private micSource: MediaStreamAudioSourceNode | null = null;
   /** openMic 경합 방지 — 가장 마지막 요청만 살아남는다 */
@@ -114,9 +123,10 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     void this.context.resume();
   };
 
-  constructor(context: SinkSelectableContext) {
+  constructor(context: SinkSelectableContext, rnnoise: RnnoiseWorkletNode | null) {
     this.context = context;
     this.toneContext = Tone.getContext();
+    this.rnnoise = rnnoise;
 
     this.monitorBus = new Tone.Volume(0).toDestination();
     this.broadcastBus = new Tone.Volume(0);
@@ -224,13 +234,10 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
       BROADCAST_MR_SYNC_MAX_DELAY_SECONDS,
       this.context.baseLatency +
         (this.context.outputLatency || 0) +
-        MIC_INPUT_LATENCY_ESTIMATE_SECONDS,
+        MIC_INPUT_LATENCY_ESTIMATE_SECONDS +
+        (this.rnnoise !== null ? RNNOISE_LATENCY_SECONDS : 0),
     );
     this.broadcastMrDelay.delayTime.setValueAtTime(syncDelaySeconds, this.context.currentTime);
-    // 지연 분해 진단용 — base는 브라우저 버퍼, output은 OS 오디오 스택. 실기 검증 후 제거 예정.
-    console.info(
-      `[vocal-audio-engine] baseLatency=${Math.round(this.context.baseLatency * 1000)}ms outputLatency=${Math.round((this.context.outputLatency || 0) * 1000)}ms`,
-    );
   }
 
   stopMr(): void {
@@ -279,11 +286,17 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
 
     this.micStream = stream;
     this.micSource = this.context.createMediaStreamSource(stream);
-    Tone.connect(this.micSource, this.echoDelay);
+    // 송출·채점은 노이즈 제거를 거치고(소음 감소 + 분석 입력 정화), 모니터는 원음 직결이라
+    // 워클릿 지연(10ms)이 가창 경험에 붙지 않는다. NS 로드 실패 시엔 원음으로 우회한다.
+    const broadcastVoiceSource: AudioNode = this.rnnoise ?? this.micSource;
+    if (this.rnnoise !== null) {
+      this.micSource.connect(this.rnnoise);
+    }
+    Tone.connect(broadcastVoiceSource, this.echoDelay);
     Tone.connect(this.micSource, this.monitorVoiceEcho);
     // 채점 탭은 에코 앞에서 갈라진다 — 사용자가 건 이펙트가 STT·음정 분석에 섞이지 않는다.
-    this.micSource.connect(this.vocalAnalyser);
-    this.micSource.connect(this.vocalTap);
+    broadcastVoiceSource.connect(this.vocalAnalyser);
+    broadcastVoiceSource.connect(this.vocalTap);
   }
 
   closeMic(): void {
@@ -367,6 +380,8 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
 
     document.removeEventListener('pointerdown', this.resumeOnPointerDown);
     this.closeMic();
+    this.rnnoise?.disconnect();
+    this.rnnoise?.destroy();
     this.player?.dispose();
     this.player = null;
     this.pitchShift.dispose();
@@ -385,15 +400,33 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   }
 }
 
+async function loadRnnoiseNode(context: AudioContext): Promise<RnnoiseWorkletNode | null> {
+  try {
+    const { loadRnnoise, RnnoiseWorkletNode: WorkletNode } = await import(
+      '@sapphi-red/web-noise-suppressor'
+    );
+    const [wasmBinary] = await Promise.all([
+      loadRnnoise({ url: RNNOISE_WASM_URL, simdUrl: RNNOISE_WASM_SIMD_URL }),
+      context.audioWorklet.addModule(RNNOISE_WORKLET_URL),
+    ]);
+
+    return new WorkletNode(context, { wasmBinary, maxChannels: 1 });
+  } catch {
+    // 에셋 미생성(404) 등 — 노이즈 제거 없이 공연은 계속돼야 한다
+    return null;
+  }
+}
+
 export async function createVocalAudioEngine(): Promise<VocalAudioEngine> {
   const context = new AudioContext({
     sampleRate: AUDIO_CONTEXT_SAMPLE_RATE,
     latencyHint: 'interactive',
   });
+  const rnnoise = await loadRnnoiseNode(context);
   // setContext와 노드 생성 사이에 await를 두지 않는다 — 엔진이 겹쳐 만들어져도
   // (React StrictMode 이중 마운트) 노드가 다른 컨텍스트에 섞이지 않는다.
   Tone.setContext(context);
-  const engine = new ToneVocalAudioEngine(context);
+  const engine = new ToneVocalAudioEngine(context, rnnoise);
 
   // 방 진입까지의 클릭으로 사용자 활성화가 있으면 즉시 살아난다
   await context.resume().catch(() => undefined);

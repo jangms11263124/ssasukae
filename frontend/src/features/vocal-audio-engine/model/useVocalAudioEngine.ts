@@ -145,8 +145,6 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
     if (engine === null || !isMrLoaded || !playing) return;
 
     engine.startMr(startOffsetMs > 0 ? startOffsetMs / 1000 : undefined);
-    // 완료 조건의 모니터링 지연 측정 기록용. 실기 검증 후 제거해도 된다.
-    console.info(`[vocal-audio-engine] 모니터링 지연 ≈ ${engine.getLatencyMs() ?? '측정 불가'}ms`);
 
     return () => {
       engine.stopMr();
