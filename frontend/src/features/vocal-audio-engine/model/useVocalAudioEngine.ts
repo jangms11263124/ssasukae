@@ -50,7 +50,7 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
     dsp,
     onMrEnded,
   } = options;
-  const { keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent } = dsp;
+  const { keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent, monitorVoicePercent } = dsp;
 
   const [engine, setEngine] = useState<VocalAudioEngine | null>(null);
   const [isMrLoaded, setIsMrLoaded] = useState(false);
@@ -168,8 +168,8 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
 
   // 설정값 반영 — 값 변화마다 램프로 부드럽게 따라간다
   useEffect(() => {
-    engine?.applyDsp({ keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent });
-  }, [engine, keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent]);
+    engine?.applyDsp({ keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent, monitorVoicePercent });
+  }, [engine, keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent, monitorVoicePercent]);
 
   // 모니터 출력 장치 — 미지원 브라우저·장치 소실은 무시하고 기본 출력을 쓴다
   useEffect(() => {
