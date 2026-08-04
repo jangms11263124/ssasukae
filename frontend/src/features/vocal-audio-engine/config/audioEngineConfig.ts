@@ -21,6 +21,16 @@ export const ECHO_WET_PER_PERCENT = 0.008;
 /** 음량 0%의 바닥값. -Infinity는 램프 목표가 될 수 없어 유한한 무음 레벨을 쓴다 */
 export const SILENCE_DB = -80;
 
+/**
+ * 마이크 입력 캡처 지연 추정치(초). 브라우저가 입력 지연을 노출하지 않아 상수로 둔다.
+ * 송출 목소리가 MR보다 늦는 만큼(출력 지연 + 이 값) 송출 MR을 늦춰 싱크를 맞춘다.
+ * 녹음 비교로 캘리브레이션하는 지점 — 목소리가 여전히 늦으면 올리고, 앞서면 내린다.
+ */
+export const MIC_INPUT_LATENCY_ESTIMATE_SECONDS = 0.025;
+
+/** 송출 MR 보정 딜레이의 상한(초). DelayNode 버퍼 크기라 생성 후 못 늘린다 */
+export const BROADCAST_MR_SYNC_MAX_DELAY_SECONDS = 0.3;
+
 /** 순 피치 변화가 이 미만이면 0으로 보고 PitchShift를 바이패스한다 */
 export const PITCH_BYPASS_EPSILON = 0.01;
 
