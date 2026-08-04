@@ -1,6 +1,9 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useRoomStore } from '@/entities/room';
+import { cn } from '@/shared/lib/cn';
 
 import { TEMPO_STEP_PERCENT } from '../../config/dspParams';
 import { useSettingsPublisher } from '../../model/useSettingsPublisher';
@@ -13,7 +16,7 @@ const SHIFT_MAX = 6;
 function FaderIcon() {
   return (
     <svg
-      aria-hidden="true"
+      aria-hidden
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -98,19 +101,26 @@ function StepperRow({ disabled = false, label, onChange, value }: StepperRowProp
   );
 }
 
-// 값은 stageStore.settings(서버 동기화 상태)를 따르고,
-// 서버 발행 디바운스는 제스처 조작과 타이머를 공유하는 useSettingsPublisher가 맡는다.
-export function AudioEnginePanel() {
+/** 대기 시 접힘, 가창(READY/PERFORMING) 시 자동 펼침 — `inline` 전용 */
+export function AudioEnginePanel({ variant = 'inline' }: { variant?: 'inline' | 'dock' }) {
   const settings = useStageStore((state) => state.settings);
   const publishSettings = useSettingsPublisher();
-  // 수성전에서 키/템포는 공격 카드 전용이므로 가창자가 직접 조절할 수 없다.
+  const phase = useStageStore((state) => state.phase);
   const isBattleMode = useRoomStore((state) => state.session?.mode === 'BATTLE');
-  // 공연 설정은 가창자 전용. 다른 참가자에게는 현재 값만 보여주고 조작을 잠근다.
   const myParticipantId = useRoomStore((state) => state.session?.myParticipantId);
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
   const isPerformer =
     myParticipantId !== undefined && myParticipantId === performerParticipantId;
   const locked = !isPerformer;
+
+  const shouldAutoExpand = phase === 'PERFORMING' || (isPerformer && phase === 'READY');
+  const [expanded, setExpanded] = useState(shouldAutoExpand);
+  const [autoExpandSnapshot, setAutoExpandSnapshot] = useState(shouldAutoExpand);
+
+  if (variant === 'inline' && shouldAutoExpand !== autoExpandSnapshot) {
+    setAutoExpandSnapshot(shouldAutoExpand);
+    setExpanded(shouldAutoExpand);
+  }
 
   const mrVolume = settings.mrVolumePercent;
   const echo = settings.echoLevel;
@@ -123,41 +133,59 @@ export function AudioEnginePanel() {
   const setTempoShift = (value: number) =>
     publishSettings({ tempoPercent: 100 + value * TEMPO_STEP_PERCENT });
 
-  return (
-    <RoomPanel className="px-4 py-4">
-      <h2 className="flex items-center justify-between border-b border-white/15 pb-2">
-        <span className="text-sm font-bold tracking-[0.08em] text-cyan-300">AUDIO ENGINE</span>
-        <span className="text-zinc-400">
-          <FaderIcon />
-        </span>
-      </h2>
-
-      <div className="mt-4 space-y-4">
-        <SliderRow label="MR VOLUME" value={mrVolume} onChange={setMrVolume} disabled={locked} />
-        <SliderRow label="ECHO" value={echo} onChange={setEcho} disabled={locked} />
-        {!isBattleMode ? (
-          <>
-            <StepperRow
-              label="PITCH SHIFT"
-              value={pitchShift}
-              onChange={setPitchShift}
-              disabled={locked}
-            />
-            <StepperRow
-              label="TEMPO SHIFT"
-              value={tempoShift}
-              onChange={setTempoShift}
-              disabled={locked}
-            />
-          </>
-        ) : null}
-      </div>
+  const controls = (
+    <div className="space-y-4 px-4 pb-4 pt-3">
+      <SliderRow label="MR VOLUME" value={mrVolume} onChange={setMrVolume} disabled={locked} />
+      <SliderRow label="ECHO" value={echo} onChange={setEcho} disabled={locked} />
+      {!isBattleMode ? (
+        <>
+          <StepperRow
+            label="PITCH SHIFT"
+            value={pitchShift}
+            onChange={setPitchShift}
+            disabled={locked}
+          />
+          <StepperRow
+            label="TEMPO SHIFT"
+            value={tempoShift}
+            onChange={setTempoShift}
+            disabled={locked}
+          />
+        </>
+      ) : null}
 
       {locked ? (
-        <p className="mt-3 font-mono text-[10px] tracking-[0.12em] text-zinc-500">
+        <p className="font-mono text-[10px] tracking-[0.12em] text-zinc-500">
           가창자만 조절할 수 있습니다
         </p>
       ) : null}
+    </div>
+  );
+
+  if (variant === 'dock') {
+    return <div className="px-4 py-3">{controls}</div>;
+  }
+
+  return (
+    <RoomPanel
+      className={cn('shrink-0', !expanded && 'border-dashed border-white/20 bg-transparent')}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        aria-expanded={expanded}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <span className="flex items-center gap-2 text-sm font-medium text-cyan-300">
+          <FaderIcon />
+          오디오 설정
+        </span>
+        <span className="text-[11px] text-zinc-500">
+          {expanded ? '접기' : '가창 시 펼침'}
+        </span>
+      </button>
+
+      {expanded ? <div className="border-t border-white/10">{controls}</div> : null}
     </RoomPanel>
   );
 }

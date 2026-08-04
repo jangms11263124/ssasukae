@@ -112,6 +112,7 @@ class RoomInfoGetTest {
         roomService.getRoomSnapshot(REQUESTER_USER_ID, ROOM_ID);
 
     assertThat(response.name()).isEqualTo("테스트방");
+    assertThat(response.inviteCode()).isEqualTo("ABC123");
     assertThat(response.mode()).isEqualTo(RoomMode.GENERAL);
     assertThat(response.status()).isEqualTo(RoomStatus.PREPARING);
     assertThat(response.hostUserId()).isEqualTo(1L);

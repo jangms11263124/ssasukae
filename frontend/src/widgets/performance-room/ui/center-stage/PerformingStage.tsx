@@ -8,6 +8,7 @@ import {
   GestureStatusBadge,
   MediaPipeLoader,
 } from '@/features/gesture-control';
+import { useRoomStore } from '@/entities/room';
 import { showToast } from '@/shared/model/toastStore';
 
 import { SOUND_PANEL_LABEL } from '../../config/dspParams';
@@ -26,6 +27,7 @@ import { MediaControlsOverlay } from './overlays/MediaControlsOverlay';
 import { VocalDspPanel } from './overlays/VocalDspPanel';
 import { StageBackdrop } from './StageBackdrop';
 import { StageCameraFeed } from './StageCameraFeed';
+import { StageIdentityBadge } from './StageIdentityBadge';
 
 // camOn은 무대에 오른 사람의 카메라 상태다(본인이면 내 토글, 아니면 가창자의 원격 상태).
 function resolvePlaceholder(
@@ -61,6 +63,12 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
   const cursorRef = useRef<HTMLDivElement>(null);
 
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
+  const myParticipantId = useRoomStore((state) => state.session?.myParticipantId);
+  const hostParticipantId = useRoomStore((state) => state.hostParticipantId);
+  const participants = useRoomStore((state) => state.participants);
+  const performer = participants.find((participant) => participant.id === performerParticipantId);
+  const me = participants.find((participant) => participant.id === myParticipantId);
+  const performerProfileImageUrl = performer?.profileImageUrl ?? null;
   const { localStream, remoteStreams } = useOpenViduSessionContext();
 
   // 수성전 가사 가리기: 가창자의 시선에서만 가려지고 다른 참가자에게는 그대로 보인다.
@@ -116,6 +124,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
     <StageBackdrop
       ref={stageRef}
       placeholder={resolvePlaceholder(isPerformer, stageCamOn, cameraSource !== null)}
+      profileImageUrl={cameraSource === null ? performerProfileImageUrl : null}
     >
       {/* CDN에서 수 MB를 받아오므로 제스처를 쓸 때만 로드한다 */}
       {canUseGesture ? <MediaPipeLoader onReady={() => setIsMediaPipeReady(true)} /> : null}
@@ -123,6 +132,19 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
       {cameraSource !== null ? (
         <StageCameraFeed source={cameraSource} mirrored={isPerformer} videoRef={videoRef} />
       ) : null}
+
+      <div className="pointer-events-none absolute bottom-4 left-4 z-10 max-w-[min(calc(100%-2rem),16rem)]">
+        <StageIdentityBadge
+          identity={{
+            nickname: isPerformer ? (me?.nickname ?? '나') : (performer?.nickname ?? '가창자'),
+            isMe: isPerformer,
+            isHost:
+              (isPerformer ? myParticipantId : performerParticipantId) !== undefined &&
+              (isPerformer ? myParticipantId : performerParticipantId) === hostParticipantId,
+            isPerformer: true,
+          }}
+        />
+      </div>
 
       <MediaControlsOverlay showGestureToggle={isPerformer} />
 
@@ -164,7 +186,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
             isReady={isMediaPipeReady}
             isHandDetected={gesture.isHandDetected}
             error={gesture.error}
-            className="absolute left-4 top-14"
+            className="absolute left-4 top-4"
           />
           <GestureCursor cursorRef={cursorRef} />
           {gesture.cancelProgress !== null ? (

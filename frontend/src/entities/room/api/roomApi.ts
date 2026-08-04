@@ -91,6 +91,7 @@ export interface RoomSnapshotPlayback {
 
 export interface RoomSnapshotResponse {
   name: string;
+  inviteCode: string;
   mode: RoomMode;
   status: RoomStatus;
   hostUserId: number;

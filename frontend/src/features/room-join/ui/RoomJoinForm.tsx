@@ -6,7 +6,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useRoomStore } from '@/entities/room';
 import { useAuth } from '@/entities/user';
@@ -19,13 +19,17 @@ import {
   mapKeyCodeToInviteChar,
   sanitizeInviteCode,
 } from '../lib/inviteCodeInput';
+import { readInviteCodeFromSearch } from '../lib/inviteLink';
 
 export function RoomJoinForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const enterRoom = useRoomStore((state) => state.enterRoom);
   const { mutate: joinRoom, isPending } = useJoinRoomMutation();
-  const [inviteCode, setInviteCode] = useState('');
+  const codeFromUrl = readInviteCodeFromSearch(searchParams.toString());
+  const [manualInviteCode, setManualInviteCode] = useState<string | null>(null);
+  const inviteCode = manualInviteCode ?? codeFromUrl;
 
   // 새 값을 DOM에 먼저 반영해 커서를 유지하고, React 상태를 뒤따라 맞춘다.
   const applyValue = (input: HTMLInputElement, next: string, cursor: number) => {
@@ -34,7 +38,7 @@ export function RoomJoinForm() {
       const position = Math.min(cursor, next.length);
       input.setSelectionRange(position, position);
     }
-    setInviteCode(next);
+    setManualInviteCode(next);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {

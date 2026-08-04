@@ -253,17 +253,40 @@ public class RoomService {
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
 
-        RoomParticipant participant = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
+        RoomParticipant participantCandidate = roomParticipantRepository.findByRoomIdAndUserId(roomId, userId)
+                .orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
+        RoomParticipant participant = roomParticipantRepository.findByIdForUpdate(participantCandidate.getId())
                 .orElseThrow(() -> new CustomException(RoomErrorCode.PARTICIPANT_NOT_FOUND));
 
         if (!participant.isActive()) {
             throw new CustomException(RoomErrorCode.PARTICIPANT_NOT_ACTIVE);
         }
 
+        // 새로고침 및 재접속 시 OpenVidu가 participantEvicted를 브로드캐스트하며 클라이언트 SDK가 경쟁상태로 터지는 것을 막기 위해, 새 토큰 발급 전에 기존 연결을 정리한다.
+        disconnectStaleMediaConnection(room, participant);
+
         return mediaSessionGateway.createConnectionToken(
                 room.getOpenViduSessionId(),
                 participant.getId()
         );
+    }
+
+    private void disconnectStaleMediaConnection(Room room, RoomParticipant participant) {
+        String connectionId = participant.getConnectionId();
+        if (connectionId == null || connectionId.isBlank()) {
+            return;
+        }
+
+        if (participant.getConnectionStatus() != ConnectionStatus.CONNECTED
+                && participant.getConnectionStatus() != ConnectionStatus.DISCONNECTED) {
+            return;
+        }
+
+        try {
+            mediaSessionGateway.disconnect(room.getOpenViduSessionId(), connectionId);
+        } catch (CustomException ignored) {
+            // OpenVidu에 connection 이 이미 없으면 무시하고 새 토큰을 발급한다.
+        }
     }
 
     @Transactional
