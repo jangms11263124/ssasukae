@@ -8,6 +8,7 @@ import { ApiError } from '@/shared/api/client';
 import { cn } from '@/shared/lib/cn';
 import { getScoreGrade, GRADE_CLASS } from '@/shared/lib/scoreGrade';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
+import { Skeleton } from '@/shared/ui/skeleton/Skeleton';
 
 import {
   AlertIcon,
@@ -22,24 +23,32 @@ import { MetricRadarChart } from './MetricRadarChart';
 import { ScoreCircle } from './ScoreCircle';
 import { TrackHeader } from './TrackHeader';
 
+const INSIGHT_SKELETON_COUNT = 4;
+
 function DetailSkeleton() {
   return (
-    <div aria-hidden="true">
+    <div>
+      <p role="status" className="sr-only">
+        피드백 리포트를 불러오고 있어요.
+      </p>
+
       <div className="flex items-center gap-6">
-        <div className="size-24 animate-pulse bg-white/[0.04]" />
+        <Skeleton tone="faint" className="size-24" />
         <div className="space-y-3">
-          <div className="h-2.5 w-40 animate-pulse bg-white/[0.05]" />
-          <div className="h-6 w-64 animate-pulse bg-white/[0.06]" />
-          <div className="h-2.5 w-32 animate-pulse bg-white/[0.04]" />
+          <Skeleton className="h-2.5 w-40" />
+          <Skeleton tone="strong" className="h-6 w-64" />
+          <Skeleton tone="faint" className="h-2.5 w-32" />
         </div>
       </div>
+
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <div className="h-[22rem] animate-pulse border border-white/[0.06] bg-white/[0.02]" />
-        <div className="h-[22rem] animate-pulse border border-white/[0.06] bg-white/[0.02]" />
+        <Skeleton tone="dim" className="h-[22rem] border border-white/[0.06]" />
+        <Skeleton tone="dim" className="h-[22rem] border border-white/[0.06]" />
       </div>
+
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        {Array.from({ length: 4 }, (_, index) => (
-          <div key={index} className="h-40 animate-pulse border border-white/[0.06] bg-white/[0.02]" />
+        {Array.from({ length: INSIGHT_SKELETON_COUNT }, (_, index) => (
+          <Skeleton key={index} tone="dim" className="h-40 border border-white/[0.06]" />
         ))}
       </div>
     </div>
