@@ -4,6 +4,7 @@ import { usePerformanceStat } from '@/entities/user';
 import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
+import { Skeleton } from '@/shared/ui/skeleton/Skeleton';
 
 import { getScoreGrade, GRADE_CLASS, NO_SCORE_LABEL } from '@/shared/lib/scoreGrade';
 
@@ -28,21 +29,35 @@ interface StatColumnProps {
   captionTone: Tone;
   /** 값 강조색. 없으면 중립색. */
   valueClassName?: string;
+  /** 첫 조회 중이면 값 자리를 스켈레톤으로 채운다. */
+  isLoading?: boolean;
 }
 
-function StatColumn({ label, value, caption, captionTone, valueClassName }: StatColumnProps) {
+function StatColumn({
+  label,
+  value,
+  caption,
+  captionTone,
+  valueClassName,
+  isLoading = false,
+}: StatColumnProps) {
   return (
     <div className="px-5 first:pl-0 last:pr-0">
       <p className="text-[0.58rem] font-bold tracking-[0.16em] text-zinc-500">{label}</p>
-      <p
-        className={cn(
-          jetBrainsMono.className,
-          'mt-3 text-xl font-bold',
-          valueClassName ?? 'text-zinc-100',
-        )}
-      >
-        {value}
-      </p>
+      {isLoading ? (
+        // text-xl 한 줄과 같은 높이로 잡아, 값이 들어올 때 칸이 밀리지 않게 한다.
+        <Skeleton tone="strong" className="mt-3.5 h-5 w-14" />
+      ) : (
+        <p
+          className={cn(
+            jetBrainsMono.className,
+            'mt-3 text-xl font-bold',
+            valueClassName ?? 'text-zinc-100',
+          )}
+        >
+          {value}
+        </p>
+      )}
       <p
         className={cn(
           jetBrainsMono.className,
@@ -69,6 +84,8 @@ export function PerformanceStatusCard() {
   const { stat, refresh, isFetching, isError } = usePerformanceStat();
 
   const hasStat = stat !== undefined;
+  // 재조회 때는 기존 값을 유지하고, 값이 아예 없는 첫 조회만 스켈레톤으로 덮는다.
+  const isInitialLoading = isFetching && !hasStat;
   const difference = stat?.difference;
   const differenceCaption =
     difference === undefined
@@ -111,12 +128,14 @@ export function PerformanceStatusCard() {
           caption={differenceCaption}
           captionTone={getDifferenceTone(difference)}
           valueClassName={hasStat ? 'text-cyan-300' : undefined}
+          isLoading={isInitialLoading}
         />
         <StatColumn
           label="TOTAL SONGS"
           value={stat ? formatCount(stat.totalSongs) : EMPTY_VALUE}
           caption="ALL_TIME"
           captionTone="muted"
+          isLoading={isInitialLoading}
         />
         <StatColumn
           label="GRADE"
@@ -124,6 +143,7 @@ export function PerformanceStatusCard() {
           caption="AVG_BASED"
           captionTone="muted"
           valueClassName={gradeClassName}
+          isLoading={isInitialLoading}
         />
       </div>
 

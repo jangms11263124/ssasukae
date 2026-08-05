@@ -13,23 +13,35 @@ import {
 } from '@/entities/feedback';
 import { cn } from '@/shared/lib/cn';
 import { useInfiniteScrollTrigger } from '@/shared/lib/useInfiniteScrollTrigger';
+import { Skeleton } from '@/shared/ui/skeleton/Skeleton';
 
 import { FeedbackFilterBar } from './FeedbackFilterBar';
 import { FeedbackSummaryCards } from './FeedbackSummaryCards';
 import { FeedbackTrackItem } from './FeedbackTrackItem';
 
 const SKELETON_COUNT = 4;
+const NEXT_PAGE_SKELETON_COUNT = 2;
 
 function TrackSkeleton() {
   return (
     <div className="flex items-center gap-8 border border-white/[0.06] bg-[#121214] p-5 pl-6">
-      <div className="size-[4.5rem] shrink-0 animate-pulse bg-white/[0.04]" />
+      <Skeleton tone="faint" className="size-[4.5rem] shrink-0" />
       <div className="flex-1 space-y-2.5">
-        <div className="h-2 w-16 animate-pulse bg-white/[0.05]" />
-        <div className="h-4 w-1/3 animate-pulse bg-white/[0.06]" />
-        <div className="h-2 w-1/4 animate-pulse bg-white/[0.04]" />
+        <Skeleton className="h-2 w-16" />
+        <Skeleton tone="strong" className="h-4 w-1/3" />
+        <Skeleton tone="faint" className="h-2 w-1/4" />
       </div>
-      <div className="h-8 w-24 animate-pulse bg-white/[0.05]" />
+      <Skeleton className="h-8 w-24" />
+    </div>
+  );
+}
+
+function SkeletonList({ count, className }: { count: number; className?: string }) {
+  return (
+    <div aria-hidden="true" className={cn('space-y-3', className)}>
+      {Array.from({ length: count }, (_, index) => (
+        <TrackSkeleton key={index} />
+      ))}
     </div>
   );
 }
@@ -84,11 +96,12 @@ export function AiFeedbackSection() {
       </div>
 
       {isPending ? (
-        <div className="mt-6 space-y-3" aria-hidden="true">
-          {Array.from({ length: SKELETON_COUNT }, (_, index) => (
-            <TrackSkeleton key={index} />
-          ))}
-        </div>
+        <>
+          <p role="status" className="sr-only">
+            공연 기록을 불러오고 있어요.
+          </p>
+          <SkeletonList count={SKELETON_COUNT} className="mt-6" />
+        </>
       ) : null}
       {isError ? (
         <p className="py-24 text-center font-mono text-xs tracking-[0.2em] text-red-400/80">
@@ -127,9 +140,7 @@ export function AiFeedbackSection() {
       ) : null}
 
       {isFetchingNextPage ? (
-        <p className="py-6 text-center font-mono text-xs tracking-[0.2em] text-zinc-600">
-          LOADING_MORE...
-        </p>
+        <SkeletonList count={NEXT_PAGE_SKELETON_COUNT} className="mt-3" />
       ) : null}
       {/* 높이 0이면 IntersectionObserver가 교차를 감지하지 못한다 */}
       <div ref={sentinelRef} aria-hidden="true" className="h-px" />
