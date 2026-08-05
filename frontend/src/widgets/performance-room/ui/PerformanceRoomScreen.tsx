@@ -10,7 +10,7 @@ import {
   useRoomStore,
 } from '@/entities/room';
 import { useAuth } from '@/entities/user';
-import { ApiError } from '@/shared/api/client';
+import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { showToast } from '@/shared/model/toastStore';
 
 import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
@@ -129,8 +129,7 @@ function PerformanceRoomContent() {
         await requestLeaveRoom(session.roomId);
       }
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : '방 나가기에 실패했습니다.';
-      showToast(message, 'error');
+      showToast(getApiErrorMessage(error, '방에서 나가지 못했어요.'), 'error');
     } finally {
       endStage();
       leaveRoomStore();

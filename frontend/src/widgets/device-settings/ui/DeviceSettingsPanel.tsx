@@ -18,12 +18,12 @@ export function DeviceSettingsPanel() {
 
   const handleSave = () => {
     saveDraft();
-    showToast('기기 설정을 저장했습니다.');
+    showToast('기기 설정을 저장했어요.');
   };
 
   const handleReset = () => {
     resetDraft();
-    showToast('기기 설정을 기본값으로 되돌렸습니다.');
+    showToast('기기 설정을 기본값으로 되돌렸어요.');
   };
 
   const isReady = permission === 'granted';
