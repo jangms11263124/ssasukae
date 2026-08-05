@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
-import { TickerFooter } from '@/shared/ui/ticker/TickerFooter';
 import { AiFeedbackSection } from '@/widgets/ai-feedback-list';
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
+import { LiveFeedFooter } from '@/widgets/live-feed-footer';
 
 export const metadata: Metadata = {
   title: 'AI 피드백',
@@ -28,10 +28,7 @@ export default function AiFeedbackPage() {
         </div>
       </main>
 
-      <TickerFooter
-        label="[AI_ARCHIVE]"
-        message="ANALYSIS_ENGINE_ONLINE :: PERFORMANCE_DATA_SYNCED :: ARCHIVE_INDEX_READY :: SYSTEM STATUS: NOMINAL"
-      />
+      <LiveFeedFooter />
     </div>
   );
 }

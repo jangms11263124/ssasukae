@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
-import { ArchiveTickerFooter, MyPagePanel } from '@/widgets/my-page';
+import { LiveFeedFooter } from '@/widgets/live-feed-footer';
+import { MyPagePanel } from '@/widgets/my-page';
 
 export const metadata: Metadata = {
   title: '마이페이지',
@@ -29,7 +30,7 @@ export default function MyPage() {
           <MyPagePanel />
         </main>
 
-        <ArchiveTickerFooter />
+        <LiveFeedFooter />
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { RoomCreateForm } from '@/features/room-create';
 import { RoomJoinForm, RoomJoinFormSkeleton } from '@/features/room-join';
 import { cn } from '@/shared/lib/cn';
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
+import { LiveFeedFooter } from '@/widgets/live-feed-footer';
 
 interface MainHomeProps {
   className?: string;
@@ -93,14 +94,7 @@ export function MainHome({ className }: MainHomeProps) {
         </div>
       </main>
 
-      <footer className="relative z-10 border-t border-white/10 bg-[#131315]">
-        <div className="mx-auto flex h-12 max-w-[1500px] items-center justify-between gap-4 px-6 font-mono text-[9px] text-zinc-600 sm:px-10">
-          <span>[ROOM_SYSTEM] CREATE_CHANNEL_READY :: INVITE_CHANNEL_READY</span>
-          <span className="hidden sm:inline">
-            CORE_STATUS: OPTIMAL &nbsp; LATENCY: 12MS &nbsp; ENCRYPTION: AES_256
-          </span>
-        </div>
-      </footer>
+      <LiveFeedFooter />
     </div>
   );
 }
