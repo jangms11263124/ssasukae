@@ -11,6 +11,7 @@ COPY data/rag/sources.json ./data/rag/sources.json
 
 ENV RAG_DB_PATH=/app/data/rag/chroma
 ENV GMS_MODEL=gpt-5-mini
+ENV GMS_REASONING_EFFORT=minimal
 
 EXPOSE 8000
 

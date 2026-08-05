@@ -26,6 +26,10 @@ GMS_BASE_URL = os.getenv(
     "https://gms.ssafy.io/gmsapi/api.openai.com/v1",
 )
 GMS_MODEL = os.getenv("GMS_MODEL", "gpt-5-mini")
+GMS_REASONING_EFFORT = os.getenv(
+    "GMS_REASONING_EFFORT",
+    "minimal",
+)
 MAX_NOTES_FOR_PROMPT = 120
 MAX_FEEDBACK_LINE_CHARS = 50
 MAX_PRACTICE_LINE_CHARS = 90
@@ -447,6 +451,7 @@ def create_feedback(request: FeedbackRequest) -> FeedbackResponse:
     feedback_payload = _build_feedback_payload(request)
     response = client.chat.completions.create(
         model=GMS_MODEL,
+        reasoning_effort=GMS_REASONING_EFFORT,
         messages=[
             {
                 "role": "developer",
