@@ -3,6 +3,7 @@
 import { cn } from '@/shared/lib/cn';
 
 import { useStageStore } from '../../../model/stageStore';
+import { useMicBlocked } from '../../../model/useMicBlocked';
 import { CamIcon, GestureIcon, MicIcon } from '../../media-controls/MediaIcons';
 import { FloatingMediaToggle } from '../../media-controls/FloatingMediaToggle';
 import { MediaToggleButton } from '../../media-controls/MediaToggleButton';
@@ -19,6 +20,7 @@ export function MediaControlsOverlay({ showGestureToggle = false }: MediaControl
   const toggleMic = useStageStore((state) => state.toggleMic);
   const toggleCam = useStageStore((state) => state.toggleCam);
   const toggleGesture = useStageStore((state) => state.toggleGesture);
+  const micBlocked = useMicBlocked();
 
   return (
     <div
@@ -31,8 +33,11 @@ export function MediaControlsOverlay({ showGestureToggle = false }: MediaControl
       <FloatingMediaToggle
         icon={<MicIcon className="size-5" />}
         label="마이크"
-        on={micOn}
+        // 막힌 동안은 실제 송출 상태를 보여준다 — 토글은 켜져 있어도 소리는 나가지 않는다
+        on={micOn && !micBlocked}
         onToggle={toggleMic}
+        disabled={micBlocked}
+        disabledReason="공연 중에는 가창자만 마이크를 쓸 수 있어요"
       />
       <FloatingMediaToggle
         icon={<CamIcon className="size-5" />}
