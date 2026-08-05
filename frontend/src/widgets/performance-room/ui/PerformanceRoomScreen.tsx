@@ -12,6 +12,7 @@ import {
 import { useAuth } from '@/entities/user';
 import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { showToast } from '@/shared/model/toastStore';
+import { ConfirmDialog } from '@/shared/ui/dialog/ConfirmDialog';
 
 import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
 import { RoomSocketProvider } from '../model/RoomSocketContext';
@@ -71,6 +72,8 @@ function PerformanceRoomContent() {
 
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [leaderboardPhase, setLeaderboardPhase] = useState(phase);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
   const {
     participantsOpen,
     setParticipantsOpen,
@@ -122,6 +125,7 @@ function PerformanceRoomContent() {
   };
 
   const handleLeaveRoom = async () => {
+    setIsLeaving(true);
     try {
       if (session.isHost) {
         await terminateRoom(session.roomId);
@@ -157,7 +161,7 @@ function PerformanceRoomContent() {
               onAudioClose={() => setAudioOpen(false)}
               onToggleLeaderboard={() => setLeaderboardOpen((prev) => !prev)}
               onLeaderboardClose={() => setLeaderboardOpen(false)}
-              onLeaveRoom={handleLeaveRoom}
+              onLeaveRoom={() => setLeaveConfirmOpen(true)}
               participantsPanel={
                 <ParticipantList
                   compact
@@ -223,6 +227,21 @@ function PerformanceRoomContent() {
             </footer>
 
             <RoomHelpFloatingButton />
+
+            <ConfirmDialog
+              open={leaveConfirmOpen}
+              title="방에서 나가시겠어요?"
+              description={
+                session.isHost
+                  ? '방장이 나가면 방이 종료되고, 모든 참가자가 함께 퇴장돼요.'
+                  : '퇴장하면 로비로 이동해요.'
+              }
+              confirmLabel="나가기"
+              danger
+              pending={isLeaving}
+              onConfirm={handleLeaveRoom}
+              onCancel={() => setLeaveConfirmOpen(false)}
+            />
           </div>
         </StageAudioProvider>
       </OpenViduSessionProvider>
