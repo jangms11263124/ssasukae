@@ -104,7 +104,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
   // 제스처 오작동을 사용자가 알아챌 수 있어야 해서 취소 사유를 알린다.
   const handleGestureCancel = () => {
     handleCancel();
-    showToast('제스처로 공연을 취소했습니다.');
+    showToast('제스처로 공연을 취소했어요.');
   };
 
   const canUseGesture = isPerformer && gestureOn && camOn;

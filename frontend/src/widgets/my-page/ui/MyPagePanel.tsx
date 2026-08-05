@@ -46,7 +46,7 @@ export function MyPagePanel() {
     try {
       await logout();
     } catch {
-      showToast('로그아웃에 실패했습니다', 'error');
+      showToast('로그아웃하지 못했어요.', 'error');
     }
 
     // 요청이 실패해도 onSettled에서 로컬 세션은 정리되므로 로그인 페이지로 이동시킨다
@@ -56,7 +56,7 @@ export function MyPagePanel() {
   if (!profile) {
     return isError ? (
       <StatusMessage tone="error">
-        [ERROR] {getApiErrorMessage(error, '마이페이지를 불러오지 못했습니다.')}
+        [ERROR] {getApiErrorMessage(error, '마이페이지를 불러오지 못했어요.')}
       </StatusMessage>
     ) : (
       <StatusMessage tone="muted">

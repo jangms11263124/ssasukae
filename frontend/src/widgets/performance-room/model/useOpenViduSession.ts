@@ -391,7 +391,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
         setLocalStream(publisher.stream.getMediaStream());
       } catch {
         if (!isStale()) {
-          showToast('카메라·마이크를 사용할 수 없어 시청 전용으로 참여합니다.', 'info');
+          showToast('카메라와 마이크를 쓸 수 없어 시청만 할 수 있어요.', 'info');
         }
       }
     };
@@ -399,7 +399,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
     connectTimer = window.setTimeout(() => {
       connect().catch(() => {
         if (!isStale()) {
-          showToast('미디어 서버 연결에 실패했습니다.', 'error');
+          showToast('화상 연결에 실패했어요. 잠시 후 다시 시도해 주세요.', 'error');
         }
       });
     }, CONNECT_DELAY_MS);
@@ -478,7 +478,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
       }
     }
     if (original === null) {
-      showToast('마이크를 다시 연결하지 못했습니다. 새로고침 후 이용해 주세요.', 'error');
+      showToast('마이크를 다시 연결하지 못했어요. 새로고침해 주세요.', 'error');
     }
     publisher.publishAudio(useStageStore.getState().micOn);
   }, []);
