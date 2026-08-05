@@ -10,7 +10,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { buildRoomPath, useRoomStore, type RoomMode } from '@/entities/room';
 import { useAuth } from '@/entities/user';
-import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { showToast } from '@/shared/model/toastStore';
 
 import { useJoinRoomMutation } from '../api/useJoinRoomMutation';
@@ -19,6 +18,7 @@ import {
   mapKeyCodeToInviteChar,
   sanitizeInviteCode,
 } from '../lib/inviteCodeInput';
+import { resolveJoinErrorMessage } from '../lib/joinErrorMessage';
 import { readInviteCodeFromSearch } from '../lib/inviteLink';
 
 export function RoomJoinForm() {
@@ -117,7 +117,7 @@ export function RoomJoinForm() {
         router.push(buildRoomPath(mode, session.roomId));
       },
       onError: (error) => {
-        showToast(getApiErrorMessage(error, '방에 입장하지 못했어요.'), 'error');
+        showToast(resolveJoinErrorMessage(error), 'error');
       },
     });
   };
