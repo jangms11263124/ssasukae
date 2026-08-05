@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { getRoomSnapshot, useRoomStore } from '@/entities/room';
 import { useAuth } from '@/entities/user';
 import { ApiError } from '@/shared/api/client';
+import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { showToast } from '@/shared/model/toastStore';
 
 export type RoomBootstrapState = 'pending' | 'ready' | 'redirect';
@@ -21,7 +22,7 @@ async function recoverRoomSession(
   const me = snapshot.participants.find((participant) => participant.userId === user.id);
 
   if (me === undefined) {
-    throw new ApiError('방 참가자 정보를 찾을 수 없습니다.', 409);
+    throw new ApiError('방 참가자 정보를 찾을 수 없어요.', 409);
   }
 
   const { enterRoom, hydrateFromSnapshot } = useRoomStore.getState();
@@ -86,9 +87,7 @@ export function useRoomBootstrap(roomIdFromUrl: number | null): RoomBootstrapSta
         return;
       }
 
-      const message =
-        error instanceof ApiError ? error.message : '방 정보를 불러오지 못했습니다.';
-      showToast(message, 'error');
+      showToast(getApiErrorMessage(error, '방 정보를 불러오지 못했어요.'), 'error');
 
       if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
         useRoomStore.getState().leaveRoom();
@@ -107,7 +106,7 @@ export function useRoomBootstrap(roomIdFromUrl: number | null): RoomBootstrapSta
       return;
     }
 
-    showToast('방 정보가 없습니다. 다시 입장해 주세요.', 'error');
+    showToast('방 정보가 없어요. 다시 입장해 주세요.', 'error');
   }, [session, authLoading, user, roomIdFromUrl]);
 
   const shouldRedirect =

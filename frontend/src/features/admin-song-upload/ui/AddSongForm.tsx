@@ -94,7 +94,7 @@ function FileField({ id, label, extension, file, onSelect }: FileFieldProps) {
 
     // accept는 탐색기 필터일 뿐 강제가 아니라서(모든 파일 선택 가능) 확장자를 직접 검증한다.
     if (!selected.name.toLowerCase().endsWith(extension)) {
-      showToast(`${extension} 파일만 첨부할 수 있습니다`, 'error');
+      showToast(`${extension} 파일만 첨부할 수 있어요.`, 'error');
       return;
     }
 
@@ -150,7 +150,7 @@ export function AddSongForm() {
 
   const handleReset = () => {
     resetForm();
-    showToast('입력 내용을 초기화했습니다.');
+    showToast('입력 내용을 초기화했어요.');
   };
 
   const handleSubmit = () => {
@@ -169,10 +169,10 @@ export function AddSongForm() {
       {
         onSuccess: () => {
           resetForm();
-          showToast('곡이 추가되었습니다');
+          showToast('곡을 추가했어요.');
         },
         onError: (error) => {
-          showToast(getApiErrorMessage(error, '곡 추가에 실패했습니다.'), 'error');
+          showToast(getApiErrorMessage(error, '곡을 추가하지 못했어요.'), 'error');
         },
       },
     );

@@ -34,6 +34,7 @@ import {
   type RoomWebSocketEvent,
   type WebSocketErrorEvent,
 } from '@/entities/room';
+import { toUserFacingMessage } from '@/shared/api/errorResponse';
 import { createStompClient, subscribeJson } from '@/shared/api/stomp';
 import { showToast } from '@/shared/model/toastStore';
 
@@ -130,7 +131,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         case 'PARTICIPANT_KICKED': {
           const payload = event.payload as ParticipantKickedPayload;
           if (payload.participantId === roomStore.session?.myParticipantId) {
-            showToast('방장에 의해 강제 퇴장되었습니다.', 'error');
+            showToast('방장이 방에서 내보냈어요.', 'error');
             exitRoom();
             break;
           }
@@ -142,14 +143,14 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           const wasHost = roomStore.session?.isHost ?? false;
           roomStore.applyHostChanged(payload);
           if (!wasHost && payload.participantId === roomStore.session?.myParticipantId) {
-            showToast('방장이 되었습니다.', 'info');
+            showToast('방장이 되었어요.', 'info');
           }
           break;
         }
         case 'ROOM_TERMINATED':
           // 종료를 직접 요청한 방장은 이미 로컬 정리를 마쳐 세션이 없다.
           if (roomStore.session !== null) {
-            showToast('방장이 방을 종료했습니다.', 'info');
+            showToast('방장이 방을 종료했어요.', 'info');
             exitRoom();
           }
           break;
@@ -224,7 +225,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           }
           cardStore.resetCards();
           if (payload.cancelReason !== 'PERFORMER_REQUEST') {
-            showToast('공연이 중단되었습니다.', 'error');
+            showToast('공연이 중단됐어요.', 'error');
           }
           break;
         }
@@ -261,7 +262,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
             payload.performanceId === stageStore.performanceId
           ) {
             stageStore.applyScoringFailed();
-            showToast('채점에 실패했습니다.', 'error');
+            showToast('채점하지 못했어요.', 'error');
           }
           // FINISHED 전이는 점수를 담은 LEADERBOARD_UPDATED가 함께 오므로 여기선 처리하지 않는다.
           break;
@@ -276,11 +277,11 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         }
         case 'PERFORMANCE_SUSPENDED':
           stageStore.applyPerformanceSuspended();
-          showToast('가창자 연결이 끊겨 공연이 일시 중지되었습니다.', 'info');
+          showToast('가창자 연결이 끊겨 공연을 잠시 멈췄어요.', 'info');
           break;
         case 'PERFORMANCE_RESUMED':
           stageStore.applyPerformanceResumed(event.payload as PerformanceResumedPayload);
-          showToast('공연이 재개되었습니다.', 'info');
+          showToast('공연을 다시 시작했어요.', 'info');
           break;
         default:
           break;
@@ -305,7 +306,10 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         // 수성전 개인 카드 배정 큐. 일반전에서는 서버가 발행하지 않는다.
         subscribeJson<RoomWebSocketEvent>(client, '/user/queue/cards', handleEvent);
         subscribeJson<WebSocketErrorEvent>(client, '/user/queue/errors', (event) => {
-          showToast(event.payload.message, 'error');
+          showToast(
+            toUserFacingMessage(event.payload.message, '요청을 처리하지 못했어요.'),
+            'error',
+          );
         });
         subscribeJson<RoomWebSocketEvent<PongPayload>>(client, '/user/queue/pong', (event) => {
           const roundTrip = Date.now() - new Date(event.payload.clientSentAt).getTime();
@@ -333,11 +337,17 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         setIsConnected(false);
         setLatencyMs(null);
       },
-      onStompError: (message) => {
+      onStompError: (brokerMessage) => {
         stopPing();
         setIsConnected(false);
         setLatencyMs(null);
-        showToast(message, 'error');
+        showToast(
+          toUserFacingMessage(
+            brokerMessage,
+            '서버 연결이 끊어졌어요. 잠시 후 다시 시도해 주세요.',
+          ),
+          'error',
+        );
       },
     });
 
@@ -359,7 +369,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
       const client = clientRef.current;
 
       if (!client || !client.connected) {
-        showToast('서버와 연결되어 있지 않습니다.', 'error');
+        showToast('서버와 연결되어 있지 않아요.', 'error');
         return;
       }
 
