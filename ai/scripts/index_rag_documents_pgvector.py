@@ -7,9 +7,8 @@ from openai import OpenAI
 
 from build_rag_index import (
     BASE_DIR,
-    PDF_DIR,
     create_chunks,
-    extract_pages,
+    extract_document_pages,
     load_sources,
 )
 
@@ -70,26 +69,14 @@ def create_embedding_client() -> OpenAI:
 
 
 def load_all_chunks() -> list[dict]:
-    """허용된 PDF를 읽어 기존 기준과 같은 청크를 생성합니다."""
+    """허용된 PDF와 TXT를 읽어 같은 기준의 청크를 생성합니다."""
     all_chunks = []
 
     for source in load_sources():
         if not source.get("rag_allowed", False):
             continue
 
-        pdf_path = PDF_DIR / source["file_name"]
-        if not pdf_path.exists():
-            raise FileNotFoundError(
-                f"PDF를 찾을 수 없습니다: {pdf_path}"
-            )
-
-        pages = extract_pages(
-            pdf_path,
-            stop_at_references=source.get(
-                "stop_at_references",
-                True,
-            ),
-        )
+        pages = extract_document_pages(source)
         chunks = create_chunks(source, pages)
         all_chunks.extend(chunks)
 
@@ -225,7 +212,7 @@ def replace_collection(
 
 
 def main() -> None:
-    """PDF 전체를 새로 임베딩해 pgvector 컬렉션을 구성합니다."""
+    """RAG 원문 전체를 새로 임베딩해 pgvector 컬렉션을 구성합니다."""
     chunks = load_all_chunks()
     if not chunks:
         raise RuntimeError("저장할 RAG 청크가 없습니다.")
