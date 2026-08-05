@@ -4,6 +4,7 @@ import { resolveDeviceId, useMediaDevices } from '@/entities/media-device';
 import { showToast } from '@/shared/model/toastStore';
 import { ActionButton } from '@/shared/ui/button/ActionButton';
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
+import { LiveFeedFooter } from '@/widgets/live-feed-footer';
 
 import { useDeviceSettingsDraft } from '../model/useDeviceSettingsDraft';
 import { AudioInputCard } from './AudioInputCard';
@@ -105,6 +106,8 @@ export function DeviceSettingsPanel() {
             />
           </div>
         </main>
+
+        <LiveFeedFooter />
       </div>
     </div>
   );
