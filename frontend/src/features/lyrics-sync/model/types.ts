@@ -18,7 +18,12 @@ export interface LyricsCandidate {
 }
 
 /** 후보가 비었을 때의 사유. 화면 안내 문구를 고르는 데 쓴다 */
-export type LyricsMissReason = 'NOT_FOUND' | 'NO_SYNCED_LYRICS' | 'RATE_LIMITED';
+export type LyricsMissReason =
+  | 'NOT_FOUND'
+  | 'NO_SYNCED_LYRICS'
+  /** 싱크 가사는 있었지만 곡 길이가 우리 음원과 맞는 레코드가 없다 */
+  | 'DURATION_MISMATCH'
+  | 'RATE_LIMITED';
 
 export interface LyricsLookupResponse {
   candidates: LyricsCandidate[];
