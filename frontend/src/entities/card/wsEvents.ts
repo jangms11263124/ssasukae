@@ -60,7 +60,10 @@ export interface CardEffectStartedPayload {
   targetType: CardEffectTargetType;
 }
 
-/** CARD_EFFECT_ENDED — 효과 종료 확정(SSOT). restoredValue 기준으로 원상 복구한다. */
+/**
+ * CARD_EFFECT_ENDED — 효과 종료 확정(SSOT).
+ * 카드 효과는 base settings에 반영되지 않으므로 이 이벤트로 activeEffect를 비우면 원래 값으로 돌아온다.
+ */
 export interface CardEffectEndedPayload {
   cardCode: string;
   cardId: number;
@@ -72,6 +75,7 @@ export interface CardEffectEndedPayload {
   endedAt: string;
   endReason: CardEffectEndReason;
   performanceId: number;
+  /** @deprecated 서버가 base settings를 건드리지 않게 바뀌어 항상 null이다. 계약 호환용으로만 남아 있다 */
   restoredValue: number | null;
   sourceParticipantId: number;
   startedAt: string;
