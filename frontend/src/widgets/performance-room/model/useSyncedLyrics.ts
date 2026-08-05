@@ -10,6 +10,7 @@ import {
   selectLyrics,
   LYRICS_LEAD_MS,
   LYRICS_SYNC_OFFSET_MS,
+  SONG_DURATION_WAIT_MS,
   type LyricsLine,
   type LyricsMissReason,
 } from '@/features/lyrics-sync';
@@ -19,7 +20,7 @@ import { useStageAudioContext } from './StageAudioContext';
 import { useStageStore } from './stageStore';
 
 /** 조회 실패 사유. 서버가 준 사유에 클라이언트 쪽 사유를 더한다 */
-type MissReason = LyricsMissReason | 'MISMATCH' | 'ERROR';
+type MissReason = LyricsMissReason | 'DURATION_UNKNOWN' | 'MISMATCH' | 'ERROR';
 
 type LoadState =
   | { status: 'IDLE' }
@@ -30,7 +31,9 @@ type LoadState =
 const MISS_MESSAGES: Record<MissReason, string> = {
   NOT_FOUND: '이 곡의 싱크 가사를 찾지 못했습니다',
   NO_SYNCED_LYRICS: '이 곡은 타임스탬프가 있는 가사가 없습니다',
+  DURATION_MISMATCH: '이 곡은 싱크 가사를 지원하지 않습니다',
   RATE_LIMITED: '가사 서버 요청이 많아 가사를 불러오지 못했습니다',
+  DURATION_UNKNOWN: '곡 길이를 확인하지 못해 가사를 표시할 수 없습니다',
   MISMATCH: '곡과 일치하는 가사를 찾지 못했습니다',
   ERROR: '가사를 불러오지 못했습니다',
 };
@@ -95,6 +98,9 @@ function useLyricsClock(isPerformer: boolean, engine: VocalAudioEngine | null): 
  *
  * 백엔드는 타임스탬프 없는 가사 원문만 주므로 타임스탬프는 LRCLIB에서 받는다.
  * 대신 그 원문을 정답지로 써서 후보가 같은 곡인지 대조한다 (동명이곡 오매칭 방지).
+ *
+ * 곡 길이가 우리 음원과 맞는 후보만 쓴다 (라우트에서 걸러진다). 맞는 후보가 없으면
+ * 어긋난 가사를 흘리는 대신 미지원으로 안내한다.
  */
 export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
   const phase = useStageStore((state) => state.phase);
@@ -108,22 +114,43 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
   const durationSeconds = selectedSong?.durationSeconds;
 
   // MR과 같은 타이밍에 미리 받는다. 공연이 시작된 뒤에 받으면 첫 소절을 놓친다.
-  const shouldLoad = (phase === 'READY' || phase === 'PERFORMING') && songId !== null;
+  const isSongLoaded = (phase === 'READY' || phase === 'PERFORMING') && songId !== null;
+  // 길이가 후보 채택의 필수 조건이라, 채워질 때까지 조회를 미룬다.
+  const hasDuration = durationSeconds !== undefined && durationSeconds > 0;
+  const shouldLoad = isSongLoaded && hasDuration;
 
   /**
    * 이 조회를 식별하는 키. 결과를 키와 함께 들고 있다가 렌더 때 지금 키와 맞춰 보는 방식으로
    * 곡이 바뀔 때의 초기화를 처리한다 — 효과 안에서 setState로 되돌리면 렌더가 한 번 더 돈다.
-   * artist·durationSeconds는 스냅샷이 늦게 채우므로, 채워지면 키가 바뀌며 다시 조회된다.
+   * artist는 스냅샷이 늦게 채우므로, 채워지면 키가 바뀌며 다시 조회된다.
    */
   const requestKey = shouldLoad
-    ? `${songId}|${artist ?? ''}|${durationSeconds ?? ''}|${lyricsDownloadUrl ?? ''}`
+    ? `${songId}|${artist ?? ''}|${durationSeconds}|${lyricsDownloadUrl ?? ''}`
     : null;
 
   const [result, setResult] = useState<{ key: string; state: LoadState } | null>(null);
   const [active, setActive] = useState<{ key: string; index: number } | null>(null);
 
+  /**
+   * 곡 길이를 기다리다 한도를 넘긴 곡의 id.
+   *
+   * 선곡한 가창자는 길이를 바로 알지만 나머지 참가자는 방 스냅샷으로만 알 수 있다. 그 왕복이
+   * 끝나기 전에 미지원 안내를 띄우면 곧 가사로 바뀌며 깜빡이므로, 기다리는 동안은 "불러오는
+   * 중"으로 두고 스냅샷이 실패해 끝내 오지 않을 때만 알린다.
+   * 결과를 곡 id와 함께 들고 있다가 렌더 때 맞춰 보는 방식은 위 result와 같다.
+   */
+  const [waitExpiredSongId, setWaitExpiredSongId] = useState<number | null>(null);
+
   useEffect(() => {
-    if (requestKey === null || title === null) return;
+    if (!isSongLoaded || hasDuration || songId === null) return;
+
+    const timeoutId = setTimeout(() => setWaitExpiredSongId(songId), SONG_DURATION_WAIT_MS);
+
+    return () => clearTimeout(timeoutId);
+  }, [isSongLoaded, hasDuration, songId]);
+
+  useEffect(() => {
+    if (requestKey === null || title === null || durationSeconds === undefined) return;
 
     const controller = new AbortController();
 
@@ -159,9 +186,12 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
   }, [requestKey, title, artist, durationSeconds, lyricsDownloadUrl]);
 
   // 지난 곡의 결과를 새 곡에 쓰지 않도록 키가 맞을 때만 인정한다.
-  const load: LoadState =
-    requestKey === null
-      ? { status: 'IDLE' }
+  const load: LoadState = !isSongLoaded
+    ? { status: 'IDLE' }
+    : requestKey === null
+      ? waitExpiredSongId === songId
+        ? { status: 'UNAVAILABLE', reason: 'DURATION_UNKNOWN' }
+        : { status: 'LOADING' }
       : result?.key === requestKey
         ? result.state
         : { status: 'LOADING' };

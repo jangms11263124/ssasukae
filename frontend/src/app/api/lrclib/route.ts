@@ -77,9 +77,8 @@ async function searchLrclib(query: Record<string, string>): Promise<SearchOutcom
   }
 }
 
-/** 길이 차이가 작은 순. 길이를 모르는 후보는 뒤로 밀되 버리지는 않는다 */
-function durationGap(record: LrclibRecord, targetSeconds: number | null): number {
-  if (targetSeconds === null) return 0;
+/** 우리 음원과의 길이 차이(초). 길이가 없는 레코드는 확인할 수 없으니 탈락시킨다 */
+function durationGap(record: LrclibRecord, targetSeconds: number): number {
   if (record.duration === null) return Number.MAX_SAFE_INTEGER;
 
   return Math.abs(record.duration - targetSeconds);
@@ -96,24 +95,33 @@ function toCandidate(record: LrclibRecord): LyricsCandidate {
   };
 }
 
+interface RankResult {
+  candidates: LyricsCandidate[];
+  /** 길이를 따지기 전, 타임스탬프가 있던 레코드 수. 안내 문구를 고르는 데 쓴다 */
+  syncedCount: number;
+}
+
 /**
- * 타임스탬프가 있는 레코드만 남기고 곡 길이가 가까운 순으로 세운다.
- * 허용 오차 안에 드는 후보가 있으면 그 안에서만 고른다 — 길이가 맞는 쪽이
- * 같은 편곡일 가능성이 높아서다.
+ * 타임스탬프가 있고 곡 길이가 허용 오차 안에 드는 레코드만 남겨 길이가 가까운 순으로 세운다.
+ *
+ * 오차 밖 후보로 폴백하지 않는다 — 길이가 다르면 다른 편곡·라이브·리메이크 버전이고,
+ * 그 타임스탬프로는 곡 전체가 어긋난 가사가 나온다. 본문 대조(selectLyrics)도 같은 곡의
+ * 다른 버전은 걸러내지 못하므로 여기서 떨어뜨려야 한다.
  */
-function rankCandidates(records: LrclibRecord[], targetSeconds: number | null): LyricsCandidate[] {
+function rankCandidates(records: LrclibRecord[], targetSeconds: number): RankResult {
   const synced = records.filter(
     (record) => !record.instrumental && (record.syncedLyrics?.trim() ?? '') !== '',
   );
 
-  const withGap = synced
+  const matched = synced
     .map((record) => ({ record, gap: durationGap(record, targetSeconds) }))
+    .filter((entry) => entry.gap <= DURATION_TOLERANCE_SEC)
     .sort((left, right) => left.gap - right.gap);
 
-  const withinTolerance = withGap.filter((entry) => entry.gap <= DURATION_TOLERANCE_SEC);
-  const chosen = withinTolerance.length > 0 ? withinTolerance : withGap;
-
-  return chosen.slice(0, MAX_CANDIDATES).map((entry) => toCandidate(entry.record));
+  return {
+    candidates: matched.slice(0, MAX_CANDIDATES).map((entry) => toCandidate(entry.record)),
+    syncedCount: synced.length,
+  };
 }
 
 function jsonWithCache(body: LyricsLookupResponse): NextResponse {
@@ -127,12 +135,18 @@ export async function GET(request: NextRequest) {
   const title = searchParams.get('title')?.trim() ?? '';
   const artist = searchParams.get('artist')?.trim() ?? '';
   const parsedDuration = Number(searchParams.get('duration'));
-  const duration =
-    Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : null;
 
   if (title === '') {
     return NextResponse.json({ message: 'title 파라미터가 필요합니다.' }, { status: 400 });
   }
+
+  // 곡 길이가 후보 채택의 필수 조건이라, 모르면 조회 자체가 의미 없다.
+  // (호출자는 길이가 채워질 때까지 기다린다 — useSyncedLyrics)
+  if (!Number.isFinite(parsedDuration) || parsedDuration <= 0) {
+    return NextResponse.json({ message: 'duration 파라미터가 필요합니다.' }, { status: 400 });
+  }
+
+  const duration = parsedDuration;
 
   // 제목+가수로 먼저 좁히고, 빈손이면 제목만으로 넓혀 다시 찾는다.
   const attempts: Record<string, string>[] =
@@ -141,6 +155,7 @@ export async function GET(request: NextRequest) {
       : [{ track_name: title, artist_name: artist }, { track_name: title }];
 
   let sawRecords = false;
+  let sawSyncedRecords = false;
 
   for (const [index, query] of attempts.entries()) {
     // 문서 권장: 요청은 순차로 보내고 사이에 짧은 간격을 둔다.
@@ -162,16 +177,22 @@ export async function GET(request: NextRequest) {
     if (outcome.records.length === 0) continue;
 
     sawRecords = true;
-    const candidates = rankCandidates(outcome.records, duration);
+    const { candidates, syncedCount } = rankCandidates(outcome.records, duration);
+
+    if (syncedCount > 0) sawSyncedRecords = true;
 
     if (candidates.length > 0) {
       return jsonWithCache({ candidates });
     }
   }
 
-  // 곡은 찾았는데 타임스탬프가 없는 경우와 아예 없는 경우를 구분해 안내 문구를 다르게 한다.
+  // 어디까지 갔다가 떨어졌는지에 따라 안내 문구를 다르게 한다.
   return jsonWithCache({
     candidates: [],
-    reason: sawRecords ? 'NO_SYNCED_LYRICS' : 'NOT_FOUND',
+    reason: sawSyncedRecords
+      ? 'DURATION_MISMATCH'
+      : sawRecords
+        ? 'NO_SYNCED_LYRICS'
+        : 'NOT_FOUND',
   });
 }

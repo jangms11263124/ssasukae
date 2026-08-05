@@ -4,8 +4,11 @@ export interface LyricsLookupParams {
   title: string;
   /** 없으면 제목만으로 검색한다 — 동명이곡이 섞이므로 검증에 더 의존하게 된다 */
   artist?: string;
-  /** 후보 순위를 매기는 데 쓴다. 없어도 조회는 된다 */
-  durationSeconds?: number;
+  /**
+   * 후보 채택의 필수 조건. 이 길이와 맞지 않는 레코드는 다른 편곡으로 보고 버리므로
+   * 값을 모르는 상태로는 조회하지 않는다 (라우트가 400을 낸다).
+   */
+  durationSeconds: number;
 }
 
 /**
@@ -17,13 +20,13 @@ export async function fetchLyricsCandidates(
   params: LyricsLookupParams,
   signal?: AbortSignal,
 ): Promise<LyricsLookupResponse> {
-  const search = new URLSearchParams({ title: params.title });
+  const search = new URLSearchParams({
+    title: params.title,
+    duration: String(Math.round(params.durationSeconds)),
+  });
 
   if (params.artist !== undefined && params.artist !== '') {
     search.set('artist', params.artist);
-  }
-  if (params.durationSeconds !== undefined && params.durationSeconds > 0) {
-    search.set('duration', String(Math.round(params.durationSeconds)));
   }
 
   const response = await fetch(`/api/lrclib?${search.toString()}`, { signal });
