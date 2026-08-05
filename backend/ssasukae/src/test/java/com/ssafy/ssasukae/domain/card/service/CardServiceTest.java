@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +17,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -129,6 +131,27 @@ class CardServiceTest {
     when(cardStateStore.findAssignment(ROOM_ID, PERFORMANCE_ID, PARTICIPANT_ID))
         .thenReturn(Optional.of(assignment));
     when(cardStateStore.findRoomCard(ROOM_ID)).thenReturn(Optional.empty());
+  }
+
+  @Test
+  void cardEffectDoesNotChangeBasePerformanceSettings() {
+    cardService.activate(USER_ID, ROOM_ID, PERFORMANCE_ID);
+
+    ArgumentCaptor<RoomCardSnapshot> roomCardCaptor =
+        ArgumentCaptor.forClass(RoomCardSnapshot.class);
+    verify(cardStateStore).saveRoomCard(roomCardCaptor.capture());
+    RoomCardSnapshot pending = roomCardCaptor.getValue();
+    when(cardStateStore.findRoomCard(ROOM_ID)).thenReturn(Optional.of(pending));
+
+    ArgumentCaptor<Runnable> activationCaptor = ArgumentCaptor.forClass(Runnable.class);
+    verify(taskScheduler).schedule(activationCaptor.capture(), any(Instant.class));
+    activationCaptor.getValue().run();
+
+    verify(performanceStore, never()).replace(any(), any());
+    verify(cardStateStore, times(2)).saveRoomCard(roomCardCaptor.capture());
+    RoomCardSnapshot active = roomCardCaptor.getAllValues().get(2);
+    assertThat(active.status()).isEqualTo(RoomCardStatus.ACTIVE);
+    assertThat(active.previousValue()).isNull();
   }
 
   @Test
