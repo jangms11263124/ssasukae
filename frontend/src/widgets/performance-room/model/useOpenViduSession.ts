@@ -75,6 +75,15 @@ function stopPublisher(publisher: Publisher | null) {
   publisher?.stream.getMediaStream()?.getTracks().forEach((track) => track.stop());
 }
 
+async function acquireMicrophoneTrack(): Promise<MediaStreamTrack | null> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    return stream.getAudioTracks()[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 type OpenViduSessionHandlers = Session & {
   onParticipantEvicted: (event: { connectionId: string; reason?: string }) => void;
   onParticipantLeft: (event: { connectionId: string; reason?: string }) => void;
@@ -386,6 +395,8 @@ export function useOpenViduSession(): OpenViduSessionApi {
       }
       publisherRef.current = null;
       isBroadcastingMixRef.current = false;
+      // 원복용 clone은 publisher 스트림 밖에 있어 stopPublisher가 못 멈춘다 — 여기서 끊지 않으면 마이크 점유가 남는다
+      originalAudioTrackRef.current?.stop();
       originalAudioTrackRef.current = null;
 
       const teardown = disconnectSessionAsync(activeSession, activePublisher);
@@ -419,8 +430,10 @@ export function useOpenViduSession(): OpenViduSessionApi {
 
     if (track !== null) {
       if (originalAudioTrackRef.current === null) {
+        // replaceTrack은 교체되는 기존 트랙을 stop시킨다(SDK 내부 동작) — 원본은 clone으로 보관해야 살아남는다
+        const current = publisher.stream.getMediaStream()?.getAudioTracks()[0] ?? null;
         originalAudioTrackRef.current =
-          publisher.stream.getMediaStream()?.getAudioTracks()[0] ?? null;
+          current !== null && current.readyState === 'live' ? current.clone() : null;
       }
       await publisher.replaceTrack(track);
       isBroadcastingMixRef.current = true;
@@ -430,10 +443,26 @@ export function useOpenViduSession(): OpenViduSessionApi {
     }
 
     isBroadcastingMixRef.current = false;
-    const original = originalAudioTrackRef.current;
+    let original = originalAudioTrackRef.current;
     originalAudioTrackRef.current = null;
-    if (original !== null && original.readyState === 'live') {
-      await publisher.replaceTrack(original);
+    if (original !== null && original.readyState !== 'live') {
+      original.stop();
+      original = null;
+    }
+    if (original === null) {
+      // 보관한 원본이 없거나 죽어 있으면 마이크를 재획득한다 — 조용히 무음으로 방치하지 않는다
+      original = await acquireMicrophoneTrack();
+    }
+    if (original !== null) {
+      try {
+        await publisher.replaceTrack(original);
+      } catch {
+        original.stop();
+        original = null;
+      }
+    }
+    if (original === null) {
+      showToast('마이크를 다시 연결하지 못했습니다. 새로고침 후 이용해 주세요.', 'error');
     }
     publisher.publishAudio(useStageStore.getState().micOn);
   }, []);
