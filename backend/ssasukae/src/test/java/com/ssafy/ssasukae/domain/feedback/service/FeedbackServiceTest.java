@@ -94,6 +94,22 @@ class FeedbackServiceTest {
   }
 
   @Test
+  @DisplayName("피드백 생성 시각을 한국 시간으로 반환한다")
+  void getListReturnsSingAtInSeoulTime() {
+    LocalDateTime createdAtUtc = LocalDateTime.of(2026, 8, 5, 6, 30);
+    when(performanceResultRepository.countCriteria(user, null, 0, 100)).thenReturn(1L);
+    when(performanceResultRepository.findAllByCriteriaOrderByCreatedAt(
+            user, null, 0, 100, null, null))
+        .thenReturn(List.of(performance(100L, 80, createdAtUtc)));
+
+    FeedbackResponseDTO.FeedbackListDTO response =
+        feedbackService.getList(AUTHENTICATED_USER, "All", "All", "recently", null);
+
+    assertThat(response.getFeedbacks().get(0).getSingAt())
+        .isEqualTo(LocalDateTime.of(2026, 8, 5, 15, 30));
+  }
+
+  @Test
   @DisplayName("점수순 다음 페이지는 커서의 ID와 점수를 Repository에 전달한다")
   void getListPassesCursorIdAndScoreForHighScore() {
     PerformanceResult cursor = performance(77L, 92, LocalDateTime.now());
