@@ -11,7 +11,13 @@ export const LRCLIB_BASE_URL = 'https://lrclib.net';
  */
 export const LRCLIB_CLIENT = 'SSASUKAE/0.1.0 (SSAFY 15th team project D206)';
 
-/** 곡 길이 일치 허용 오차. LRCLIB 자체도 ±2초를 매칭 기준으로 쓴다 */
+/**
+ * 곡 길이 일치 허용 오차. LRCLIB 자체도 ±2초를 매칭 기준으로 쓴다.
+ *
+ * 이 값이 곧 "가사 지원 여부"의 기준이다 — 이 안에 드는 후보가 없으면 다른 편곡·라이브
+ * 버전의 타임스탬프로 어긋난 가사를 흘리는 대신 미지원으로 안내한다.
+ * 싱크 가사가 뜨는 곡이 너무 적으면 여기만 올려 조정한다.
+ */
 export const DURATION_TOLERANCE_SEC = 2;
 
 /**
@@ -22,6 +28,15 @@ export const MAX_CANDIDATES = 3;
 
 /** 문서 권장: 연속 요청 사이에 200~500ms 간격을 둔다 */
 export const SEARCH_DELAY_MS = 300;
+
+/**
+ * 곡 길이가 채워지기를 기다리는 한도.
+ *
+ * 길이 없이는 후보를 검증할 수 없어 조회를 시작하지 않는데, 선곡한 가창자 외에는 방
+ * 스냅샷이 도착해야 길이를 알 수 있다. 그때까지는 "불러오는 중"으로 두고, 스냅샷 조회가
+ * 실패해 끝내 오지 않으면 이 시간 뒤에 미지원으로 안내한다.
+ */
+export const SONG_DURATION_WAIT_MS = 5_000;
 
 /** 가사는 바뀌지 않는다. 외부 요청을 하루에 곡당 한 번으로 줄인다 */
 export const LYRICS_CACHE_SECONDS = 86_400;
