@@ -8,6 +8,8 @@ interface FloatingMediaToggleProps {
   on: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  /** 잠긴 이유. 툴팁과 aria-label로 안내한다 — 눌러도 안 되는 이유를 알 수 있어야 한다 */
+  disabledReason?: string;
 }
 
 /** 스테이지 하단 중앙에 떠 있는 원형 MIC/CAM 토글 */
@@ -17,13 +19,17 @@ export function FloatingMediaToggle({
   on,
   onToggle,
   disabled = false,
+  disabledReason,
 }: FloatingMediaToggleProps) {
+  const lockedLabel = disabled && disabledReason !== undefined;
+
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-pressed={on}
-      aria-label={`${label} ${on ? '끄기' : '켜기'}`}
+      aria-label={lockedLabel ? `${label} — ${disabledReason}` : `${label} ${on ? '끄기' : '켜기'}`}
+      title={lockedLabel ? disabledReason : undefined}
       disabled={disabled}
       className={cn(
         'grid size-11 place-items-center rounded-full transition-all',

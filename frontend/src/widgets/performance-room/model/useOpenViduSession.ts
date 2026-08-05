@@ -9,6 +9,7 @@ import { showToast } from '@/shared/model/toastStore';
 
 import { fetchMediaToken } from './openViduMediaToken';
 import { useStageStore } from './stageStore';
+import { readMicBlocked, useMicBlocked } from './useMicBlocked';
 
 /**
  * 원격 참가자 한 명의 미디어 상태.
@@ -193,6 +194,8 @@ export function useOpenViduSession(): OpenViduSessionApi {
   const roomId = useRoomStore((state) => state.session?.roomId ?? null);
   const micOn = useStageStore((state) => state.micOn);
   const camOn = useStageStore((state) => state.camOn);
+  // 공연 중 가창자 외 송출 차단. 토글 상태와 곱해져 실제 송출 여부가 된다
+  const micBlocked = useMicBlocked();
 
   const [isConnected, setIsConnected] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -374,7 +377,8 @@ export function useOpenViduSession(): OpenViduSessionApi {
 
       try {
         const publisher = await openVidu.initPublisherAsync(undefined, {
-          publishAudio: useStageStore.getState().micOn,
+          // 공연 도중 입장·재접속이면 처음부터 막힌 채로 시작한다
+          publishAudio: useStageStore.getState().micOn && !readMicBlocked(),
           publishVideo: useStageStore.getState().camOn,
           mirror: false,
         });
@@ -433,8 +437,8 @@ export function useOpenViduSession(): OpenViduSessionApi {
 
   useEffect(() => {
     if (isBroadcastingMixRef.current) return;
-    publisherRef.current?.publishAudio(micOn);
-  }, [micOn]);
+    publisherRef.current?.publishAudio(micOn && !micBlocked);
+  }, [micOn, micBlocked]);
 
   useEffect(() => {
     publisherRef.current?.publishVideo(camOn);
@@ -480,7 +484,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
     if (original === null) {
       showToast('마이크를 다시 연결하지 못했어요. 새로고침해 주세요.', 'error');
     }
-    publisher.publishAudio(useStageStore.getState().micOn);
+    publisher.publishAudio(useStageStore.getState().micOn && !readMicBlocked());
   }, []);
 
   return { isConnected, localStream, remoteStreams, replaceAudioTrack };
