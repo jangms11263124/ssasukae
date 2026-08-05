@@ -9,6 +9,7 @@ export {
   LYRICS_SYNC_OFFSET_MS,
   MAX_CANDIDATES,
   SEARCH_DELAY_MS,
+  SONG_DURATION_WAIT_MS,
 } from './config/lyricsSyncConfig';
 export { findLineIndexAt, findNextTextIndex, parseLrc } from './lib/parseLrc';
 export { lyricsOverlapRatio, selectLyrics } from './lib/verifyLyrics';
