@@ -70,10 +70,15 @@ export const DSP_ROWS: readonly DspRowDefinition[] = [
   },
 ];
 
-// 수성전은 공격 카드가 키·템포를 흔드는 것이 핵심이라 손으로 되돌리지 못하게 한다.
-// AudioEnginePanel도 같은 모드에서 PITCH/TEMPO SHIFT 스테퍼를 숨긴다.
+/**
+ * 수성전에서 가창자가 조절할 수 없는 항목. 공격 카드가 흔드는 값이라 손으로 되돌릴 수 없어야 한다.
+ * 서버(PerformanceService)도 같은 두 필드는 요청값을 무시하고 저장된 base를 유지하므로,
+ * 여기서 빠뜨려도 값이 바뀌지는 않는다. 다만 조절되지 않는 항목을 띄워 두게 되니 맞춰 둔다.
+ */
+const BATTLE_LOCKED_KEYS: readonly DspRowDefinition['key'][] = ['pitch', 'tempo'];
+
 const BATTLE_DSP_ROWS: readonly DspRowDefinition[] = DSP_ROWS.filter(
-  (row) => row.key !== 'pitch' && row.key !== 'tempo',
+  (row) => !BATTLE_LOCKED_KEYS.includes(row.key),
 );
 
 /**
