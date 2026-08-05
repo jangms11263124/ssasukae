@@ -12,12 +12,16 @@ import {
 } from '@/entities/song';
 import { cn } from '@/shared/lib/cn';
 import { useInfiniteScrollTrigger } from '@/shared/lib/useInfiniteScrollTrigger';
+import { Skeleton } from '@/shared/ui/skeleton/Skeleton';
 
 const TABS = ['ALL', 'POPULAR', 'MY_FAVORITES'] as const;
 type TabKey = (typeof TABS)[number];
 
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_PAGE_SIZE = 20;
+// 목록 영역을 대략 채울 만큼만. 더 늘리면 스크롤 없이 보이지 않는 줄까지 그리게 된다.
+const SKELETON_ROW_COUNT = 6;
+const NEXT_PAGE_SKELETON_ROW_COUNT = 3;
 
 // MY_FAVORITES는 전용 필터가 검색 API에 없어 응답의 favorite 필드로 걸러낸다.
 const TAB_TO_FILTER: Record<TabKey, SongFilter> = {
@@ -57,6 +61,26 @@ function CloseIcon() {
       <path d="m6 6 12 12M18 6 6 18" />
     </svg>
   );
+}
+
+/** 곡 행과 같은 골격의 스켈레톤. 실제 행으로 바뀔 때 목록 높이가 유지된다. */
+function SongRowSkeleton() {
+  return (
+    <li aria-hidden="true" className="flex items-center gap-5 border-b border-white/5 py-3.5">
+      <Skeleton className="h-3 w-6 shrink-0" />
+      <Skeleton tone="faint" className="size-11 shrink-0" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <Skeleton tone="strong" className="h-3.5 w-1/2" />
+        <Skeleton tone="faint" className="h-2.5 w-1/4" />
+      </div>
+      <Skeleton className="h-3 w-10 shrink-0" />
+      <Skeleton tone="faint" className="h-8 w-20 shrink-0" />
+    </li>
+  );
+}
+
+function renderSkeletonRows(count: number) {
+  return Array.from({ length: count }, (_, index) => <SongRowSkeleton key={index} />);
 }
 
 interface SongSearchModalProps {
@@ -242,9 +266,12 @@ export function SongSearchModal({ onClose, renderSongAction }: SongSearchModalPr
             </li>
           ))}
           {isPending ? (
-            <li className="py-12 text-center font-mono text-xs tracking-[0.2em] text-zinc-600">
-              LOADING_TRACKS...
-            </li>
+            <>
+              <li role="status" className="sr-only">
+                곡 목록을 불러오고 있어요.
+              </li>
+              {renderSkeletonRows(SKELETON_ROW_COUNT)}
+            </>
           ) : null}
           {isError ? (
             <li className="py-12 text-center font-mono text-xs tracking-[0.2em] text-red-400/80">
@@ -256,11 +283,7 @@ export function SongSearchModal({ onClose, renderSongAction }: SongSearchModalPr
               NO_TRACKS_FOUND
             </li>
           ) : null}
-          {isFetchingNextPage ? (
-            <li className="py-5 text-center font-mono text-xs tracking-[0.2em] text-zinc-600">
-              LOADING_MORE...
-            </li>
-          ) : null}
+          {isFetchingNextPage ? renderSkeletonRows(NEXT_PAGE_SKELETON_ROW_COUNT) : null}
           {/* IntersectionObserver는 높이 0짜리 요소를 교차로 판정하지 않으므로 최소 높이를 준다. */}
           <li ref={sentinelRef} aria-hidden="true" className="h-px" />
         </ul>
