@@ -2,10 +2,10 @@ import type { ReactNode } from 'react';
 
 import { SocialLoginPanel } from '@/features/auth-social-login';
 import { cn } from '@/shared/lib/cn';
+import { LiveFeedFooter } from '@/widgets/live-feed-footer';
 
 import { LandingHeader } from './LandingHeader';
 import { LandingStagePanel } from './LandingStagePanel';
-import { LandingTickerFooter } from './LandingTickerFooter';
 
 interface LandingSplitProps {
   className?: string;
@@ -34,7 +34,7 @@ export function LandingSplit({ className, children }: LandingSplitProps) {
         </section>
       </main>
 
-      <LandingTickerFooter />
+      <LiveFeedFooter />
     </div>
   );
 }
