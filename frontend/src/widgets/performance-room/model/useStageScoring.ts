@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '@/entities/user';
 import type { ScoringSession } from '@/features/performance-scoring';
 import type { VocalAudioEngine } from '@/features/vocal-audio-engine';
+import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { showToast } from '@/shared/model/toastStore';
 
 import { useStageStore } from './stageStore';
@@ -66,7 +67,7 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
 
         if (!session.isSttSupported) {
           showToast(
-            '이 브라우저에서는 가사 인식을 지원하지 않아 가사 점수가 0점 처리됩니다.',
+            '이 브라우저는 가사 인식을 지원하지 않아 가사 점수가 0점이에요.',
             'error',
           );
         }
@@ -79,7 +80,7 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
         sessionRef.current = session;
       })
       .catch(() => {
-        showToast('채점 모듈을 불러오지 못해 이번 공연은 채점되지 않습니다.', 'error');
+        showToast('채점 기능을 불러오지 못해 이번 공연은 채점되지 않아요.', 'error');
       });
 
     return () => {
@@ -132,7 +133,7 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
       midiJsonDownloadUrl === null ||
       lyricsDownloadUrl === null
     ) {
-      failScoring('채점에 필요한 공연 정보가 없어 점수를 낼 수 없습니다.');
+      failScoring('공연 정보가 없어 채점할 수 없어요.');
       return;
     }
 
@@ -143,7 +144,7 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
         // AI는 빈 transcript와 빈 notes를 400으로 거절한다. 무의미한 요청을 보내는 대신
         // 바로 실패로 넘겨 "채점 중..."에 갇히지 않게 한다.
         if (singerMidi.notes.length === 0 || stt.fullTranscript.trim() === '') {
-          failScoring('가창 음성을 인식하지 못해 채점할 수 없습니다.');
+          failScoring('가창 음성을 인식하지 못해 채점할 수 없어요.');
           return;
         }
 
@@ -167,7 +168,7 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
           singerMidi,
         });
       } catch (error) {
-        failScoring(error instanceof Error ? error.message : '채점 요청에 실패했습니다.');
+        failScoring(getApiErrorMessage(error, '채점 요청에 실패했어요.'));
       }
     })();
   }, [phase, userId]);

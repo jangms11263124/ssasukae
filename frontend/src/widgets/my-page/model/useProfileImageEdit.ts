@@ -13,12 +13,12 @@ import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { showToast } from '@/shared/model/toastStore';
 
 export const PROFILE_IMAGE_EDIT_COPY = {
-  invalidType: `${PROFILE_IMAGE_TYPE_LABEL} 이미지만 업로드할 수 있습니다.`,
-  tooLarge: `이미지는 ${PROFILE_IMAGE_MAX_SIZE_LABEL} 이하만 업로드할 수 있습니다.`,
-  uploading: '[EDIT_MODE] 이미지를 업로드하는 중입니다...',
-  hint: `[EDIT_MODE] 이미지는 ${PROFILE_IMAGE_TYPE_LABEL}, ${PROFILE_IMAGE_MAX_SIZE_LABEL} 이하만 업로드할 수 있습니다.`,
-  saved: '프로필 이미지를 변경했습니다.',
-  saveFailed: '프로필 이미지 변경에 실패했습니다. 다시 시도해 주세요.',
+  invalidType: `${PROFILE_IMAGE_TYPE_LABEL} 이미지만 올릴 수 있어요.`,
+  tooLarge: `${PROFILE_IMAGE_MAX_SIZE_LABEL} 이하 이미지만 올릴 수 있어요.`,
+  uploading: '[EDIT_MODE] 이미지를 올리는 중이에요...',
+  hint: `[EDIT_MODE] ${PROFILE_IMAGE_TYPE_LABEL}, ${PROFILE_IMAGE_MAX_SIZE_LABEL} 이하 이미지만 올릴 수 있어요.`,
+  saved: '프로필 이미지를 바꿨어요.',
+  saveFailed: '프로필 이미지를 바꾸지 못했어요. 다시 시도해 주세요.',
 } as const;
 
 export function useProfileImageEdit() {

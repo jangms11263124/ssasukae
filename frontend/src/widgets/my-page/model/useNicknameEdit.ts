@@ -23,13 +23,13 @@ export const NICKNAME_EDIT_COPY = {
   placeholder: 'ENTER_IDENTITY',
   check: 'CHECK ID',
   checking: 'CHECKING...',
-  available: '사용 가능한 닉네임입니다.',
-  unchanged: '현재 사용 중인 닉네임입니다.',
+  available: '사용할 수 있는 닉네임이에요.',
+  unchanged: '지금 쓰고 있는 닉네임이에요.',
   required: '닉네임을 입력해 주세요.',
-  duplicated: '이미 사용 중인 닉네임입니다.',
-  checkFailed: '닉네임 확인에 실패했습니다. 다시 시도해 주세요.',
-  saveFailed: '닉네임 변경에 실패했습니다. 다시 시도해 주세요.',
-  saved: '닉네임을 변경했습니다.',
+  duplicated: '이미 사용 중인 닉네임이에요.',
+  checkFailed: '닉네임을 확인하지 못했어요. 다시 시도해 주세요.',
+  saveFailed: '닉네임을 바꾸지 못했어요. 다시 시도해 주세요.',
+  saved: '닉네임을 바꿨어요.',
 } as const;
 
 interface UseNicknameEditParams {
