@@ -9,11 +9,13 @@ BASE_DIR = Path(__file__).resolve().parents[1]
 
 RAG_DIR = BASE_DIR / "data" / "rag"
 PDF_DIR = RAG_DIR / "pdfs"
+TEXT_DIR = RAG_DIR / "texts"
 SOURCES_PATH = RAG_DIR / "sources.json"
 
 # 한 청크의 최대 글자 수와 앞 청크에서 중복할 글자 수
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150
+TEXT_PAGE_SIZE = 12000
 
 
 def load_sources() -> list[dict]:
@@ -29,6 +31,131 @@ def normalize_text(text: str) -> str:
     text = re.sub(r"\s*\n\s*", " ", text)
     text = re.sub(r"[ \t]+", " ", text)
     return text.strip()
+
+
+def strip_gutenberg_boilerplate(text: str) -> str:
+    """Project Gutenberg의 배포 안내문을 본문에서 제외합니다."""
+    start_match = re.search(
+        r"\*\*\*\s*START OF THE PROJECT GUTENBERG EBOOK.*?\*\*\*",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if start_match:
+        text = text[start_match.end() :]
+
+    end_match = re.search(
+        r"\*\*\*\s*END OF THE PROJECT GUTENBERG EBOOK.*?\*\*\*",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if end_match:
+        text = text[: end_match.start()]
+
+    return text
+
+
+def normalize_plain_text(text: str) -> str:
+    """TXT의 줄바꿈은 정리하되 문단 경계는 보존합니다."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = text.replace("\u00ad", "")
+    text = re.sub(r"(?<=\w)-\n(?=\w)", "", text)
+
+    paragraphs = []
+    for paragraph in re.split(r"\n\s*\n+", text):
+        paragraph = re.sub(r"[ \t]*\n[ \t]*", " ", paragraph)
+        paragraph = re.sub(r"[ \t]+", " ", paragraph).strip()
+        if paragraph:
+            paragraphs.append(paragraph)
+
+    return "\n\n".join(paragraphs)
+
+
+def split_text_pages(text: str) -> list[str]:
+    """페이지가 없는 TXT를 문단 경계 기준의 가상 페이지로 나눕니다."""
+    pages = []
+    current_paragraphs = []
+    current_length = 0
+
+    for paragraph in text.split("\n\n"):
+        additional_length = len(paragraph)
+        if current_paragraphs:
+            additional_length += 2
+
+        if (
+            current_paragraphs
+            and current_length + additional_length > TEXT_PAGE_SIZE
+        ):
+            pages.append("\n\n".join(current_paragraphs))
+            current_paragraphs = []
+            current_length = 0
+
+        current_paragraphs.append(paragraph)
+        current_length += additional_length
+
+    if current_paragraphs:
+        pages.append("\n\n".join(current_paragraphs))
+
+    return pages
+
+
+def extract_text_pages(
+    text_path: Path,
+    *,
+    remove_gutenberg_boilerplate: bool = False,
+) -> list[dict]:
+    """UTF-8 TXT 본문을 정제해 가상 페이지 단위로 반환합니다."""
+    text = text_path.read_text(encoding="utf-8-sig")
+    if remove_gutenberg_boilerplate:
+        text = strip_gutenberg_boilerplate(text)
+
+    text = normalize_plain_text(text)
+    if not text:
+        return []
+
+    return [
+        {
+            "page": page_number,
+            "text": page_text,
+        }
+        for page_number, page_text in enumerate(
+            split_text_pages(text),
+            start=1,
+        )
+    ]
+
+
+def resolve_source_path(source: dict) -> Path:
+    """파일 확장자에 맞는 RAG 원문 경로를 반환합니다."""
+    file_name = source["file_name"]
+    suffix = Path(file_name).suffix.lower()
+
+    if suffix == ".pdf":
+        return PDF_DIR / file_name
+    if suffix == ".txt":
+        return TEXT_DIR / file_name
+
+    raise ValueError(f"지원하지 않는 RAG 문서 형식입니다: {suffix}")
+
+
+def extract_document_pages(source: dict) -> list[dict]:
+    """PDF 또는 TXT 원문을 공통 페이지 구조로 읽습니다."""
+    source_path = resolve_source_path(source)
+    if not source_path.exists():
+        raise FileNotFoundError(f"RAG 원문을 찾을 수 없습니다: {source_path}")
+
+    if source_path.suffix.lower() == ".pdf":
+        return extract_pages(
+            source_path,
+            stop_at_references=source.get("stop_at_references", True),
+        )
+
+    return extract_text_pages(
+        source_path,
+        remove_gutenberg_boilerplate=source.get(
+            "strip_gutenberg_boilerplate",
+            False,
+        ),
+    )
 
 
 def extract_pages(
@@ -140,6 +267,11 @@ def create_chunks(source: dict, pages: list[dict]) -> list[dict]:
                         "page": page["page"],
                         "source_url": source["source_url"],
                         "license": source["license"],
+                        "source_format": (
+                            Path(source["file_name"])
+                            .suffix.lower()
+                            .lstrip(".")
+                        ),
                         "topics": ",".join(source["topics"]),
                     },
                 }
@@ -149,22 +281,14 @@ def create_chunks(source: dict, pages: list[dict]) -> list[dict]:
 
 
 def main() -> None:
-    """PDF를 읽고 청킹한 결과를 확인합니다."""
+    """PDF와 TXT를 읽고 청킹한 결과를 확인합니다."""
     sources = load_sources()
 
     for source in sources:
         if not source.get("rag_allowed", False):
             continue
 
-        pdf_path = PDF_DIR / source["file_name"]
-
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"PDF를 찾을 수 없습니다: {pdf_path}")
-
-        pages = extract_pages(
-            pdf_path,
-            stop_at_references=source.get("stop_at_references", True),
-        )
+        pages = extract_document_pages(source)
         chunks = create_chunks(source, pages)
 
         print(
