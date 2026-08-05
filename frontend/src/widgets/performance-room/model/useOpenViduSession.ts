@@ -15,6 +15,8 @@ import { useStageStore } from './stageStore';
  */
 export interface RemoteMedia {
   streamManager: StreamManager;
+  /** 이 스트림이 속한 커넥션. 재입장 시 이전(유령) 커넥션의 늦은 이벤트를 구분하는 키 */
+  connectionId: string;
   audioActive: boolean;
   videoActive: boolean;
 }
@@ -228,6 +230,25 @@ export function useOpenViduSession(): OpenViduSessionApi {
       });
     };
 
+    // 종료 이벤트를 보낸 커넥션이 지금 보관 중인 스트림의 커넥션일 때만 지운다 —
+    // 재입장 직후 이전(유령) 커넥션의 늦은 종료 이벤트가 새 스트림을 지우는 것을 막는다.
+    const removeRemote = (participantId: number, connectionId: string | undefined) => {
+      if (isStale() || connectionId === undefined) {
+        return;
+      }
+
+      setRemoteStreams((previous) => {
+        const current = previous.get(participantId);
+        if (current === undefined || current.connectionId !== connectionId) {
+          return previous;
+        }
+
+        const next = new Map(previous);
+        next.delete(participantId);
+        return next;
+      });
+    };
+
     const connect = async () => {
       setRemoteStreams(new Map());
       setLocalStream(null);
@@ -278,6 +299,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
           const subscriber = session.subscribe(event.stream, undefined);
           updateRemote(participantId, {
             streamManager: subscriber,
+            connectionId: connection.connectionId,
             audioActive: event.stream.audioActive,
             videoActive: event.stream.videoActive,
           });
@@ -287,24 +309,17 @@ export function useOpenViduSession(): OpenViduSessionApi {
       });
 
       session.on('streamDestroyed', (event) => {
-        if (isStale()) {
-          return;
-        }
-
-        const participantId = parseParticipantId(event.stream.connection?.data);
+        const connection = event.stream.connection;
+        const participantId = parseParticipantId(connection?.data);
         if (participantId !== null) {
-          updateRemote(participantId, null);
+          removeRemote(participantId, connection?.connectionId);
         }
       });
 
       session.on('connectionDestroyed', (event) => {
-        if (isStale()) {
-          return;
-        }
-
         const participantId = parseParticipantId(event.connection?.data);
         if (participantId !== null) {
-          updateRemote(participantId, null);
+          removeRemote(participantId, event.connection?.connectionId);
         }
       });
 
@@ -324,7 +339,8 @@ export function useOpenViduSession(): OpenViduSessionApi {
 
         setRemoteStreams((previous) => {
           const current = previous.get(participantId);
-          if (current === undefined) {
+          // 유령 커넥션의 늦은 토글 이벤트가 새 스트림 상태를 덮어쓰지 않게 커넥션까지 맞춘다
+          if (current === undefined || current.connectionId !== event.stream.connection?.connectionId) {
             return previous;
           }
 
