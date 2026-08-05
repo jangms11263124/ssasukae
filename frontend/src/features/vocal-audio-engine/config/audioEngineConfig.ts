@@ -26,7 +26,7 @@ export const SILENCE_DB = -80;
  * 송출 목소리가 MR보다 늦는 만큼(출력 지연 + 이 값) 송출 MR을 늦춰 싱크를 맞춘다.
  * 녹음 비교로 캘리브레이션하는 지점 — 목소리가 여전히 늦으면 올리고, 앞서면 내린다.
  */
-export const MIC_INPUT_LATENCY_ESTIMATE_SECONDS = 0.025;
+export const MIC_INPUT_LATENCY_ESTIMATE_SECONDS = 0.05;
 
 /** 송출 MR 보정 딜레이의 상한(초). DelayNode 버퍼 크기라 생성 후 못 늘린다 */
 export const BROADCAST_MR_SYNC_MAX_DELAY_SECONDS = 0.3;
