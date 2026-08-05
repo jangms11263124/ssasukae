@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +32,8 @@ import static com.ssafy.ssasukae.global.exception.user.UserErrorCode.USER_NOT_FO
 @RequiredArgsConstructor
 @Transactional
 public class FeedbackService {
+    private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
+
     private final UserRepository userRepository;
     private final UserPerformanceStatRepository userPerformanceStatRepository;
     private final PerformanceResultRepository performanceResultRepository;
@@ -66,7 +70,7 @@ public class FeedbackService {
                             .title(song.getTitle())
                             .artist(song.getArtist())
                             .songId(song.getId())
-                            .singAt(pr.getCreatedAt())
+                            .singAt(toSeoulTime(pr.getCreatedAt()))
                             .thumbnail(song.getThumbnailImageUrl())
                             .overall(pr.getOverall())
                             .score(pr.getFinalScore()).build();
@@ -74,6 +78,12 @@ public class FeedbackService {
                 .nextCursor(hasNext ? fetchedData.fetched().get(pageSize - 1).getId() : null)
                 .hasNext(hasNext)
                 .total(fetchedData.count()).build();
+    }
+
+    private LocalDateTime toSeoulTime(LocalDateTime utcDateTime) {
+        return utcDateTime.atOffset(ZoneOffset.UTC)
+                .atZoneSameInstant(SEOUL_ZONE_ID)
+                .toLocalDateTime();
     }
 
     private FetchedData findAll(User user, String period, String grade, String sort, Long cursor) {
