@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 
 import { RoomCreateForm } from '@/features/room-create';
-import { RoomJoinForm } from '@/features/room-join';
+import { RoomJoinForm, RoomJoinFormSkeleton } from '@/features/room-join';
 import { cn } from '@/shared/lib/cn';
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
 
@@ -71,7 +71,7 @@ export function MainHome({ className }: MainHomeProps) {
               </h2>
             </div>
             <div className="mt-7">
-              <Suspense fallback={null}>
+              <Suspense fallback={<RoomJoinFormSkeleton />}>
                 <RoomJoinForm />
               </Suspense>
             </div>
