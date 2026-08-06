@@ -37,8 +37,6 @@ export function useSignupForm({
   const [nicknameError, setNicknameError] = useState<string | null>(null);
   const [isNicknameConfirmed, setIsNicknameConfirmed] = useState(false);
   const [isNicknameChecking, setIsNicknameChecking] = useState(false);
-  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
-  const [hasAcceptedPrivacy, setHasAcceptedPrivacy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleNicknameChange = (value: string) => {
@@ -76,12 +74,7 @@ export function useSignupForm({
     }
   };
 
-  const canSubmit =
-    isNicknameConfirmed &&
-    hasAcceptedTerms &&
-    hasAcceptedPrivacy &&
-    !signupMutation.isPending &&
-    !isNicknameChecking;
+  const canSubmit = isNicknameConfirmed && !signupMutation.isPending && !isNicknameChecking;
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -108,15 +101,11 @@ export function useSignupForm({
     nicknameError,
     isNicknameConfirmed,
     isNicknameChecking,
-    hasAcceptedTerms,
-    hasAcceptedPrivacy,
     submitError,
     isSubmitting: signupMutation.isPending,
     canSubmit,
     handleNicknameChange,
     handleNicknameCheck,
-    setHasAcceptedTerms,
-    setHasAcceptedPrivacy,
     handleSubmit,
   };
 }
