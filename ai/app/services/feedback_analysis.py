@@ -3,6 +3,7 @@ from statistics import median, pstdev
 
 from app.schemas.feedback import NoteEvent
 from app.services.performance_rules import (
+    HIGH_STABILITY_STD,
     LOW_COVERAGE_RATIO,
     PITCH_TOLERANCE_SEMITONES,
     STABILITY_STD_TOLERANCE,
@@ -215,7 +216,7 @@ def _analyze_reference_note(
                 "unstable_pitch",
                 reference_note.note,
                 representative_user_note,
-                "high" if pitch_std > 1.2 else "medium",
+                "high" if pitch_std > HIGH_STABILITY_STD else "medium",
                 {
                     "pitch_std": round(pitch_std, 3),
                     "coverage": round(coverage, 3),
