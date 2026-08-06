@@ -67,16 +67,15 @@ export function LowLatencyAppInstallDialog({
 
         <div className="space-y-2 px-5 pt-5 pb-4">
           <h2 id={titleId} className="text-base font-semibold text-zinc-100">
-            전용 오디오 앱이 필요합니다
+            전용 오디오 앱이 필요해요
           </h2>
           <p id={descriptionId} className="break-keep text-sm leading-relaxed text-zinc-400">
-            앱 실행을 확인하지 못했습니다. 설치 파일을 실행하면 합창 모드용 앱과 ssafystar://
-            연결이 함께 등록됩니다.
+            앱이 열리지 않았어요. 설치 파일을 실행하면 앱과 ssafystar:// 연결이 함께 등록돼요.
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-2 px-5">
-          <ActionButton onClick={onRetry}>이미 설치함 · 다시 실행</ActionButton>
+          <ActionButton onClick={onRetry}>이미 설치했어요 · 다시 실행</ActionButton>
           <a
             href={LOW_LATENCY_APP_DOWNLOAD_URL}
             download={LOW_LATENCY_APP_FILE_NAME}
