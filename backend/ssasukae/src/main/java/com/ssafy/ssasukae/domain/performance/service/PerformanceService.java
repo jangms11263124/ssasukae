@@ -71,7 +71,7 @@ public class PerformanceService {
     validatePositive(request.songId(), "songId");
 
     Room room = getRoomForUpdate(roomId);
-    RoomParticipant performer = getOnlinePerformer(roomId, userId);
+    RoomParticipant performer = getOnlinePerformer(roomId, userId, room.getMode());
     validateRoomPreparing(room);
 
     // DB가 PREPARING인데 Redis 활성 공연이 남아 있다면 이전 트랜잭션의 미완료 보상으로 간주한다.
@@ -130,6 +130,8 @@ public class PerformanceService {
                   snapShot.performerParticipantId(),
                   snapShot.songId(),
                   song.getTitle(),
+                  song.getArtist(),
+                  song.getDuration(),
                   song.getDifficultyLevel(),
                   song.getThumbnailImageUrl(),
                   mrDownloadUrl,
@@ -141,7 +143,7 @@ public class PerformanceService {
   /** 실제 음원 재생을 시작한다. */
   @Transactional
   public void startPlayback(Long userId, Long roomId, Long performanceId) {
-    validatePlayingRoomAndPerformer(userId, roomId);
+    Room room = validatePlayingRoomAndPerformer(userId, roomId);
 
     PerformanceSnapShot previous = getValidatedSnapShot(roomId, performanceId, userId);
 
@@ -162,14 +164,16 @@ public class PerformanceService {
               PerformanceWebSocketEventType.PLAYBACK_STARTED,
               new PlaybackStartedPayload(
                   changed.performanceId(), changed.performerParticipantId(), changed.startedAt()));
-          try {
-            cardService.assignForPlayback(changed);
-          } catch (RuntimeException exception) {
-            log.error(
-                "카드 배정 트랜잭션 시작 또는 완료 실패 (roomId={}, performanceId={})",
-                changed.roomId(),
-                changed.performanceId(),
-                exception);
+          if (room.getMode() != RoomMode.LOW_LATENCY) {
+            try {
+              cardService.assignForPlayback(changed);
+            } catch (RuntimeException exception) {
+              log.error(
+                  "카드 배정 트랜잭션 시작 또는 완료 실패 (roomId={}, performanceId={})",
+                  changed.roomId(),
+                  changed.performanceId(),
+                  exception);
+            }
           }
         });
   }
@@ -177,9 +181,15 @@ public class PerformanceService {
   /** 실제 음원 재생을 종료한다. */
   @Transactional
   public void finishPlayback(Long userId, Long roomId, Long performanceId) {
-    validatePlayingRoomAndPerformer(userId, roomId);
+    Room room = validatePlayingRoomAndPerformer(userId, roomId);
 
     PerformanceSnapShot previous = getValidatedSnapShot(roomId, performanceId, userId);
+
+    if (room.getMode() == RoomMode.LOW_LATENCY) {
+      finishLowLatencyPlayback(room, previous);
+      return;
+    }
+
     previous = cardService.closeForPerformance(previous, CardEffectEndReason.PERFORMANCE_ENDED);
 
     PerformanceSnapShot changed;
@@ -206,6 +216,29 @@ public class PerformanceService {
                     changed.performanceId(),
                     changed.performerParticipantId(),
                     changed.playbackFinishedAt())));
+  }
+
+  private void finishLowLatencyPlayback(Room room, PerformanceSnapShot previous) {
+    PerformanceSnapShot changed;
+    try {
+      changed = previous.finishWithoutAnalysis(now());
+    } catch (IllegalStateException exception) {
+      throw invalidPerformanceState(exception);
+    }
+
+    transactionSupport.saveWithRollback(previous, changed);
+    room.recoverPerformance();
+    transactionSupport.afterCommit(
+        () -> {
+          transactionSupport.deletePerformance(changed);
+          eventPublisher.publish(
+              room.getId(),
+              PerformanceWebSocketEventType.PLAYBACK_FINISHED,
+              new PlaybackFinishedPayload(
+                  changed.performanceId(),
+                  changed.performerParticipantId(),
+                  changed.playbackFinishedAt()));
+        });
   }
 
   /** 공연 설정을 변경한다. */
@@ -271,7 +304,7 @@ public class PerformanceService {
       throw business(WebSocketErrorCode.INVALID_ROOM_STATE, "현재 공연 중인 방이 아닙니다.");
     }
 
-    getOnlinePerformer(roomId, userId);
+    getOnlinePerformer(roomId, userId, room.getMode());
 
     return room;
   }
@@ -283,7 +316,7 @@ public class PerformanceService {
         .orElseThrow(() -> business(WebSocketErrorCode.RESOURCE_NOT_FOUND, "요청한 방이 존재하지 않습니다."));
   }
 
-  private RoomParticipant getOnlinePerformer(Long roomId, Long userId) {
+  private RoomParticipant getOnlinePerformer(Long roomId, Long userId, RoomMode roomMode) {
     RoomParticipant participant =
         roomParticipantRepository
             .findByRoomIdAndUserId(roomId, userId)
@@ -293,7 +326,7 @@ public class PerformanceService {
       throw business(WebSocketErrorCode.ROOM_ACCESS_DENIED, "현재 방에 온라인으로 참가 중인 사용자가 아닙니다.");
     }
 
-    if (!participant.isPerformer()) {
+    if (roomMode != RoomMode.LOW_LATENCY && !participant.isPerformer()) {
       throw business(WebSocketErrorCode.PERFORMER_PERMISSION_REQUIRED);
     }
 

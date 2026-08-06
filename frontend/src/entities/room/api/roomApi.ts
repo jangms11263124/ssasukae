@@ -115,6 +115,8 @@ export interface RoomSessionResponse {
   roomId: number;
   participantId: number;
   inviteCode: string;
+  /** 백엔드 저지연 방 모드 API 반영 전에는 없을 수 있다. */
+  mode?: RoomMode;
   openViduSessionId: string;
   openViduToken: string;
 }
@@ -123,6 +125,18 @@ export interface RoomTokenResponse {
   roomId: number;
   // 백엔드 DTO 필드명이 소문자 v(openviduToken)다.
   openviduToken: string;
+}
+
+/** 초대 코드 미리보기. 입장하지 않고 모드·정원·입장 가능 여부만 확인한다. */
+export interface RoomInviteResponse {
+  roomId: number;
+  inviteCode: string;
+  name: string;
+  mode: RoomMode;
+  status: RoomStatus;
+  currentParticipants: number;
+  maxParticipants: number;
+  joinable: boolean;
 }
 
 export interface CreateRoomRequest {
@@ -137,6 +151,14 @@ export function createRoom(request: CreateRoomRequest): Promise<RoomSessionRespo
     auth: true,
     body: request,
   });
+}
+
+/** 초대 코드로 방 정보 조회 (입장 전 모드 확인용) */
+export function getRoomByInviteCode(inviteCode: string): Promise<RoomInviteResponse> {
+  return apiClient<RoomInviteResponse>(
+    `/api/rooms/invite/${encodeURIComponent(inviteCode.toUpperCase())}`,
+    { auth: true },
+  );
 }
 
 /** 초대 코드로 방 입장 */

@@ -153,7 +153,8 @@ public class RoomService {
                 savedParticipant.getId(),
                 room.getInviteCode(),
                 room.getOpenViduSessionId(),
-                token
+                token,
+                room.getMode()
         );
     }
 
@@ -238,6 +239,33 @@ public class RoomService {
                 myCard,
                 cardUsageStatuses,
                 activeCard);
+    }
+
+    @Transactional
+    public RoomInviteResponse getRoomByInviteCode(String inviteCode) {
+        Room room = roomRepository.findByInviteCode(inviteCode.toUpperCase())
+                .orElseThrow(() -> new CustomException(RoomErrorCode.ROOM_NOT_FOUND));
+
+        long currentParticipants =
+                roomParticipantRepository.countByRoomIdAndConnectionStatusIn(
+                        room.getId(),
+                        ACTIVE_STATUSES
+                );
+
+        boolean joinable =
+                room.getStatus() == RoomStatus.PREPARING
+                        && currentParticipants < room.getMaxParticipants();
+
+        return new RoomInviteResponse(
+                room.getId(),
+                room.getInviteCode(),
+                room.getName(),
+                room.getMode(),
+                room.getStatus(),
+                currentParticipants,
+                room.getMaxParticipants(),
+                joinable
+        );
     }
 
     private PerformanceSnapshotResponse createPerformanceSnapshot(
