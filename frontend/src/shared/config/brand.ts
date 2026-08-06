@@ -11,5 +11,4 @@ export const HERO_COPY = {
 export const LOGIN_COPY = {
   title: '소셜 로그인으로 지금 바로 입장하세요.',
   description: '지금 바로 입장하기',
-  activeUsers: (count: number) => `지금도 ${count}명이 즐기고 있습니다`,
 } as const;
