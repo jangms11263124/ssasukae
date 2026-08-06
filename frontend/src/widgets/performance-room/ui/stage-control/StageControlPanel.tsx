@@ -55,7 +55,12 @@ export function StageControlPanel() {
     PERFORMING: (
       <ControlMessage
         title="공연이 진행 중입니다..."
-        subtitle={isPerformer ? '공연 취소는 무대 우측 하단 버튼으로 할 수 있습니다' : undefined}
+        // 수성전은 공연 취소가 없어 무대에 버튼도 없다 — 안내하면 없는 버튼을 찾게 된다.
+        subtitle={
+          isPerformer && session.mode !== 'BATTLE'
+            ? '공연 취소는 무대 우측 하단 버튼으로 할 수 있습니다'
+            : undefined
+        }
       />
     ),
     SCORE: <ControlMessage title="채점 결과를 기다리는 중입니다..." />,
