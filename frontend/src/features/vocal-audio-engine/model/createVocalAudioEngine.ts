@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 
 import type { RnnoiseWorkletNode } from '@sapphi-red/web-noise-suppressor';
+import type { SoundTouchNode } from '@soundtouchjs/audio-worklet';
 
 import {
   AUDIO_CONTEXT_SAMPLE_RATE,
@@ -21,10 +22,18 @@ import {
   PITCH_BYPASS_EPSILON,
   PITCH_SHIFT_WINDOW_SIZE,
   SILENCE_DB,
+  SOUNDTOUCH_MR_LATENCY_SECONDS,
   VOCAL_ANALYSER_FFT_SIZE,
   VOCAL_CAPTURE_CONSTRAINTS,
 } from '../config/audioEngineConfig';
 import type { VocalAudioEngine, VocalDspValues } from './types';
+import {
+  applySoundTouchTempoParams,
+  createSoundTouchMrNode,
+  decodeMrBuffer,
+  registerSoundTouchWorklet,
+  shouldUseSoundTouchStretch,
+} from './soundTouchMr';
 
 /*
  * 오디오 그래프 (모니터/송출 믹스 분리):
@@ -33,8 +42,8 @@ import type { VocalAudioEngine, VocalDspValues } from './types';
  *           mrGain → broadcastMrDelay(싱크) → mrBroadcastTrim ─────┴→ broadcastBus
  *                  → Limiter → MediaStreamDestination (→ OpenVidu publisher)
  *
- *   [모니터] mic(원음) → monitorVoiceEcho → monitorVoiceGain ─┐
- *           MR(Player) → PitchShift(음정) → mrGain ──────────┴→ monitorBus → 이어폰
+ *   [모니터] mic(원음) → monitorVoiceDelay(싱크) → monitorVoiceEcho → monitorVoiceGain ─┐
+ *           MR(BufferSource) → [SoundTouch@≠100%] → PitchShift(키) → mrGain ────────────┴→ monitorBus
  *
  *   [채점]  mic(NS) ─┬→ vocalAnalyser (음정 수집)
  *                    └→ vocalTap → MediaStreamDestination (STT 녹음)
@@ -42,7 +51,7 @@ import type { VocalAudioEngine, VocalDspValues } from './types';
  * 채점 탭 두 갈래는 에코·음량 이전의 드라이 목소리를 딴다 — 사용자가 만진 이펙트가 점수에 섞이면 안 된다.
  *
  * 모니터링은 WebRTC 루프백이 아니라 로컬 그래프에서 직접 딴다 — 지터 버퍼 지연이 없다.
- * 음정/템포는 MR 전용(PitchShift 지연 100ms가 목소리에 붙으면 노래를 못 부른다),
+ * MR 템포(100% 제외)는 SoundTouch WSOLA, 키는 PitchShift. stretch 시 처리 지연만큼 모니터 목소리를 늦춘다.
  * 에코는 목소리 전용이다.
  *
  * 송출 전용 보정(컴프레서·메이크업 게인·MR 트림·리미터)은 모니터 경로에 걸지 않는다 —
@@ -95,12 +104,12 @@ function sanitizeDspValues(values: VocalDspValues, fallback: VocalDspValues): Vo
 
 class ToneVocalAudioEngine implements VocalAudioEngine {
   private readonly context: SinkSelectableContext;
-  /** 노드 생성 시점의 전역 컨텍스트. 이후 다른 엔진이 전역을 바꿔도 이 엔진의 노드는 여기 묶인다 */
-  private readonly toneContext: ReturnType<typeof Tone.getContext>;
+  /** 노드 생성 시점의 전역 컨텍스트. 이후 다른 엔진이 전역을 바꿔도 이 엔진의 Tone 노드는 여기 묶인다 */
 
   private readonly monitorBus: Tone.Volume;
   private readonly broadcastBus: Tone.Volume;
   private readonly broadcastDestination: MediaStreamAudioDestinationNode;
+  private readonly soundTouchNode: SoundTouchNode;
   private readonly pitchShift: Tone.PitchShift;
   private readonly mrGain: Tone.Volume;
   /** 목소리 울림(`echoLevel`). 딜레이는 되풀이로 들려 리버브 노드로 구현한다 */
@@ -112,7 +121,8 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   private readonly mrBroadcastTrim: Tone.Volume;
   /** 송출 믹스 마지막 단. 목소리 메이크업으로 커진 합산 피크를 잡는다 */
   private readonly broadcastLimiter: Tone.Limiter;
-  /** 모니터 전용 목소리 경로 (원음 → 울림 → 게인). NS가 도입돼도 이 경로는 거치지 않는다 */
+  /** 모니터 전용 목소리 경로 (원음 → 싱크 딜레이 → 울림 → 게인). NS가 도입돼도 이 경로는 거치지 않는다 */
+  private readonly monitorVoiceDelay: DelayNode;
   private readonly monitorVoiceEcho: Tone.Reverb;
   private readonly monitorVoiceGain: Tone.Volume;
   /** 송출 MR 싱크 보정 — 가창자가 들은 MR에 맞춰 부른 목소리가 믹스에서 정렬되도록 MR을 늦춘다 */
@@ -121,7 +131,8 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   private readonly vocalTap: MediaStreamAudioDestinationNode;
   private readonly vocalAnalyser: AnalyserNode;
 
-  private player: Tone.Player | null = null;
+  private mrBuffer: AudioBuffer | null = null;
+  private mrSource: AudioBufferSourceNode | null = null;
   private mrUrl: string | null = null;
   /** 송출·채점 목소리의 노이즈 제거. 로드 실패 시 null — NS 없이 동작한다 */
   private readonly rnnoise: RnnoiseWorkletNode | null;
@@ -132,13 +143,14 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   private micRequestId = 0;
 
   /*
-   * MR 시간축 추적: Tone.Player는 재생 위치를 알려주지 않아 직접 잰다.
-   * 배속이 바뀌면 그 시점까지의 진행을 확정하고 앵커를 다시 잡는다 — 카드 효과로 템포가
-   * 오르내려도 누적 위치가 어긋나지 않는다.
+   * MR 시간축 추적: BufferSource는 재생 위치 API가 없어 직접 잰다.
+   * 배속이 바뀌면 그 시점까지의 진행을 확정하고 앵커를 다시 잡는다.
    */
   private mrAnchorSeconds = 0;
   private mrAnchorContextTime = 0;
   private mrPlaying = false;
+  /** 100%가 아닐 때 MR이 SoundTouch stretch 경로를 타는지 */
+  private mrStretchActive = false;
 
   private lastDsp: VocalDspValues = DEFAULT_DSP;
   private onMrEnded: (() => void) | null = null;
@@ -147,10 +159,10 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     void this.context.resume();
   };
 
-  constructor(context: SinkSelectableContext, rnnoise: RnnoiseWorkletNode | null) {
+  constructor(context: SinkSelectableContext, rnnoise: RnnoiseWorkletNode | null, soundTouchNode: SoundTouchNode) {
     this.context = context;
-    this.toneContext = Tone.getContext();
     this.rnnoise = rnnoise;
+    this.soundTouchNode = soundTouchNode;
 
     this.monitorBus = new Tone.Volume(0).toDestination();
     this.broadcastBus = new Tone.Volume(0);
@@ -171,7 +183,7 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.mrBroadcastTrim = new Tone.Volume(BROADCAST_MR_TRIM_DB);
     Tone.connect(this.mrGain, this.broadcastMrDelay);
     Tone.connect(this.broadcastMrDelay, this.mrBroadcastTrim);
-    this.mrBroadcastTrim.connect(this.broadcastBus);
+    Tone.connect(this.mrBroadcastTrim, this.broadcastBus);
     this.pitchShift = new Tone.PitchShift({
       pitch: 0,
       windowSize: PITCH_SHIFT_WINDOW_SIZE,
@@ -179,8 +191,8 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
       feedback: 0,
     });
     this.pitchShift.connect(this.mrGain);
-    // 순 피치 0에서는 그래뉼러 아티팩트를 피하려고 드라이 통과시킨다
     this.pitchShift.wet.value = 0;
+    Tone.connect(this.soundTouchNode, this.pitchShift);
 
     // 목소리 송출 경로 — 모니터로는 가지 않는다 (모니터는 아래 전용 경로)
     this.micGain = new Tone.Volume(broadcastVoiceDb(DEFAULT_DSP.micVolumePercent));
@@ -194,8 +206,9 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     });
     this.voiceEcho.connect(this.voiceCompressor);
 
-    // 목소리 모니터 경로 — 원음에서 바로 따서 NS(추후) 지연이 가창 경험에 붙지 않는다.
-    // 울림은 송출과 같은 echoLevel로 연동되는 별도 노드 (dry 통과라 지연 추가 없음).
+    // 목소리 모니터 경로 — SoundTouch stretch 시 MR 지연만큼 목소리를 늦춰 가창 싱크를 맞춘다.
+    this.monitorVoiceDelay = context.createDelay(SOUNDTOUCH_MR_LATENCY_SECONDS + 0.05);
+    this.monitorVoiceDelay.delayTime.setValueAtTime(0, context.currentTime);
     this.monitorVoiceEcho = new Tone.Reverb({
       decay: ECHO_DECAY_SECONDS,
       preDelay: ECHO_PRE_DELAY_SECONDS,
@@ -226,69 +239,140 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   }
 
   async loadMr(url: string): Promise<void> {
-    if (this.mrUrl === url && this.player !== null) return;
+    if (this.mrUrl === url && this.mrBuffer !== null) return;
 
     this.stopMr();
-    this.player?.dispose();
-    this.player = null;
+    this.mrBuffer = null;
     this.mrUrl = null;
-    // 곡이 바뀌면 이전 곡의 재생 위치는 의미가 없다.
     this.mrAnchorSeconds = 0;
     this.mrPlaying = false;
 
-    const buffer = await new Tone.ToneAudioBuffer().load(url);
+    const buffer = await decodeMrBuffer(this.context, url);
     if (this.disposed) return;
 
-    // 전역 컨텍스트가 바뀌었을 수 있어 생성 시점 컨텍스트를 명시한다
-    const player = new Tone.Player({ context: this.toneContext });
-    player.buffer = buffer;
-    player.loop = false;
-    player.connect(this.pitchShift);
-    // stopMr()·dispose()는 mrPlaying/disposed를 먼저 내리고 멈추므로,
-    // onstop 시점에 아직 재생 중이면 버퍼가 끝까지 소진된 자연 종료다.
-    player.onstop = () => {
-      if (this.disposed || !this.mrPlaying || this.player !== player) return;
-      this.mrAnchorSeconds = player.buffer.duration;
-      this.mrPlaying = false;
-      this.onMrEnded?.();
-    };
-    this.player = player;
+    this.mrBuffer = buffer;
     this.mrUrl = url;
-
-    // 로드 전에 들어온 설정(템포 등)을 플레이어에 반영한다
     this.applyDsp(this.lastDsp);
   }
 
   startMr(offsetSeconds?: number): void {
-    if (this.disposed || this.player === null || this.player.state === 'started') return;
-    // 곡 길이를 넘는 오프셋으로 시작하면 Tone이 예외를 던진다.
-    const duration = this.player.buffer.duration;
+    if (this.disposed || this.mrBuffer === null || this.mrPlaying) return;
+
+    this.disposeMrSource();
+    this.mrStretchActive = shouldUseSoundTouchStretch(this.lastDsp.tempoPercent);
+
+    const duration = this.mrBuffer.duration;
     const offset =
       offsetSeconds !== undefined && offsetSeconds > 0
         ? Math.min(offsetSeconds, duration)
-        : undefined;
-    this.player.start(undefined, offset);
-    this.mrAnchorSeconds = offset ?? 0;
+        : 0;
+
+    this.beginMrPlayback(offset);
+  }
+
+  private beginMrPlayback(offsetSeconds: number): void {
+    if (this.disposed || this.mrBuffer === null) return;
+
+    const source = this.context.createBufferSource();
+    source.buffer = this.mrBuffer;
+    this.attachMrSource(source, this.lastDsp.tempoPercent);
+    this.applyMrKey(this.lastDsp.keyOffset);
+
+    const duration = this.mrBuffer.duration;
+
+    source.onended = () => {
+      if (this.disposed || !this.mrPlaying || this.mrSource !== source) return;
+      this.mrAnchorSeconds = duration;
+      this.mrPlaying = false;
+      this.mrSource = null;
+      this.onMrEnded?.();
+    };
+
+    source.start(0, offsetSeconds);
+    this.mrSource = source;
+    this.mrAnchorSeconds = offsetSeconds;
     this.mrAnchorContextTime = this.context.currentTime;
     this.mrPlaying = true;
-    // 송출 MR 보정량 = 가창자가 MR을 듣기까지(출력) + 목소리가 그래프로 돌아오기까지(입력 추정).
-    // outputLatency는 렌더링이 시작된 뒤에야 값이 잡히므로 재생 시작 시점에 확정한다.
-    const syncDelaySeconds = Math.min(
-      BROADCAST_MR_SYNC_MAX_DELAY_SECONDS,
-      this.context.baseLatency +
-        (this.context.outputLatency || 0) +
-        MIC_INPUT_LATENCY_ESTIMATE_SECONDS +
-        (this.rnnoise !== null ? RNNOISE_LATENCY_SECONDS : 0),
+    this.updateSyncDelays(this.lastDsp.tempoPercent);
+  }
+
+  private attachMrSource(source: AudioBufferSourceNode, tempoPercent: number): void {
+    const stretch = shouldUseSoundTouchStretch(tempoPercent);
+    this.mrStretchActive = stretch;
+
+    if (stretch) {
+      source.connect(this.soundTouchNode);
+      applySoundTouchTempoParams(source, this.soundTouchNode, tempoPercent);
+      return;
+    }
+
+    source.playbackRate.value = 1;
+    Tone.connect(source, this.pitchShift);
+  }
+
+  private applyMrKey(keyOffset: number): void {
+    if (Math.abs(keyOffset) < PITCH_BYPASS_EPSILON) {
+      this.pitchShift.wet.value = 0;
+      return;
+    }
+
+    this.pitchShift.pitch = keyOffset;
+    this.pitchShift.wet.value = 1;
+  }
+
+  private applyMrTempoRouting(tempoPercent: number): void {
+    const stretch = shouldUseSoundTouchStretch(tempoPercent);
+
+    if (stretch === this.mrStretchActive) {
+      if (stretch) {
+        applySoundTouchTempoParams(this.mrSource, this.soundTouchNode, tempoPercent);
+      }
+      return;
+    }
+
+    if (this.mrPlaying && this.mrSource !== null) {
+      const resumeAt = this.mrPositionSeconds();
+      this.mrPlaying = false;
+      this.disposeMrSource();
+      this.mrStretchActive = stretch;
+      this.beginMrPlayback(resumeAt);
+      return;
+    }
+
+    this.mrStretchActive = stretch;
+  }
+
+  private updateSyncDelays(tempoPercent: number): void {
+    const stretch = shouldUseSoundTouchStretch(tempoPercent);
+    const syncDelaySeconds = Math.max(
+      0,
+      Math.min(
+        BROADCAST_MR_SYNC_MAX_DELAY_SECONDS,
+        this.context.baseLatency +
+          (this.context.outputLatency || 0) +
+          MIC_INPUT_LATENCY_ESTIMATE_SECONDS +
+          (this.rnnoise !== null ? RNNOISE_LATENCY_SECONDS : 0) -
+          (stretch ? SOUNDTOUCH_MR_LATENCY_SECONDS : 0),
+      ),
     );
     this.broadcastMrDelay.delayTime.setValueAtTime(syncDelaySeconds, this.context.currentTime);
+    this.monitorVoiceDelay.delayTime.setValueAtTime(
+      stretch ? SOUNDTOUCH_MR_LATENCY_SECONDS : 0,
+      this.context.currentTime,
+    );
   }
 
   stopMr(): void {
-    if (this.player === null || this.player.state !== 'started') return;
-    // 멈춘 위치를 확정해 둔다. 일시 중지 뒤에도 마지막 위치를 물어볼 수 있어야 한다.
+    if (!this.mrPlaying || this.mrSource === null) return;
+
     this.mrAnchorSeconds = this.mrPositionSeconds();
     this.mrPlaying = false;
-    this.player.stop();
+    try {
+      this.mrSource.stop();
+    } catch {
+      // already stopped
+    }
+    this.disposeMrSource();
   }
 
   setOnMrEnded(callback: (() => void) | null): void {
@@ -296,14 +380,29 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   }
 
   /** 앵커 이후 흐른 컨텍스트 시간에 배속을 곱해 MR 시간축 위치를 낸다 */
+  private mrPlaybackRate(): number {
+    if (!shouldUseSoundTouchStretch(this.lastDsp.tempoPercent)) {
+      return 1;
+    }
+
+    return Math.max(0.01, this.lastDsp.tempoPercent / 100);
+  }
+
+  private disposeMrSource(): void {
+    if (this.mrSource === null) return;
+
+    this.mrSource.onended = null;
+    this.mrSource.disconnect();
+    this.mrSource = null;
+  }
+
   private mrPositionSeconds(): number {
-    if (!this.mrPlaying || this.player === null) return this.mrAnchorSeconds;
+    if (!this.mrPlaying || this.mrBuffer === null) return this.mrAnchorSeconds;
 
     const elapsed = this.context.currentTime - this.mrAnchorContextTime;
-    const position = this.mrAnchorSeconds + elapsed * this.player.playbackRate;
+    const position = this.mrAnchorSeconds + elapsed * this.mrPlaybackRate();
 
-    // 곡이 끝나도 컨텍스트 시계는 계속 흐른다. 곡 길이를 넘는 위치를 주지 않는다.
-    return Math.min(position, this.player.buffer.duration);
+    return Math.min(position, this.mrBuffer.duration);
   }
 
   getMrPositionMs(): number {
@@ -340,7 +439,8 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
       this.micSource.connect(this.rnnoise);
     }
     Tone.connect(broadcastVoiceSource, this.voiceEcho);
-    Tone.connect(this.micSource, this.monitorVoiceEcho);
+    this.micSource.connect(this.monitorVoiceDelay);
+    Tone.connect(this.monitorVoiceDelay, this.monitorVoiceEcho);
     // 채점 탭은 에코 앞에서 갈라진다 — 사용자가 건 이펙트가 STT·음정 분석에 섞이지 않는다.
     broadcastVoiceSource.connect(this.vocalAnalyser);
     broadcastVoiceSource.connect(this.vocalTap);
@@ -361,22 +461,17 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     if (this.disposed) return;
 
     const speedMultiplier = safe.tempoPercent / 100;
-    if (this.player !== null) {
-      // 배속을 바꾸기 전에 지금까지의 진행을 옛 배속으로 확정해 둔다.
-      if (this.mrPlaying && this.player.playbackRate !== speedMultiplier) {
-        this.mrAnchorSeconds = this.mrPositionSeconds();
-        this.mrAnchorContextTime = this.context.currentTime;
-      }
-      this.player.playbackRate = speedMultiplier;
+    if (this.mrPlaying && this.mrPlaybackRate() !== speedMultiplier) {
+      this.mrAnchorSeconds = this.mrPositionSeconds();
+      this.mrAnchorContextTime = this.context.currentTime;
     }
+    this.applyMrTempoRouting(safe.tempoPercent);
+    this.updateSyncDelays(safe.tempoPercent);
 
-    // playbackRate가 키를 함께 올리므로 상쇄해서 "템포만 바뀌고 키는 그대로"를 만든다
-    const pitchCompensation = -12 * Math.log2(speedMultiplier);
-    const netPitch = safe.keyOffset + pitchCompensation;
-    if (Math.abs(netPitch) < PITCH_BYPASS_EPSILON) {
+    if (Math.abs(safe.keyOffset) < PITCH_BYPASS_EPSILON) {
       this.pitchShift.wet.rampTo(0, PARAM_RAMP_SECONDS);
     } else {
-      this.pitchShift.pitch = netPitch;
+      this.pitchShift.pitch = safe.keyOffset;
       this.pitchShift.wet.rampTo(1, PARAM_RAMP_SECONDS);
     }
 
@@ -429,11 +524,13 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.closeMic();
     this.rnnoise?.disconnect();
     this.rnnoise?.destroy();
-    this.player?.dispose();
-    this.player = null;
+    this.stopMr();
+    this.mrBuffer = null;
+    this.soundTouchNode.disconnect();
     this.pitchShift.dispose();
     this.mrGain.dispose();
     this.broadcastMrDelay.disconnect();
+    this.monitorVoiceDelay.disconnect();
     this.mrBroadcastTrim.dispose();
     this.voiceEcho.dispose();
     this.voiceCompressor.dispose();
@@ -473,10 +570,12 @@ export async function createVocalAudioEngine(): Promise<VocalAudioEngine> {
     latencyHint: 'interactive',
   });
   const rnnoise = await loadRnnoiseNode(context);
+  await registerSoundTouchWorklet(context);
+  const soundTouchNode = await createSoundTouchMrNode(context);
   // setContext와 노드 생성 사이에 await를 두지 않는다 — 엔진이 겹쳐 만들어져도
   // (React StrictMode 이중 마운트) 노드가 다른 컨텍스트에 섞이지 않는다.
   Tone.setContext(context);
-  const engine = new ToneVocalAudioEngine(context, rnnoise);
+  const engine = new ToneVocalAudioEngine(context, rnnoise, soundTouchNode);
 
   // 임펄스 응답이 없으면 울림만 조용히 빠진다 — 실패해도 공연은 계속돼야 한다
   await engine.prepareEcho().catch(() => undefined);
