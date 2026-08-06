@@ -131,7 +131,7 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
       }
       if (!preview.joinable) {
         setLaunchState('idle');
-        showToast('지금은 입장할 수 없는 방이에요.', 'error');
+        showToast('지금은 들어갈 수 없는 방이에요.', 'error');
         return;
       }
 
@@ -145,7 +145,7 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
       launch(joined);
     } catch (error) {
       setLaunchState('idle');
-      showToast(getApiErrorMessage(error, '합창 방에 입장하지 못했어요.'), 'error');
+      showToast(getApiErrorMessage(error, '합창 방에 들어가지 못했어요.'), 'error');
     }
   };
 
@@ -189,15 +189,14 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
             합창 모드
           </h2>
           <p id={descriptionId} className="mt-2 text-sm leading-relaxed text-zinc-400">
-            전용 Windows 앱이 초저지연 음성 합주를 담당합니다. 웹에서 방을 잡으면 앱이 자동으로
-            연결됩니다.
+            합창은 전용 Windows 앱에서 해요. 여기서 방만 만들면 앱이 바로 연결돼요.
           </p>
 
           {!isAuthenticated ? (
             <>
               <p className="mt-5 border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-zinc-400">
-                로그인하면 합창 방을 만들거나 초대 코드로 입장할 수 있어요. 앱은 먼저 설치해
-                두어도 됩니다.
+                로그인하면 방을 만들거나 초대 코드로 들어갈 수 있어요. 앱은 미리 설치해 둬도
+                돼요.
               </p>
               <DialogFooter onClose={handleClose} />
             </>
@@ -208,7 +207,7 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
                   AUDIO APP CONNECTED
                 </p>
                 <p className="mt-2 text-sm text-zinc-200">
-                  {room?.name ?? '합창 방'} · 앱에서 오디오 연결을 진행하세요.
+                  {room?.name ?? '합창 방'} · 이제 앱에서 오디오를 연결해 주세요.
                 </p>
                 {room?.inviteCode ? (
                   <p className="mt-3 font-mono text-xs tracking-[0.16em] text-fuchsia-200">
@@ -238,8 +237,8 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
               <div className="mt-5 border border-amber-300/25 bg-amber-300/[0.05] px-4 py-4">
                 <p className="text-sm leading-relaxed text-amber-100/90">
                   <span className="font-semibold">{otherModeRoom.name}</span> 은(는){' '}
-                  {MODE_LABEL[otherModeRoom.mode]} 방이에요. 합창 모드가 아니라 전용 앱을 쓰지
-                  않으니 로비 입장 폼에서 들어가 주세요.
+                  {MODE_LABEL[otherModeRoom.mode]} 방이에요. 합창 방이 아니라서 전용 앱이 필요
+                  없어요. 로비에서 바로 들어갈 수 있어요.
                 </p>
               </div>
               <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -251,14 +250,14 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
                   }}
                   className="h-12 border border-cyan-300/60 bg-cyan-300/10 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-300/15"
                 >
-                  로비에서 입장하기
+                  로비에서 들어가기
                 </button>
                 <button
                   type="button"
                   onClick={() => setOtherModeRoom(null)}
                   className="h-12 border border-white/15 bg-white/[0.04] text-sm font-semibold text-zinc-200 transition-colors hover:bg-white/[0.08]"
                 >
-                  다른 코드 입력
+                  다른 코드 입력하기
                 </button>
               </div>
             </>
@@ -268,7 +267,7 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
                 {(
                   [
                     ['create', '방 만들기'],
-                    ['join', '초대 코드로 입장'],
+                    ['join', '초대 코드로 들어가기'],
                   ] as const
                 ).map(([value, label]) => (
                   <button
@@ -337,7 +336,7 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
                     className="mt-3 h-12 w-full border border-white/15 bg-black/25 px-4 text-center font-mono text-lg tracking-[0.3em] text-white uppercase outline-none transition-colors placeholder:text-sm placeholder:tracking-normal placeholder:text-zinc-600 focus:border-cyan-300/70"
                   />
                   <p className="mt-2 text-xs text-zinc-600">
-                    합창 방이 아닌 코드는 로비 입장 폼으로 안내합니다.
+                    합창 방이 아니면 로비 입장 화면으로 안내해 드려요.
                   </p>
                   <button
                     type="button"
@@ -345,7 +344,7 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
                     onClick={handleJoin}
                     className="mt-3 h-12 w-full border border-cyan-300/60 bg-cyan-300/10 font-semibold text-cyan-100 transition-colors hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.02] disabled:text-zinc-600"
                   >
-                    {launchStateLabel(launchState, '입장하고 앱 열기')}
+                    {launchStateLabel(launchState, '들어가고 앱 열기')}
                   </button>
                 </div>
               )}
@@ -367,7 +366,7 @@ export function ChorusLaunchDialog({ onClose }: ChorusLaunchDialogProps) {
 }
 
 function launchStateLabel(state: LaunchState, idleLabel: string): string {
-  if (state === 'entering') return '방 준비 중...';
+  if (state === 'entering') return '방 준비하는 중...';
   if (state === 'launching') return '앱 여는 중...';
   return idleLabel;
 }

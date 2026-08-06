@@ -54,7 +54,7 @@ export function ChorusHandoffScreen({ roomIdFromUrl }: ChorusHandoffScreenProps)
 
   useEffect(() => {
     if (roomIdFromUrl === null) {
-      showToast('방 정보가 없습니다. 다시 입장해 주세요.', 'error');
+      showToast('방 정보가 없어요. 다시 들어와 주세요.', 'error');
       router.replace('/lobby');
       return;
     }
@@ -75,7 +75,7 @@ export function ChorusHandoffScreen({ roomIdFromUrl }: ChorusHandoffScreenProps)
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        showToast(getApiErrorMessage(error, '방 정보를 불러오지 못했습니다.'), 'error');
+        showToast(getApiErrorMessage(error, '방 정보를 불러오지 못했어요.'), 'error');
         router.replace('/lobby');
       });
 
@@ -121,7 +121,7 @@ export function ChorusHandoffScreen({ roomIdFromUrl }: ChorusHandoffScreenProps)
 
           <h1 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl">{room.name}</h1>
           <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-            영상과 브라우저 음성은 사용하지 않습니다. 전용 앱에서 저지연 오디오를 연결하세요.
+            이 방은 영상과 브라우저 음성을 쓰지 않아요. 오디오는 전용 앱에서 연결해요.
           </p>
 
           <div className="mt-7 flex flex-wrap items-center gap-3 border-y border-white/10 py-5">
@@ -135,7 +135,7 @@ export function ChorusHandoffScreen({ roomIdFromUrl }: ChorusHandoffScreenProps)
                   : 'font-mono text-[11px] tracking-[0.14em] text-zinc-500'
               }
             >
-              {launchState === 'opened' ? '● 앱으로 전환됨' : '● 앱 실행 요청 중'}
+              {launchState === 'opened' ? '● 앱으로 전환했어요' : '● 앱을 여는 중이에요'}
             </span>
           </div>
 
@@ -152,7 +152,7 @@ export function ChorusHandoffScreen({ roomIdFromUrl }: ChorusHandoffScreenProps)
               onClick={handleLeave}
               className="h-12 border border-white/15 bg-white/[0.04] text-sm font-semibold text-zinc-200 transition-colors hover:bg-white/[0.08]"
             >
-              방 나가고 로비로
+              방 나가고 로비로 가기
             </button>
           </div>
         </section>
@@ -162,7 +162,7 @@ export function ChorusHandoffScreen({ roomIdFromUrl }: ChorusHandoffScreenProps)
         open={launchState === 'unavailable'}
         onRetry={handleRelaunch}
         onClose={handleLeave}
-        closeLabel="방 나가고 로비로"
+        closeLabel="방 나가고 로비로 가기"
       />
     </div>
   );

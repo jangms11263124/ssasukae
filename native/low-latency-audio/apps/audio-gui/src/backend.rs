@@ -173,6 +173,34 @@ pub fn create_low_latency_app_session(
         .map_err(|error| format!("저지연 방 실행 정보 형식이 올바르지 않습니다: {error}"))
 }
 
+/// 백엔드 워커를 띄우지 못한 상태에서 방을 나간다.
+///
+/// app-session 요청 단계에서 실패하면 워커가 없어 `BackendCommand::LeaveRoom`을 보낼 수
+/// 없다. 그대로 앱을 닫으면 웹이 만들어 둔 참가자가 방에 남으므로, 실행 정보만으로
+/// 퇴장 요청을 직접 보낸다.
+pub fn leave_room_directly(
+    base_url: &str,
+    room_id: u64,
+    access_token: &str,
+) -> Result<(), String> {
+    let client = Client::builder()
+        .timeout(HTTP_TIMEOUT)
+        .build()
+        .map_err(|error| format!("Spring HTTP 클라이언트를 만들지 못했습니다: {error}"))?;
+    leave_spring_room(
+        &client,
+        &BackendConfig {
+            base_url: base_url.to_owned(),
+            websocket_url: None,
+            room_id,
+            access_token: access_token.to_owned(),
+            app_refresh_token: None,
+            access_token_expires_in_seconds: None,
+        },
+        access_token,
+    )
+}
+
 fn run_mock_http_server(listener: std::net::TcpListener) {
     for stream in listener.incoming() {
         let Ok(mut stream) = stream else {
@@ -1076,8 +1104,8 @@ mod tests {
     #[test]
     fn backend_url_maps_to_websocket_endpoint() {
         assert_eq!(
-            websocket_url("https://ssafystar-k.site/").as_deref(),
-            Ok("wss://ssafystar-k.site/ws")
+            websocket_url("https://api.ssafystar-k.site/").as_deref(),
+            Ok("wss://api.ssafystar-k.site/ws")
         );
         assert_eq!(
             websocket_url("http://localhost:8080").as_deref(),
@@ -1241,6 +1269,28 @@ mod tests {
         };
 
         leave_spring_room(&client, &config, &config.access_token).expect("room leave");
+        server.join().expect("test server");
+    }
+
+    #[test]
+    fn direct_leave_reaches_the_same_endpoint_without_a_worker() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("test listener");
+        let address = listener.local_addr().expect("test address");
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("test connection");
+            let mut request = [0_u8; 4096];
+            let length = stream.read(&mut request).expect("test request");
+            let request = String::from_utf8_lossy(&request[..length]);
+            assert!(request.starts_with("DELETE /api/rooms/12/leave "));
+            assert!(request.contains("authorization: Bearer app-access"));
+            write!(
+                stream,
+                "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+            .expect("test response");
+        });
+
+        leave_room_directly(&format!("http://{address}"), 12, "app-access").expect("room leave");
         server.join().expect("test server");
     }
 
