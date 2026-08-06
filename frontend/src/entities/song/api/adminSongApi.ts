@@ -1,10 +1,5 @@
 import { ApiError, apiClient } from '@/shared/api/client';
 
-const AI_SERVER_URL = (
-  process.env.NEXT_PUBLIC_AI_SERVER_URL ??
-  'https://51ukphggjdemqd-8000.proxy.runpod.net'
-).replace(/\/$/, '');
-
 interface AdminUploadTicketResponse {
   ticket: string;
 }
@@ -34,6 +29,16 @@ function getAiUploadErrorMessage(status: number): string {
   if (status === 413) return '첨부 파일의 용량 제한을 초과했어요.';
   if (status === 400 || status === 422) return '입력 내용과 첨부 파일 형식을 확인해 주세요.';
   return 'AI 서버에서 곡 분석 요청을 접수하지 못했어요.';
+}
+
+function getAiServerUrl(): string {
+  const aiServerUrl = process.env.NEXT_PUBLIC_AI_SERVER_URL?.trim().replace(/\/$/, '');
+
+  if (!aiServerUrl) {
+    throw new ApiError('AI 서버 주소가 설정되지 않았어요.', 500);
+  }
+
+  return aiServerUrl;
 }
 
 function isUploadAcceptedResponse(value: unknown): value is UploadAdminSongResponse {
@@ -71,7 +76,7 @@ export async function uploadAdminSong(
   formData.append('albumImg', request.albumImg);
   formData.append('lyrics', request.lyrics);
 
-  const response = await fetch(`${AI_SERVER_URL}/api/admin/songs`, {
+  const response = await fetch(`${getAiServerUrl()}/api/admin/songs`, {
     method: 'POST',
     body: formData,
   });
