@@ -13,7 +13,7 @@ import { StageBackdrop } from './StageBackdrop';
 const SCORE_DISPLAY_MS = 5000;
 
 /** WaitingControls의 시작 최소 인원과 같은 기준 — 그 아래로 줄면 대기 화면으로 돌아간다 */
-const MIN_PARTICIPANTS_TO_CONTINUE = 2;
+const MIN_PARTICIPANTS_TO_START = 2;
 
 /** 등급별 결과 문구 — 구간(S~F)은 마이페이지·AI 피드백과 같은 scoreGrade.ts 기준을 쓴다 */
 const SCORE_LABEL: Record<ScoreGrade, string> = {
@@ -35,7 +35,7 @@ export function ScoreStage() {
   const participantCount = participants.length;
 
   const isScoring = score === null && !scoringFailed;
-  const canContinue = participantCount >= MIN_PARTICIPANTS_TO_CONTINUE;
+  const canContinue = participantCount >= MIN_PARTICIPANTS_TO_START;
 
   // 채점이 끝나면 점수를 잠깐 보여준 뒤 다음 가창자 선택으로 자동 전이한다.
   // 전용 브로드캐스트가 없어 각자 같은 채점 이벤트 수신 시점 기준으로 타이머를 돌린다.

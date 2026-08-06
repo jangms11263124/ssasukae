@@ -37,7 +37,7 @@ export function StageControlPanel() {
 
   const CONTROL_VIEWS: Record<StagePhase, ReactNode> = {
     WAITING: <WaitingControls isHost={isHost} participantCount={participants.length} />,
-    SINGER_SELECT: <SingerSelectControls isHost={isHost} participants={participants} />,
+    SINGER_SELECT: <SingerSelectControls isHost={isHost} />,
     SONG_SELECT: <SongSelectControls isPerformer={isPerformer} />,
     READY: (
       <ReadyControls
