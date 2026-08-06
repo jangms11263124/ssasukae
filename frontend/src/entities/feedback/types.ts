@@ -36,7 +36,10 @@ export interface FeedbackListPage {
   total: number;
 }
 
-/** 지표 점수. 전부 0~100 스케일이며, 분석 전이면 null일 수 있다. */
+/**
+ * 지표 점수. 분석 전이면 null일 수 있다.
+ * difficulty만 곡의 difficultyLevel(LV, 0~10)이고 나머지는 0~100 스케일.
+ */
 export interface FeedbackScores {
   pitch: number | null;
   rhythm: number | null;

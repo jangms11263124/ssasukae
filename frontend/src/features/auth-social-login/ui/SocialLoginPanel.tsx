@@ -5,16 +5,11 @@ import { LOGIN_COPY } from '@/shared/config/brand';
 import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
 
-import {
-  DEFAULT_ACTIVE_USER_COUNT,
-  SOCIAL_PROVIDERS,
-  type SocialProvider,
-} from '../config/socialProviders';
+import { SOCIAL_PROVIDERS, type SocialProvider } from '../config/socialProviders';
 import { SocialLoginButton } from './SocialLoginButton';
 
 interface SocialLoginPanelProps {
   className?: string;
-  activeUserCount?: number;
 }
 
 const SOCIAL_LOGIN_ACTIONS: Partial<Record<SocialProvider, () => void>> = {
@@ -22,10 +17,7 @@ const SOCIAL_LOGIN_ACTIONS: Partial<Record<SocialProvider, () => void>> = {
   kakao: startKakaoOAuth,
 };
 
-export function SocialLoginPanel({
-  className,
-  activeUserCount = DEFAULT_ACTIVE_USER_COUNT,
-}: SocialLoginPanelProps) {
+export function SocialLoginPanel({ className }: SocialLoginPanelProps) {
   const getLoginAction = (provider: SocialProvider) => SOCIAL_LOGIN_ACTIONS[provider];
 
   return (
@@ -50,10 +42,6 @@ export function SocialLoginPanel({
           />
         ))}
       </div>
-
-      <p className="mt-9 text-center text-sm tracking-wide text-neon-cyan">
-        {LOGIN_COPY.activeUsers(activeUserCount)}
-      </p>
     </section>
   );
 }
