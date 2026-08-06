@@ -2,7 +2,7 @@ import { ApiError, apiClient } from '@/shared/api/client';
 
 const AI_SERVER_URL = (
   process.env.NEXT_PUBLIC_AI_SERVER_URL ??
-  'https://9dpqllrrhyfzfq-8000.proxy.runpod.net'
+  'https://51ukphggjdemqd-8000.proxy.runpod.net'
 ).replace(/\/$/, '');
 
 interface AdminUploadTicketResponse {
