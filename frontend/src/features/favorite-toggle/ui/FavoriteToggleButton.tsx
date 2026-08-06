@@ -1,12 +1,9 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-
-import { addFavoriteSong, favoriteQueryKeys, removeFavoriteSong } from '@/entities/favorite';
-import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { cn } from '@/shared/lib/cn';
-import { showToast } from '@/shared/model/toastStore';
 import { HeartIcon } from '@/shared/ui/icons/HeartIcon';
+
+import { useFavoriteToggle } from '../model/useFavoriteToggle';
 
 interface FavoriteToggleButtonProps {
   songId: number;
@@ -17,33 +14,23 @@ interface FavoriteToggleButtonProps {
 
 export function FavoriteToggleButton({
   songId,
-  favorite,
+  favorite: initialFavorite,
   className,
   iconClassName,
 }: FavoriteToggleButtonProps) {
-  const queryClient = useQueryClient();
-
-  const { mutate: toggleFavorite, isPending } = useMutation({
-    mutationFn: () => (favorite ? removeFavoriteSong(songId) : addFavoriteSong(songId)),
-    onError: (error) => {
-      showToast(getApiErrorMessage(error, '찜 설정을 바꾸지 못했어요.'), 'error');
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: favoriteQueryKeys.all });
-      // 곡 검색 결과의 favorite 필드도 함께 갱신한다.
-      queryClient.invalidateQueries({ queryKey: ['songs', 'search'] });
-    },
-  });
+  const { favorite, toggle } = useFavoriteToggle(songId, initialFavorite);
 
   return (
     <button
       type="button"
       aria-label={favorite ? '찜 해제' : '찜하기'}
       aria-pressed={favorite}
-      disabled={isPending}
-      onClick={() => toggleFavorite()}
+      onClick={(event) => {
+        event.stopPropagation();
+        toggle();
+      }}
       className={cn(
-        'shrink-0 transition-colors disabled:opacity-40',
+        'shrink-0 transition-colors',
         favorite
           ? 'text-cyan-300 drop-shadow-[0_0_8px_rgba(103,232,249,0.55)] hover:text-cyan-200'
           : 'text-zinc-600 hover:text-zinc-400',

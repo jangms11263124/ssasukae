@@ -58,12 +58,18 @@ public class FavoriteService {
         }
 
         User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
-        List<Favorite> fetchData = favoriteRepository.search(user, query.trim(), cursorCreatedAt, cursorId, PageRequest.of(0, size + 1));
+        String normalizedQuery = query == null ? "" : query.trim();
+        List<Favorite> fetchData = favoriteRepository.search(user, normalizedQuery, cursorCreatedAt, cursorId, PageRequest.of(0, size + 1));
         boolean hasNext = fetchData.size() > size;
         List<Favorite> result = fetchData.stream().limit(size).toList();
 
+        // totalCount는 첫 페이지에서만 쓰이므로 이후 페이지는 COUNT 쿼리를 생략한다.
+        int totalCount = cursor == null
+                ? favoriteRepository.countByUserAndQuery(user, normalizedQuery)
+                : 0;
+
         return FavoriteResponseDTO.QueryDTO.builder()
-                .totalCount(favoriteRepository.countByUserAndQuery(user, query.trim()))
+                .totalCount(totalCount)
                 .songs(result.stream()
                         .map((e) -> {
                             Song song = e.getSong();
