@@ -30,20 +30,6 @@ export function HistoryIcon() {
   );
 }
 
-export function RefreshIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-3.5">
-      <path
-        d="M19 12a7 7 0 1 1-2.05-4.95M19 4v4h-4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
 export function PencilIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-3.5">
