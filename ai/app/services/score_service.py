@@ -17,6 +17,9 @@ from app.services.performance_rules import (
 )
 
 
+FINAL_SCORE_BONUS = 10
+
+
 def _clamp(value: float, minimum: float, maximum: float) -> float:
     """숫자가 지정한 최솟값과 최댓값 범위를 벗어나지 않도록 제한합니다."""
     # 점수가 0~100 같은 정해진 범위를 벗어나지 않도록 제한합니다.
@@ -260,7 +263,8 @@ def calculate_score_details(
         + stability_score * 0.10
     )
 
-    final_score = base_score + difficulty_score
+    # 기존 난이도 보정에 더해 전체 점수를 10점 상향합니다.
+    final_score = base_score + difficulty_score + FINAL_SCORE_BONUS
 
     rounded_pitch_score = round(_clamp(pitch_score, 0, 100))
     rounded_rhythm_score = round(_clamp(rhythm_score, 0, 100))

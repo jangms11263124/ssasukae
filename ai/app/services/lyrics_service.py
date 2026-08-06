@@ -4,6 +4,10 @@ from jamo import h2j
 from rapidfuzz import fuzz
 
 
+LYRICS_SCORE_BOOST_THRESHOLD = 60
+LYRICS_SCORE_FLOOR = 70
+
+
 def normalize_text(text: str) -> str:
     """가사 비교를 위해 공백·기호를 제거하고 영문을 소문자로 정규화합니다."""
     # 공백, 문장부호, 특수문자 차이가 가사 점수에 과하게 영향을 주지 않도록 제거합니다.
@@ -38,6 +42,11 @@ def score_lyrics(lyrics: str, transcript: str) -> dict[str, int]:
         (text_similarity * 0.5)
         + (pronunciation_similarity * 0.5)
     )
+
+    # 인식 오차로 가사 점수가 지나치게 낮아지는 것을 완화합니다.
+    # 원점수가 60점 이상이면 적어도 70점은 받을 수 있도록 보정합니다.
+    if lyrics_score >= LYRICS_SCORE_BOOST_THRESHOLD:
+        lyrics_score = max(lyrics_score, LYRICS_SCORE_FLOOR)
 
     return {
         "lyricsScore": lyrics_score,
