@@ -45,6 +45,11 @@ export interface VocalAudioEngine {
    * 벽시계가 아니라 MR 시간축이라 템포 변경·재개 오프셋이 반영된다 — 정답 MIDI와 이 축이 맞는다.
    */
   getMrPositionMs(): number;
+  /**
+   * 지금 MR에 실제로 적용된 키 오프셋(반음). 카드 효과·clamp가 반영된 값이라
+   * 가창 음정을 원곡 키 기준으로 되돌릴 때 이 값을 빼면 정답 MIDI와 축이 맞는다.
+   */
+  getAppliedKeyOffset(): number;
   /** 모니터링 지연(ms) = baseLatency + outputLatency. 측정 불가면 null */
   getLatencyMs(): number | null;
   dispose(): void;
