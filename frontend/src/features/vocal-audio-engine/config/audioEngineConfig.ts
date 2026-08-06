@@ -11,12 +11,28 @@ export const PARAM_RAMP_SECONDS = 0.05;
 /** PitchShift 그레인 크기(초). 이 값만큼 MR이 지연된다 — 줄이면 지연 대신 음이 뭉개진다 */
 export const PITCH_SHIFT_WINDOW_SIZE = 0.1;
 
-/** 에코 반복 간격. 데모와 같은 8분음표(기본 BPM 120 기준 0.25초) */
-export const ECHO_DELAY_TIME = '8n';
+/**
+ * 에코(`echoLevel`)는 딜레이가 아니라 `Tone.Reverb`로 구현한다.
+ * 딜레이(FeedbackDelay)는 원리상 원음을 일정 간격으로 되풀이하므로, 간격을 줄여도
+ * 피드백이 남는 한 반복이 쌓여 "말이 두 번" 들린다. 데모에서 옮겨온 0.25초는 물론
+ * 0.11초로 줄여도 레벨을 올리면 220ms·330ms 반복이 또렷하게 분리됐다.
+ * 리버브는 수천 개의 반사를 흩어 꼬리로 만들기 때문에 되풀이가 아니라 울림으로 들린다.
+ *
+ * decay는 생성 시 임펄스 응답을 굽는 값이라 런타임에 못 바꾼다(비동기 재생성 필요).
+ * 그래서 decay·preDelay는 고정하고 사용자가 조절하는 것은 wet 하나뿐이다.
+ */
+/** 울림 꼬리 길이(초). 길면 넓은 홀, 짧으면 작은 방 */
+export const ECHO_DECAY_SECONDS = 1.6;
 
-/** echoLevel 0~100 → 피드백 0~0.7 / 웻 0~0.8 사상 (데모 계수 유지) */
-export const ECHO_FEEDBACK_PER_PERCENT = 0.007;
-export const ECHO_WET_PER_PERCENT = 0.008;
+/** 원음과 반사음 사이 간격(초). 목소리 윤곽이 뭉개지지 않게 살짝 띄운다 */
+export const ECHO_PRE_DELAY_SECONDS = 0.02;
+
+/**
+ * echoLevel 0~100 → 웻 0~0.4.
+ * 웻 0.4만 돼도 상당히 젖은 소리라 100을 상한으로 잡았다.
+ * 울림이 부족하면 이 계수를 올리고, 공간이 좁게/넓게 느껴지면 decay를 조정한다.
+ */
+export const ECHO_WET_PER_PERCENT = 0.004;
 
 /** 음량 0%의 바닥값. -Infinity는 램프 목표가 될 수 없어 유한한 무음 레벨을 쓴다 */
 export const SILENCE_DB = -80;
