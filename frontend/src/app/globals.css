@@ -73,6 +73,22 @@
   }
 }
 
+/* 카운트다운 숫자가 바뀔 때마다 한 번 튀어나온다 */
+@keyframes countdown-pop {
+  0% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.85;
+    transform: scale(0.94);
+  }
+}
+
 @keyframes latency-bar {
   0%,
   100% {

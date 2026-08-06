@@ -9,6 +9,8 @@ import {
   findNextTextIndex,
   selectLyrics,
   LISTENER_LYRICS_DELAY_MS,
+  LYRICS_COUNTDOWN_LEAD_MS,
+  LYRICS_COUNTDOWN_MIN_GAP_MS,
   LYRICS_LEAD_MS,
   LYRICS_SYNC_OFFSET_MS,
   SONG_DURATION_WAIT_MS,
@@ -55,6 +57,33 @@ export interface SyncedLyricsState {
   nextLine: string;
   /** LOADING·UNAVAILABLE일 때 보여줄 안내 문구 */
   message: string | null;
+  /** 인트로·간주 끝의 3·2·1. 그 밖에는 null */
+  countdown: number | null;
+}
+
+/**
+ * 노래방식 3·2·1. 지금 부를 소절이 없고(인트로·간주) 다음 소절이 코앞일 때만 센다.
+ *
+ * 소절 사이의 짧은 숨 자리마다 숫자가 튀면 방해만 되므로, 공백이 충분히 길 때만 띄운다.
+ * 시작 전(index === -1)의 공백은 곡 머리부터 첫 소절까지다.
+ */
+function resolveCountdown(
+  lines: LyricsLine[],
+  index: number,
+  nextIndex: number,
+  timeMs: number,
+): number | null {
+  if (nextIndex < 0) return null;
+  // 부를 소절이 이미 떠 있으면 카운트다운할 자리가 아니다.
+  if (index >= 0 && lines[index].text !== '') return null;
+
+  const gapStartMs = index >= 0 ? lines[index].timeMs : 0;
+  if (lines[nextIndex].timeMs - gapStartMs < LYRICS_COUNTDOWN_MIN_GAP_MS) return null;
+
+  const remainingMs = lines[nextIndex].timeMs - timeMs;
+  if (remainingMs <= 0 || remainingMs > LYRICS_COUNTDOWN_LEAD_MS) return null;
+
+  return Math.ceil(remainingMs / 1_000);
 }
 
 /** 카드 효과까지 반영한 실제 배속. MR 시간축이 벽시계보다 이 비율만큼 빨리 흐른다 */
@@ -158,7 +187,11 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
     : null;
 
   const [result, setResult] = useState<{ key: string; state: LoadState } | null>(null);
-  const [active, setActive] = useState<{ key: string; index: number } | null>(null);
+  const [active, setActive] = useState<{
+    key: string;
+    index: number;
+    countdown: number | null;
+  } | null>(null);
 
   /**
    * 곡 길이를 기다리다 한도를 넘긴 곡의 id.
@@ -226,7 +259,8 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
         : { status: 'LOADING' };
 
   const lines = load.status === 'READY' ? load.lines : NO_LINES;
-  const activeIndex = active?.key === requestKey ? active.index : -1;
+  const current = active?.key === requestKey ? active : null;
+  const activeIndex = current?.index ?? -1;
 
   const getPositionMs = useLyricsClock(isPerformer, engine);
 
@@ -238,8 +272,9 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
   useEffect(() => {
     if (phase !== 'PERFORMING' || requestKey === null || lines.length === 0) return;
 
-    // 이 효과가 사는 동안의 직전 인덱스. 값이 바뀐 틱에만 상태를 갱신해 리렌더를 아낀다.
+    // 이 효과가 사는 동안의 직전 값. 바뀐 틱에만 상태를 갱신해 리렌더를 아낀다.
     let lastIndex = -1;
+    let lastCountdown: number | null = null;
 
     const tick = () => {
       // 시계는 호출할 때마다 감기므로 한 틱에서 한 번만 읽는다.
@@ -249,11 +284,13 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
         LYRICS_SYNC_OFFSET_MS -
         (isPerformer ? 0 : LISTENER_LYRICS_DELAY_MS);
       const index = findLineIndexAt(lines, timeMs);
+      const countdown = resolveCountdown(lines, index, findNextTextIndex(lines, index), timeMs);
 
-      if (index !== lastIndex) {
-        lastIndex = index;
-        setActive({ key: requestKey, index });
-      }
+      if (index === lastIndex && countdown === lastCountdown) return;
+
+      lastIndex = index;
+      lastCountdown = countdown;
+      setActive({ key: requestKey, index, countdown });
     };
 
     tick();
@@ -268,6 +305,7 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
       currentLine: '',
       nextLine: '',
       message: load.status === 'LOADING' ? '가사를 불러오는 중입니다' : null,
+      countdown: null,
     };
   }
 
@@ -277,6 +315,7 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
       currentLine: '',
       nextLine: '',
       message: MISS_MESSAGES[load.reason],
+      countdown: null,
     };
   }
 
@@ -288,5 +327,6 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
     currentLine: activeIndex >= 0 ? (lines[activeIndex]?.text ?? '') : '',
     nextLine: nextIndex >= 0 ? lines[nextIndex].text : '',
     message: null,
+    countdown: current?.countdown ?? null,
   };
 }
