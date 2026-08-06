@@ -45,8 +45,9 @@ interface StageStore {
   // ── 서버 공연 세션 상태 ──
   performanceId: number | null;
   /**
-   * 시작하기를 눌러 MR 다운로드를 요청한 상태. 노래 바꾸기로 선곡이 반복될 수 있어
-   * 선곡만으로는 내려받지 않는다 — 시작 요청 후 다운로드가 끝나면 재생 시작을 보낸다.
+   * 시작하기를 눌러 공연 준비(prepare)와 MR 다운로드를 요청한 상태. 선곡은 로컬 전이만
+   * 하므로 서버 공연 생성과 다운로드 모두 이 시점에 시작된다 — 준비 이벤트로 URL이
+   * 내려오고 다운로드가 끝나면 재생 시작을 보낸다.
    */
   mrLoadRequested: boolean;
   mrDownloadUrl: string | null;
