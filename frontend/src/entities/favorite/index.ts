@@ -1,5 +1,6 @@
 export {
   addFavoriteSong,
+  findFavoriteSong,
   getFavoriteSongs,
   removeFavoriteSong,
   type GetFavoriteSongsParams,

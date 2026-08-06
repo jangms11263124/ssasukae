@@ -258,9 +258,9 @@ export function LikedSongsSection({ className }: LikedSongsSectionProps) {
 
           {!showListSkeleton && songs.length > 0 ? (
             <ul className="grid gap-6 lg:grid-cols-2">
-              {songs.map((song, index) => (
+              {songs.map((song) => (
                 <li key={song.songId}>
-                  <LikedSongCard song={song} index={index} />
+                  <LikedSongCard song={song} />
                 </li>
               ))}
             </ul>
