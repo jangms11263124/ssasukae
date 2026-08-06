@@ -159,7 +159,7 @@ function AudioAppInstallModal({ onClose, onRetry }: { onClose: () => void; onRet
         </p>
         <div className="mt-7 grid gap-3 sm:grid-cols-2">
           <a
-            href="/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi?v=0.1.4"
+            href="/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi?v=0.1.7"
             download
             className="grid h-12 place-items-center border border-cyan-300/60 bg-cyan-300/10 text-sm font-semibold text-cyan-100 transition-colors hover:bg-cyan-300/20"
           >

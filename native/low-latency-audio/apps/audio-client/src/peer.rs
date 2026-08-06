@@ -9,7 +9,8 @@ use std::{
 pub(crate) const JITTER_PREBUFFER_FRAMES: usize = 4;
 pub(crate) const JITTER_TARGET_FRAMES: usize = 4;
 pub(crate) const JITTER_MAX_FRAMES: usize = 6;
-pub(crate) const STALE_FRAME_MARGIN: Duration = Duration::from_millis(30);
+// The 10 ms target jitter plus this margin gives buffered audio a hard 20 ms age limit.
+pub(crate) const STALE_FRAME_MARGIN: Duration = Duration::from_millis(10);
 
 pub(crate) struct BufferedOpusFrame {
     pub(crate) packet: Vec<u8>,

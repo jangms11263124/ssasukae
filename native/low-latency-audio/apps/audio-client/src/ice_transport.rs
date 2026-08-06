@@ -1,6 +1,6 @@
 use crate::security::PeerCipher;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, VecDeque},
     sync::{
         atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
         mpsc as std_mpsc, Arc, Mutex, RwLock,
@@ -28,17 +28,46 @@ const STATE_CONNECTED: u8 = 2;
 const STATE_DISCONNECTED: u8 = 3;
 const STATE_FAILED: u8 = 4;
 const DELIVERY_ACK_INTERVAL: Duration = Duration::from_millis(20);
-// Keep the same 80 ms burst capacity after moving from 5 ms to 2.5 ms packets.
-// The consumer still rejects audio older than 25 ms, so this capacity absorbs
-// scheduler bursts without allowing stale audio to reach playout.
-const REALTIME_PACKET_QUEUE_CAPACITY: usize = 32;
+// Eight 2.5 ms packets cap each real-time queue at 20 ms. When the incoming
+// queue is full, the oldest packet is evicted so fresh voice is preserved.
+const REALTIME_PACKET_QUEUE_CAPACITY: usize = 8;
 const MAX_OUTGOING_AUDIO_AGE: Duration = Duration::from_millis(20);
+
+struct IncomingPacketQueue {
+    packets: Mutex<VecDeque<Vec<u8>>>,
+    capacity: usize,
+}
+
+impl IncomingPacketQueue {
+    fn new(capacity: usize) -> Self {
+        Self {
+            packets: Mutex::new(VecDeque::with_capacity(capacity)),
+            capacity: capacity.max(1),
+        }
+    }
+
+    fn push_drop_oldest(&self, packet: Vec<u8>) -> bool {
+        let mut packets = self.packets.lock().unwrap();
+        let dropped = if packets.len() >= self.capacity {
+            packets.pop_front();
+            true
+        } else {
+            false
+        };
+        packets.push_back(packet);
+        dropped
+    }
+
+    fn try_pop(&self) -> Option<Vec<u8>> {
+        self.packets.lock().unwrap().pop_front()
+    }
+}
 
 pub struct IceTransport {
     local_description: Arc<Mutex<String>>,
     remote_tx: std_mpsc::Sender<(u64, String)>,
     outgoing_tx: mpsc::Sender<Arc<[u8]>>,
-    incoming_rx: std_mpsc::Receiver<Vec<u8>>,
+    incoming_queue: Arc<IncomingPacketQueue>,
     state: Arc<AtomicU8>,
     disconnected_event: Arc<AtomicBool>,
     incoming_queue_drops: Arc<AtomicU64>,
@@ -52,7 +81,7 @@ impl IceTransport {
         let (outgoing_tx, outgoing_rx) = mpsc::channel(REALTIME_PACKET_QUEUE_CAPACITY);
         let outgoing_rx = Arc::new(tokio::sync::Mutex::new(outgoing_rx));
         let remote_rx = Arc::new(Mutex::new(remote_rx));
-        let (incoming_tx, incoming_rx) = std_mpsc::sync_channel(REALTIME_PACKET_QUEUE_CAPACITY);
+        let incoming_queue = Arc::new(IncomingPacketQueue::new(REALTIME_PACKET_QUEUE_CAPACITY));
         let local_description = Arc::new(Mutex::new(String::new()));
         let state = Arc::new(AtomicU8::new(STATE_GATHERING));
         let disconnected_event = Arc::new(AtomicBool::new(false));
@@ -65,6 +94,7 @@ impl IceTransport {
         let incoming_queue_drops_for_thread = Arc::clone(&incoming_queue_drops);
         let stale_outgoing_audio_drops_for_thread = Arc::clone(&stale_outgoing_audio_drops);
         let security_for_thread = Arc::clone(&security);
+        let incoming_queue_for_thread = Arc::clone(&incoming_queue);
         let (ready_tx, ready_rx) = std_mpsc::sync_channel(1);
 
         thread::Builder::new()
@@ -90,7 +120,7 @@ impl IceTransport {
                         Arc::clone(&disconnected_event_for_thread),
                         Arc::clone(&remote_rx),
                         Arc::clone(&outgoing_rx),
-                        incoming_tx.clone(),
+                        Arc::clone(&incoming_queue_for_thread),
                         ready_tx.clone(),
                         Arc::clone(&incoming_queue_drops_for_thread),
                         Arc::clone(&stale_outgoing_audio_drops_for_thread),
@@ -110,7 +140,7 @@ impl IceTransport {
             local_description,
             remote_tx,
             outgoing_tx,
-            incoming_rx,
+            incoming_queue,
             state,
             disconnected_event,
             incoming_queue_drops,
@@ -140,7 +170,7 @@ impl IceTransport {
     }
 
     pub fn try_recv(&self) -> Option<Vec<u8>> {
-        self.incoming_rx.try_recv().ok()
+        self.incoming_queue.try_pop()
     }
 
     pub fn connected(&self) -> bool {
@@ -168,7 +198,7 @@ async fn run_ice(
     disconnected_event: Arc<AtomicBool>,
     remote_rx: Arc<Mutex<std_mpsc::Receiver<(u64, String)>>>,
     outgoing_rx: Arc<tokio::sync::Mutex<mpsc::Receiver<Arc<[u8]>>>>,
-    incoming_tx: std_mpsc::SyncSender<Vec<u8>>,
+    incoming_queue: Arc<IncomingPacketQueue>,
     ready_tx: std_mpsc::SyncSender<Result<(), String>>,
     incoming_queue_drops: Arc<AtomicU64>,
     stale_outgoing_audio_drops: Arc<AtomicU64>,
@@ -356,7 +386,7 @@ async fn run_ice(
                                     let dispatch_ns = elapsed_ns(epoch);
                                     plaintext[24..32].copy_from_slice(&received_ns.to_be_bytes());
                                     plaintext[32..40].copy_from_slice(&dispatch_ns.to_be_bytes());
-                                    if incoming_tx.try_send(plaintext).is_err() {
+                                    if incoming_queue.push_drop_oldest(plaintext) {
                                         incoming_queue_drops.fetch_add(1, Ordering::Relaxed);
                                     }
                                     let should_ack = last_delivery_ack
@@ -382,7 +412,7 @@ async fn run_ice(
                                             }
                                         }
                                     }
-                                } else if incoming_tx.try_send(plaintext).is_err() {
+                                } else if incoming_queue.push_drop_oldest(plaintext) {
                                     incoming_queue_drops.fetch_add(1, Ordering::Relaxed);
                                 }
                             }
@@ -454,4 +484,21 @@ fn parse_description(value: &str) -> Option<(String, String, bool, Vec<String>)>
         complete,
         lines.map(str::to_owned).collect(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn incoming_queue_drops_the_oldest_packet_when_full() {
+        let queue = IncomingPacketQueue::new(2);
+        assert!(!queue.push_drop_oldest(vec![1]));
+        assert!(!queue.push_drop_oldest(vec![2]));
+        assert!(queue.push_drop_oldest(vec![3]));
+
+        assert_eq!(queue.try_pop(), Some(vec![2]));
+        assert_eq!(queue.try_pop(), Some(vec![3]));
+        assert_eq!(queue.try_pop(), None);
+    }
 }

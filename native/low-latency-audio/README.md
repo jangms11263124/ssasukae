@@ -50,8 +50,9 @@
 - 재생 시각이 지난 frame은 sample ring 진입 전에 폐기
 - 누락 frame은 지연 추가 없는 Opus PLC로 은폐하고 실제 frame 복귀 시 crossfade
 - 장치 clock drift와 과도한 재생 큐를 회수하는 적응형 재생속도 보정 최대 ±0.3%
-- sample ring의 30ms → 15ms 정리는 비상 안전장치로만 유지
-- stale frame 기한은 목표 jitter 10ms에 30ms 여유를 더한 40ms
+- sample ring의 10ms → 5ms 정리는 비상 안전장치로 유지
+- stale frame 기한은 목표 jitter 10ms에 10ms 여유를 더한 20ms
+- 송수신 실시간 큐는 최대 8 packet(20ms)이며 수신 포화 시 가장 오래된 packet을 폐기
 - 손실 은폐, 늦은 프레임 거부, 언더런·삭제·속도 보정 통계
 - 오래된 음성은 2.5ms frame 경계에서 정리하고 1ms crossfade로 연결
 - 누락 frame concealment 후 실제 음성 복귀 시 짧은 crossfade 적용
