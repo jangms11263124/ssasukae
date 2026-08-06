@@ -42,13 +42,13 @@ interface RoomStore {
   session: RoomSession | null;
   participants: RoomParticipant[];
   hostParticipantId: number | null;
-  /** 방 리더보드. 스냅샷에 없어 LEADERBOARD_UPDATED 이벤트로만 쌓인다 */
+  /** 방 리더보드. 스냅샷으로 복구하고 이후 LEADERBOARD_UPDATED 이벤트로 갱신한다 */
   leaderboard: LeaderboardEntry[];
 
   enterRoom: (input: EnterRoomInput) => void;
   leaveRoom: () => void;
   setOpenViduToken: (token: string) => void;
-  /** 방 정보 조회 응답으로 방 메타·참가자 목록·방장 정보를 서버 기준으로 덮어쓴다 */
+  /** 방 정보 조회 응답으로 방 메타·참가자 목록·방장·리더보드를 서버 기준으로 덮어쓴다 */
   hydrateFromSnapshot: (snapshot: RoomSnapshotResponse) => void;
 
   // ── WebSocket 이벤트 반영 ──
@@ -125,6 +125,8 @@ export const useRoomStore = create<RoomStore>((set) => ({
           userId: participant.userId,
         })),
         hostParticipantId: host?.participantId ?? null,
+        // 서버가 rank까지 계산해 내려주므로 그대로 교체한다.
+        leaderboard: snapshot.leaderboard ?? [],
       };
     }),
 
