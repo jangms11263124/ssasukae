@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { formatFavoritedAt, type FavoriteSong } from '@/entities/favorite';
 import { formatSongDuration, SongThumbnail } from '@/entities/song';
 import { FavoriteToggleButton } from '@/features/favorite-toggle';
@@ -5,13 +7,9 @@ import { cn } from '@/shared/lib/cn';
 
 interface LikedSongCardProps {
   song: FavoriteSong;
-  /** 전체 목록 기준 0부터 시작하는 순번 */
-  index: number;
 }
 
-export function LikedSongCard({ song, index }: LikedSongCardProps) {
-  const trackNo = String(index + 1).padStart(3, '0');
-
+export function LikedSongCard({ song }: LikedSongCardProps) {
   return (
     <article
       className={cn(
@@ -20,6 +18,13 @@ export function LikedSongCard({ song, index }: LikedSongCardProps) {
         'hover:border-cyan-300/35 hover:bg-[#18181c]',
       )}
     >
+      {/* 카드 전체를 덮는 상세 이동 링크. 하트 버튼은 z-[2]로 위에 띄워 클릭이 겹치지 않는다. */}
+      <Link
+        href={`/favorite/${song.songId}`}
+        aria-label={`${song.title} 상세 보기`}
+        className="absolute inset-0 z-[1] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-cyan-300"
+      />
+
       {/* 좌측 시안 액센트 — 호버 시만 또렷해짐 */}
       <span
         aria-hidden
@@ -39,14 +44,11 @@ export function LikedSongCard({ song, index }: LikedSongCardProps) {
 
       <div className="flex min-w-0 flex-1 flex-col py-0.5">
         <div className="flex items-start justify-between gap-3">
-          <p className="font-mono text-[11px] tracking-[0.28em] text-cyan-300/90">
-            TRACK <span className="text-zinc-600">{'//'}</span>{' '}
-            <span className="text-cyan-200">{trackNo}</span>
-          </p>
+          <p className="font-mono text-[11px] tracking-[0.28em] text-cyan-300/90">SAVED_TRACK</p>
           <FavoriteToggleButton
             songId={song.songId}
             favorite
-            className="opacity-80 transition-opacity group-hover:opacity-100"
+            className="relative z-[2] opacity-80 transition-opacity group-hover:opacity-100"
           />
         </div>
 
