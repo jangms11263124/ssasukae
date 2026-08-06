@@ -27,6 +27,8 @@
   --animate-holo-shift: holo-shift 4s linear infinite;
   --animate-mini-card-pulse: mini-card-pulse 2.4s ease-in-out infinite;
   --animate-mini-card-sheen: mini-card-sheen 3.2s ease-in-out infinite;
+  --animate-skeleton-shimmer: skeleton-shimmer 1.4s ease-in-out infinite;
+  --animate-skeleton-fade-in: skeleton-fade-in 0.45s ease-out both;
 }
 
 @keyframes holo-shift {
@@ -70,6 +72,26 @@
   100% {
     transform: translateX(140%) skewX(-18deg);
     opacity: 0;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    transform: translateX(-120%) skewX(-16deg);
+  }
+  100% {
+    transform: translateX(220%) skewX(-16deg);
+  }
+}
+
+@keyframes skeleton-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
