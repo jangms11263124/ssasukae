@@ -9,11 +9,18 @@ interface AttackCardBackProps {
   className?: string;
   /** 호버 틸트. 기본 true */
   interactive?: boolean;
+  /** false면 외곽 box-shadow 제거 (딜 연출 3D 회전용) */
+  showFrameGlow?: boolean;
   tier: CardTier;
 }
 
 /** 수성전 공격 카드 뒷면. TCG 비율·둥근 모서리 + 기존 등급 프레임 UI. */
-export function AttackCardBack({ className, interactive = true, tier }: AttackCardBackProps) {
+export function AttackCardBack({
+  className,
+  interactive = true,
+  showFrameGlow = true,
+  tier,
+}: AttackCardBackProps) {
   const tierVisual = CARD_TIER_VISUALS[tier];
 
   return (
@@ -24,7 +31,7 @@ export function AttackCardBack({ className, interactive = true, tier }: AttackCa
           aspectRatio: CARD_ASPECT,
           borderRadius: CARD_RADIUS,
           background: tierVisual.frameGradient,
-          boxShadow: tierVisual.glow,
+          boxShadow: showFrameGlow ? tierVisual.glow : undefined,
         }}
       >
         <div

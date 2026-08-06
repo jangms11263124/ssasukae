@@ -68,9 +68,9 @@ export const CARD_TIER_VISUALS: Record<CardTier, CardTierVisual> = {
   },
   P: {
     frameGradient:
-      'linear-gradient(160deg, #67e8f9 0%, #a78bfa 30%, #f9a8d4 55%, #fde68a 78%, #6ee7b7 100%)',
+      'linear-gradient(145deg, #7dd3fc 0%, #a78bfa 28%, #e9a8c4 52%, #fde68a 76%, #6ee7b7 100%)',
     glow:
-      '0 1px 0 rgb(255 255 255 / 40%) inset, 0 -2px 4px rgb(0 0 0 / 30%) inset, 0 14px 28px rgb(0 0 0 / 45%), 0 0 22px rgb(167 139 250 / 32%)',
+      '0 1px 0 rgb(255 255 255 / 35%) inset, 0 -2px 4px rgb(0 0 0 / 30%) inset, 0 14px 28px rgb(0 0 0 / 45%), 0 0 20px rgb(167 139 250 / 24%)',
     iconColor: '#a5f3fc',
     iconGradientStops: ['#67e8f9', '#a78bfa', '#f9a8d4', '#fde68a', '#6ee7b7'],
     label: 'PLATINUM',

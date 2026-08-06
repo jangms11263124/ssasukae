@@ -1,7 +1,7 @@
 /* 실물 카드처럼 보이는 4면 엣지 + 코어 (둥근 모서리 맞춤) */
 
 .attack-card-depth {
-  --card-thickness: 3px;
+  --card-thickness: 5px;
   --card-radius: 4.55% / 3.5%;
   --edge-inset-x: 4.55%;
   --edge-inset-y: 3.5%;
@@ -61,7 +61,7 @@
   background: var(--card-depth-edge);
   pointer-events: none;
   border-radius: 1px;
-  box-shadow: inset 0 0 3px rgb(0 0 0 / 50%);
+  box-shadow: inset 0 0 3px rgb(0 0 0 / 55%), 0 0 1px rgb(255 255 255 / 6%);
 }
 
 .attack-card-depth__edge--left {
