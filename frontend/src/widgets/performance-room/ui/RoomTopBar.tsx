@@ -17,7 +17,14 @@ const COPIED_MS = 2200;
 
 function CopyIcon() {
   return (
-    <svg aria-hidden viewBox="0 0 24 24" fill="none" className="size-3.5" stroke="currentColor" strokeWidth="1.6">
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      className="block size-3.5 shrink-0 translate-y-px"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
       <path d="M8.5 8.5h8v10h-8z" />
       <path d="M6 15.5H4.5v-10h8V7" />
     </svg>
@@ -26,7 +33,14 @@ function CopyIcon() {
 
 function CheckIcon() {
   return (
-    <svg aria-hidden viewBox="0 0 24 24" fill="none" className="size-3.5" stroke="currentColor" strokeWidth="2">
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      fill="none"
+      className="block size-3.5 shrink-0 translate-y-px"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
       <path d="M5 12.5 9.5 17 19 7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -145,35 +159,35 @@ export function RoomTopBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5 sm:gap-3">
-        <div className="relative">
+        <div>
           <button
             type="button"
             onClick={() => void handleCopyInviteCode()}
             className={cn(
-              'inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 transition-all',
+              'inline-flex h-8 min-w-[9.75rem] items-center gap-2 rounded-md border px-2.5 transition-colors',
               copied
                 ? 'border-emerald-400/40 bg-emerald-400/10'
                 : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]',
             )}
             aria-label={
               copied
-                ? `초대 코드 ${room.inviteCode}가 복사되었습니다`
+                ? `초대 코드 ${room.inviteCode} 복사 완료`
                 : `초대 코드 ${room.inviteCode} 복사`
             }
-            title={copied ? '초대 코드가 복사되었습니다' : '클릭하면 초대 코드가 복사됩니다'}
+            title={copied ? undefined : '클릭하면 초대 코드가 복사됩니다'}
           >
             <span
               className={cn(
-                'text-[11px] font-medium',
+                'inline-flex h-8 w-[3.5rem] shrink-0 translate-y-px items-center whitespace-nowrap text-xs font-normal',
                 copied ? 'text-emerald-300/90' : 'text-zinc-500',
               )}
             >
-              {copied ? '복사됨' : '초대코드'}
+              {copied ? '복사 완료' : '초대코드'}
             </span>
             <span
               aria-hidden
               className={cn(
-                'font-mono text-xs tracking-[0.16em]',
+                'inline-flex h-8 min-w-[3.75rem] flex-1 items-center justify-center font-mono text-xs tabular-nums tracking-[0.16em]',
                 copied ? 'text-emerald-100' : 'text-zinc-200',
               )}
             >
@@ -181,22 +195,13 @@ export function RoomTopBar({
             </span>
             <span
               className={cn(
+                'inline-flex h-8 w-3.5 shrink-0 items-center justify-center',
                 copied ? 'text-emerald-300' : 'text-zinc-500',
               )}
             >
               {copied ? <CheckIcon /> : <CopyIcon />}
             </span>
           </button>
-
-          {copied ? (
-            <span
-              role="status"
-              aria-live="polite"
-              className="pointer-events-none absolute right-0 top-full z-30 mt-1.5 whitespace-nowrap rounded-md border border-emerald-400/35 bg-[#0f1a14]/95 px-2.5 py-1 text-[11px] text-emerald-200 shadow-lg backdrop-blur-sm"
-            >
-              초대 코드가 복사되었습니다
-            </span>
-          ) : null}
         </div>
 
         <span aria-hidden className="hidden h-5 w-px bg-white/10 sm:block" />

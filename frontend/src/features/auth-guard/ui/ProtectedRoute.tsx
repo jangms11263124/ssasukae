@@ -1,15 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { useAuth } from '@/entities/user';
-
-const PUBLIC_ROUTES = ['/login', '/signup', '/oauth/callback', '/login-error'] as const;
-
-function isPublicRoute(pathname: string): boolean {
-  return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
-}
 
 function AuthLoadingScreen() {
   return (
@@ -26,19 +20,18 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
+/** (protected) 레이아웃 전용. 비로그인 시 /login 으로 보낸다. */
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
-  const isPublic = isPublicRoute(pathname);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && !isPublic) {
+    if (!isLoading && !isAuthenticated) {
       router.replace('/login');
     }
-  }, [isAuthenticated, isLoading, isPublic, router]);
+  }, [isAuthenticated, isLoading, router]);
 
-  if (!isPublic && (isLoading || !isAuthenticated)) {
+  if (isLoading || !isAuthenticated) {
     return <AuthLoadingScreen />;
   }
 

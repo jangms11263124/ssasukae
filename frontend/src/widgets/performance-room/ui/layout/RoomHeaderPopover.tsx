@@ -5,6 +5,8 @@ import { createPortal } from 'react-dom';
 
 import { cn } from '@/shared/lib/cn';
 
+import { PARTICIPANT_ACTION_MENU_ATTR } from '../ParticipantActionMenu';
+
 interface RoomHeaderPopoverProps {
   anchorRef: RefObject<HTMLElement | null>;
   children: ReactNode;
@@ -55,6 +57,7 @@ export function RoomHeaderPopover({
       const target = event.target as Node;
       if (anchorRef.current?.contains(target)) return;
       if (panelRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest(`[${PARTICIPANT_ACTION_MENU_ATTR}]`)) return;
       onClose();
     }
 

@@ -11,15 +11,12 @@ import {
 import { useRoomStore } from '@/entities/room';
 import { showToast } from '@/shared/model/toastStore';
 
-import { SOUND_PANEL_LABEL } from '../../config/dspParams';
 import { useCardStore } from '../../model/cardStore';
 import { useGestureDspControl } from '../../model/useGestureDspControl';
 import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { useStageLyricsContext } from '../../model/StageLyricsContext';
 import { useStageStore } from '../../model/stageStore';
-import { SoundIcon } from '../media-controls/MediaIcons';
-import { MediaToggleButton } from '../media-controls/MediaToggleButton';
 import { LyricsBlackout } from './overlays/LyricsBlackout';
 import { LyricsCountdown } from './overlays/LyricsCountdown';
 import { LyricsNotice } from './overlays/LyricsNotice';
@@ -148,29 +145,26 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
         />
       </div>
 
-      <MediaControlsOverlay showGestureToggle={isPerformer} />
+      <MediaControlsOverlay
+        placement="top-right"
+        showGestureToggle={isPerformer}
+        soundToggle={
+          isPerformer
+            ? {
+                on: dspPanelOpen,
+                onToggle: toggleDspPanel,
+                disabled: !camOn,
+              }
+            : undefined
+        }
+      />
 
-      {isPerformer ? (
-        <>
-          {/* 패널 바로 위에 고정해 열고 닫아도 자리가 움직이지 않게 한다 */}
-          <MediaToggleButton
-            icon={<SoundIcon />}
-            label={SOUND_PANEL_LABEL}
-            on={dspPanelOpen}
-            onToggle={toggleDspPanel}
-            showState={false}
-            // 캠이 꺼지면 제스처로 조작할 수 없어 패널을 열 이유가 없다.
-            disabled={!camOn}
-            className="absolute right-4 top-4"
-          />
-          {dspPanelOpen ? (
-            <VocalDspPanel
-              onClose={() => setDspPanelOpen(false)}
-              activeRowIndex={gesture.activeRowIndex}
-              grabbedRowIndex={gesture.grabbedRowIndex}
-            />
-          ) : null}
-        </>
+      {isPerformer && dspPanelOpen ? (
+        <VocalDspPanel
+          onClose={() => setDspPanelOpen(false)}
+          activeRowIndex={gesture.activeRowIndex}
+          grabbedRowIndex={gesture.grabbedRowIndex}
+        />
       ) : null}
 
       {lyricsHidden ? (
