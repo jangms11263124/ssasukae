@@ -126,6 +126,79 @@ export default function StageCheckPage() {
       onClick: applyPlaybackFinished,
     },
     { label: '⑥ 무대 종료 (처음으로)', onClick: endStage },
+    // ── 아래 3개는 가창자 이탈 시 재접속 카운트다운(#131) 확인용 ──
+    // 서버 이벤트·스냅샷 없이 일시 중지 오버레이를 띄운다.
+    {
+      label: '가창자 이탈 → 일시중지',
+      onClick: () => {
+        confirmSinger(2);
+        // 카운트다운은 가창자가 DISCONNECTED인 동안에만 뜬다.
+        useRoomStore.setState({
+          participants: MOCK_PARTICIPANTS.map((participant) =>
+            participant.id === 2
+              ? { ...participant, connectionStatus: 'DISCONNECTED' as const }
+              : participant,
+          ),
+        });
+        useStageStore.getState().applyPerformanceSuspended({
+          performanceId: 1,
+          performerParticipantId: 2,
+          previousStatus: 'PLAYING',
+          currentStatus: 'SUSPENDED',
+          suspendedAt: new Date().toISOString(),
+          playbackPositionMs: 0,
+        });
+      },
+    },
+    {
+      label: '가창자 복귀',
+      onClick: () => useRoomStore.setState({ participants: MOCK_PARTICIPANTS }),
+    },
+    {
+      label: '새로고침 복구 (5초 전 이탈 스냅샷)',
+      onClick: () => {
+        endStage();
+        useRoomStore.setState({
+          participants: MOCK_PARTICIPANTS.map((participant) =>
+            participant.id === 2
+              ? { ...participant, connectionStatus: 'DISCONNECTED' as const }
+              : participant,
+          ),
+        });
+        // 새로고침 직후 서버 스냅샷으로 복구되는 경로를 그대로 태운다.
+        useStageStore.getState().hydrateFromRoomSnapshot({
+          name: 'DEV',
+          inviteCode: 'DEV000',
+          mode: 'GENERAL',
+          status: 'PLAYING',
+          hostUserId: 1,
+          maxParticipants: 6,
+          serverNow: new Date().toISOString(),
+          participants: [],
+          playback: null,
+          performance: {
+            performanceId: 7,
+            status: 'SUSPENDED',
+            suspendedFromStatus: 'PLAYING',
+            performerParticipantId: 2,
+            songId: 999,
+            songTitle: '테스트 곡',
+            artist: '테스트',
+            difficultyLevel: null,
+            thumbnailImageUrl: null,
+            settings: { keyOffset: 0, tempoPercent: 100, mrVolumePercent: 100, echoLevel: 30 },
+            preparedAt: new Date(Date.now() - 60_000).toISOString(),
+            startedAt: new Date(Date.now() - 30_000).toISOString(),
+            suspendedAt: new Date(Date.now() - 5_000).toISOString(),
+            playbackPositionMs: 25_000,
+            songDurationMs: 200_000,
+            mrDownloadUrl: '',
+            midiJsonDownloadUrl: '',
+            lyricsDownloadUrl: '',
+          },
+        });
+      },
+    },
   ];
 
   return (
