@@ -1,13 +1,25 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 
 import { cn } from '@/shared/lib/cn';
 
 import { clamp, round } from '../lib/cardMotionMath';
 import { createSpring, SPRING_INTERACT, SPRING_POPOVER } from '../lib/cardSpring';
+import type { CardTier } from '../types';
+
+import { AttackCardDepth } from './AttackCardDepth';
 
 import './attack-card-deal.css';
+import './attack-card-depth.css';
 
 interface AttackCardDealFlipProps {
   back: ReactNode;
@@ -16,11 +28,33 @@ interface AttackCardDealFlipProps {
   front: ReactNode;
   onReady?: () => void;
   onReveal?: () => void;
+  onFlipSettled?: () => void;
   onConfirm?: () => void;
   revealed: boolean;
+  /** 등급별 등장·확정 연출 강도 (S < G < P) */
+  tier?: CardTier;
 }
 
 const DEAL_READY_FALLBACK_MS = 2000;
+
+/** 등장 시 Y축 스핀 각도 — 360° 배수만 사용 (180°에서 앞면이 보이므로) */
+const TIER_DEAL_SPIN_DEG: Record<CardTier, number> = {
+  S: 360,
+  G: 720,
+  P: 1080,
+};
+
+const TIER_START_SCALE: Record<CardTier, number> = {
+  S: 0.52,
+  G: 0.44,
+  P: 0.36,
+};
+
+const TIER_FLIP_MS: Record<CardTier, number> = {
+  S: 550,
+  G: 650,
+  P: 720,
+};
 
 /**
  * pokemon-cards-css Card.svelte 기반 배분 연출.
@@ -33,12 +67,19 @@ export function AttackCardDealFlip({
   front,
   onReady,
   onReveal,
+  onFlipSettled,
   onConfirm,
   revealed,
+  tier = 'S',
 }: AttackCardDealFlipProps) {
   const [landed, setLanded] = useState(false);
+  const [isInteracting, setIsInteracting] = useState(false);
+  const [isFlipping, setIsFlipping] = useState(false);
+  const [flipSettled, setFlipSettled] = useState(revealed);
   const rootRef = useRef<HTMLDivElement>(null);
+  const flipRef = useRef<HTMLDivElement>(null);
   const onReadyRef = useRef(onReady);
+  const onFlipSettledRef = useRef(onFlipSettled);
   const landedRef = useRef(false);
 
   // 스프링은 ref에만 보관하고, 렌더에서는 .current를 읽지 않는다.
@@ -46,7 +87,6 @@ export function AttackCardDealFlip({
   const springScaleRef = useRef(createSpring(1, SPRING_POPOVER));
   const springRotateDeltaRef = useRef(createSpring({ x: 0, y: 0 }, SPRING_POPOVER));
   const springRotateRef = useRef(createSpring({ x: 0, y: 0 }, SPRING_INTERACT));
-  const springGlareRef = useRef(createSpring({ x: 50, y: 50, o: 0 }, SPRING_INTERACT));
 
   const txRef = useRef(0);
   const tyRef = useRef(0);
@@ -55,13 +95,14 @@ export function AttackCardDealFlip({
   const deltaYRef = useRef(0);
   const tiltXRef = useRef(0);
   const tiltYRef = useRef(0);
-  const glareXRef = useRef(50);
-  const glareYRef = useRef(50);
-  const glareORef = useRef(0);
 
   useEffect(() => {
     onReadyRef.current = onReady;
   }, [onReady]);
+
+  useEffect(() => {
+    onFlipSettledRef.current = onFlipSettled;
+  }, [onFlipSettled]);
 
   const paint = useCallback(() => {
     const root = rootRef.current;
@@ -72,9 +113,6 @@ export function AttackCardDealFlip({
     root.style.setProperty('--card-scale', String(scaleRef.current));
     root.style.setProperty('--rotate-x', `${tiltXRef.current + deltaXRef.current}deg`);
     root.style.setProperty('--rotate-y', `${tiltYRef.current + deltaYRef.current}deg`);
-    root.style.setProperty('--pointer-x', `${glareXRef.current}%`);
-    root.style.setProperty('--pointer-y', `${glareYRef.current}%`);
-    root.style.setProperty('--card-opacity', String(glareORef.current));
   }, []);
 
   useEffect(() => {
@@ -82,7 +120,6 @@ export function AttackCardDealFlip({
     const springScale = springScaleRef.current;
     const springRotateDelta = springRotateDeltaRef.current;
     const springRotate = springRotateRef.current;
-    const springGlare = springGlareRef.current;
 
     const unsubs = [
       springTranslate.subscribe((v) => {
@@ -102,12 +139,6 @@ export function AttackCardDealFlip({
       springRotate.subscribe((v) => {
         tiltXRef.current = v.x;
         tiltYRef.current = v.y;
-        paint();
-      }),
-      springGlare.subscribe((v) => {
-        glareXRef.current = v.x;
-        glareYRef.current = v.y;
-        glareORef.current = v.o;
         paint();
       }),
     ];
@@ -150,14 +181,14 @@ export function AttackCardDealFlip({
     };
 
     void springTranslate.set(start, { hard: true });
-    void springScale.set(0.48, { hard: true });
+    void springScale.set(TIER_START_SCALE[tier], { hard: true });
     void springRotateDelta.set({ x: 0, y: 0 }, { hard: true });
 
     startId = requestAnimationFrame(() => {
       void Promise.all([
         springTranslate.set({ x: 0, y: 0 }),
         springScale.set(1),
-        springRotateDelta.set({ x: 360, y: 0 }),
+        springRotateDelta.set({ x: TIER_DEAL_SPIN_DEG[tier], y: 0 }),
       ]).then(() => {
         void springRotateDelta.set({ x: 0, y: 0 }, { hard: true });
         markReady();
@@ -171,27 +202,56 @@ export function AttackCardDealFlip({
       cancelAnimationFrame(startId);
       window.clearTimeout(fallbackTimer);
     };
+    // 카드 배정마다 CardDealContent key로 리마운트되므로 tier는 마운트 시점 값만 쓴다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- entrance runs once per deal
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!confirming) return;
+    void springRotateRef.current.set({ x: 0, y: 0 }, { hard: true });
+  }, [confirming]);
+
+  const startFlip = useCallback(() => {
+    setIsFlipping(true);
+    setFlipSettled(false);
+    setIsInteracting(false);
+    void springRotateRef.current.set({ x: 0, y: 0 }, { hard: true });
   }, []);
 
   useEffect(() => {
-    if (!confirming) return;
-    void springRotateRef.current.set({ x: 0, y: 0 }, { hard: true });
-    void springGlareRef.current.set({ x: 50, y: 50, o: 0 }, { hard: true });
-  }, [confirming]);
+    if (!revealed || !isFlipping) return;
+
+    const flipEl = flipRef.current;
+    const finishFlip = () => {
+      setIsFlipping(false);
+      setFlipSettled(true);
+      onFlipSettledRef.current?.();
+    };
+
+    const onTransitionEnd = (event: TransitionEvent) => {
+      if (event.propertyName !== 'transform') return;
+      finishFlip();
+    };
+
+    flipEl?.addEventListener('transitionend', onTransitionEnd);
+    const fallbackTimer = window.setTimeout(finishFlip, TIER_FLIP_MS[tier] + 80);
+
+    return () => {
+      flipEl?.removeEventListener('transitionend', onTransitionEnd);
+      window.clearTimeout(fallbackTimer);
+    };
+  }, [isFlipping, revealed, tier]);
 
   const handlePointerEnter = useCallback(() => {
-    if (confirming) return;
+    if (confirming || isFlipping) return;
     const springRotate = springRotateRef.current;
-    const springGlare = springGlareRef.current;
     springRotate.stiffness = SPRING_INTERACT.stiffness;
     springRotate.damping = SPRING_INTERACT.damping;
-    springGlare.stiffness = SPRING_INTERACT.stiffness;
-    springGlare.damping = SPRING_INTERACT.damping;
-  }, [confirming]);
+  }, [confirming, isFlipping]);
 
   const handlePointerMove = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
-      if (confirming) return;
+      if (confirming || isFlipping) return;
 
       const rect = event.currentTarget.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
@@ -210,40 +270,31 @@ export function AttackCardDealFlip({
       };
 
       const springRotate = springRotateRef.current;
-      const springGlare = springGlareRef.current;
       springRotate.stiffness = SPRING_INTERACT.stiffness;
       springRotate.damping = SPRING_INTERACT.damping;
-      springGlare.stiffness = SPRING_INTERACT.stiffness;
-      springGlare.damping = SPRING_INTERACT.damping;
 
       void springRotate.set({
-        x: round(-(center.x / 5)),
-        y: round(center.y / 5),
+        x: round(-(center.x / 10)),
+        y: round(center.y / 10),
       });
-      void springGlare.set({
-        x: round(percent.x),
-        y: round(percent.y),
-        o: 1,
-      });
+      setIsInteracting(Math.abs(center.x) > 2 || Math.abs(center.y) > 2);
     },
-    [confirming],
+    [confirming, isFlipping],
   );
 
   const resetTilt = useCallback(() => {
     if (confirming) return;
+    setIsInteracting(false);
     const springRotate = springRotateRef.current;
-    const springGlare = springGlareRef.current;
     springRotate.stiffness = 0.01;
     springRotate.damping = 0.06;
-    springGlare.stiffness = 0.01;
-    springGlare.damping = 0.06;
     void springRotate.set({ x: 0, y: 0 }, { soft: 1 });
-    void springGlare.set({ x: 50, y: 50, o: 0 }, { soft: 1 });
   }, [confirming]);
 
   const handleCardActivate = () => {
     if (!landed || confirming) return;
     if (!revealed) {
+      startFlip();
       onReveal?.();
       return;
     }
@@ -253,26 +304,37 @@ export function AttackCardDealFlip({
   return (
     <div
       ref={rootRef}
-      className={cn('attack-card-deal', confirming && 'is-confirming', className)}
+      className={cn(
+        'attack-card-deal',
+        `attack-card-deal--${tier}`,
+        'is-entering',
+        landed && 'is-landed',
+        isFlipping && 'is-flipping',
+        isInteracting && !confirming && 'is-interacting',
+        flipSettled && 'is-revealed-fx',
+        confirming && 'is-confirming',
+        className,
+      )}
+      data-tier={tier}
       onPointerEnter={handlePointerEnter}
       onPointerMove={handlePointerMove}
       onPointerLeave={resetTilt}
       onPointerCancel={resetTilt}
     >
+      {/* sparkles만 rotator 안 — 3D 틸트와 동기 */}
       <div className="attack-card-deal__frame">
         <div className="attack-card-deal__translater">
           <div className="attack-card-deal__rotator">
-            <div className={cn('attack-card-deal__flip', revealed && 'is-revealed')}>
-              <span className="attack-card-deal__core" aria-hidden />
-              <span className="attack-card-deal__edge attack-card-deal__edge--left" aria-hidden />
-              <span className="attack-card-deal__edge attack-card-deal__edge--right" aria-hidden />
-              <span className="attack-card-deal__edge attack-card-deal__edge--top" aria-hidden />
-              <span className="attack-card-deal__edge attack-card-deal__edge--bottom" aria-hidden />
-              <div className="attack-card-deal__faces">
+            {tier !== 'S' ? <span className="attack-card-deal__sparkles" aria-hidden /> : null}
+
+            <div
+              ref={flipRef}
+              className={cn('attack-card-deal__flip', revealed && 'is-revealed')}
+            >
+              <AttackCardDepth frameOnly showBackplate>
                 <div className="attack-card-deal__face attack-card-deal__face--back">{back}</div>
                 <div className="attack-card-deal__face attack-card-deal__face--front">{front}</div>
-              </div>
-              <span className="attack-card-deal__sheen" aria-hidden />
+              </AttackCardDepth>
             </div>
           </div>
         </div>
