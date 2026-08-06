@@ -22,7 +22,7 @@ export function FavoritesCard({ count, items }: FavoritesCardProps) {
     <SettingsPanel title="FAVORITES" icon={<HeartIcon />}>
       {/* 나머지 두 패널과 같은 자리에 둬야 세 카드의 액션이 한 줄로 맞는다. */}
       <Link
-        href="/like"
+        href="/favorite"
         className={cn(
           jetBrainsMono.className,
           'absolute right-0 top-0 flex items-center gap-1.5 border border-white/10 bg-black/25 px-2.5 py-1.5 text-[0.5rem] font-bold tracking-[0.12em] text-zinc-400 transition-colors',
