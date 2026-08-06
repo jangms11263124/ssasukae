@@ -1,5 +1,6 @@
 package com.ssafy.ssasukae.domain.song.service;
 
+import com.ssafy.ssasukae.domain.song.dto.SongLyricsResponse;
 import com.ssafy.ssasukae.domain.song.dto.SongResponseDTO;
 import com.ssafy.ssasukae.domain.song.entity.Song;
 import com.ssafy.ssasukae.domain.song.repository.SongRepository;
@@ -9,10 +10,12 @@ import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.song.SongErrorCode;
 import com.ssafy.ssasukae.global.exception.user.UserErrorCode;
+import com.ssafy.ssasukae.integration.aws.S3StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -27,6 +30,18 @@ public class SongService {
     private final SongRepository songRepository;
     private final FavoriteRepository favoriteRepository;
     private final UserRepository userRepository;
+    private final S3StorageService s3StorageService;
+
+    public SongLyricsResponse getLyrics(Long songId) {
+        Song song = songRepository.findById(songId)
+                .orElseThrow(() -> new CustomException(SongErrorCode.SONG_NOT_FOUND));
+
+        if (!StringUtils.hasText(song.getLyricsObjectKey())) {
+            throw new CustomException(SongErrorCode.LYRICS_NOT_FOUND);
+        }
+
+        return new SongLyricsResponse(s3StorageService.presignedUrl(song.getLyricsObjectKey()));
+    }
 
     public SongResponseDTO.searchDTO search(Long userId, String query, String filter, Long cursor, Integer size) {
         User user = userRepository.findById(userId).orElseThrow(() -> new CustomException(UserErrorCode.USER_NOT_FOUND));
