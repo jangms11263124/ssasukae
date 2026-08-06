@@ -12,8 +12,8 @@ use audio_client::{
     EmbeddedEvent, PeerMixSettings,
 };
 use backend::{
-    create_low_latency_app_session, spawn_backend, spawn_mock_backend, BackendCommand,
-    BackendConfig, BackendEvent, LowLatencyAppSession,
+    create_low_latency_app_session, leave_room_directly, spawn_backend, spawn_mock_backend,
+    BackendCommand, BackendConfig, BackendEvent, LowLatencyAppSession,
 };
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
 use std::{
@@ -373,6 +373,8 @@ struct App {
     command_tx: Option<Sender<EmbeddedCommand>>,
     event_rx: Option<Receiver<WorkerEvent>>,
     app_session_rx: Option<Receiver<Result<LowLatencyAppSession, String>>>,
+    /// 백엔드 워커 없이 보낸 퇴장 요청의 결과 (Error 화면에서만 쓴다)
+    direct_leave_rx: Option<Receiver<Result<(), String>>>,
     backend_command_tx: Option<Sender<BackendCommand>>,
     backend_event_rx: Option<Receiver<BackendEvent>>,
     backend_connected: bool,
@@ -528,6 +530,7 @@ impl App {
             command_tx: None,
             event_rx: None,
             app_session_rx: None,
+            direct_leave_rx: None,
             backend_command_tx: None,
             backend_event_rx: None,
             backend_connected: preview,
@@ -1541,6 +1544,7 @@ impl App {
         self.command_tx = None;
         self.event_rx = None;
         self.app_session_rx = None;
+        self.direct_leave_rx = None;
         self.participants.clear();
         self.client_id = None;
         self.connected_peers = 0;
@@ -1619,6 +1623,69 @@ impl App {
             let _ = sender.send(BackendCommand::LeaveRoom);
         }
         self.maybe_finish_leave();
+    }
+
+    /// Error 화면에서 방을 나가고 앱을 닫는다.
+    ///
+    /// app-session 단계에서 실패하면 백엔드 워커가 없어 워커 경유 퇴장이 조용히
+    /// 생략된다. 웹이 만들어 둔 참가자가 방에 남지 않도록 실행 정보로 직접 요청한다.
+    fn leave_room_from_error(&mut self) {
+        if self.leaving {
+            return;
+        }
+        if self.backend_command_tx.is_some() {
+            self.leave_room();
+            return;
+        }
+
+        let room_id = self
+            .launch
+            .as_ref()
+            .and_then(|launch| launch.room_id.parse::<u64>().ok());
+        let Some((launch, room_id)) = self.launch.clone().zip(room_id) else {
+            // 보낼 정보가 없으면 정리할 참가자도 없다. 그대로 닫는다.
+            self.leave_room_without_backend_request();
+            return;
+        };
+
+        self.diagnostic("room_leave_requested_from_error", serde_json::json!({}));
+        self.leaving = true;
+        self.status = "방 퇴장 요청을 보내고 있습니다".into();
+        self.audio_leave_finished = self.command_tx.is_none();
+        self.backend_leave_finished = false;
+        self.leave_deadline = Some(Instant::now() + LEAVE_TIMEOUT);
+        if let Some(sender) = &self.command_tx {
+            let _ = sender.send(EmbeddedCommand::Stop);
+        }
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = tx.send(leave_room_directly(
+                &launch.backend_url,
+                room_id,
+                &launch.auth_token,
+            ));
+        });
+        self.direct_leave_rx = Some(rx);
+    }
+
+    fn poll_direct_leave(&mut self) {
+        let result = self
+            .direct_leave_rx
+            .as_ref()
+            .and_then(|receiver| receiver.try_recv().ok());
+        let Some(result) = result else {
+            return;
+        };
+        self.direct_leave_rx = None;
+        if let Err(error) = result {
+            // 퇴장까지 실패하면 웹에서 정리해야 한다. 진단에 남기고 앱은 닫는다.
+            self.diagnostic(
+                "room_leave_from_error_failed",
+                serde_json::json!({ "message": error }),
+            );
+        }
+        self.backend_leave_finished = true;
     }
 
     fn leave_room_without_backend_request(&mut self) {
@@ -2020,20 +2087,35 @@ impl App {
             ui.add_space(16.0);
             ui.label(RichText::new(&self.error_message).size(13.0).color(MUTED));
             ui.add_space(28.0);
-            if self.launch.is_some()
-                && ui
-                    .add_sized(
-                        [280.0, 44.0],
-                        egui::Button::new(RichText::new("같은 방 다시 연결").color(Color32::WHITE))
-                            .fill(PANEL_ALT),
-                    )
-                    .clicked()
+            if self.launch.is_some() {
+                let retry_button =
+                    egui::Button::new(RichText::new("같은 방 다시 연결").color(Color32::WHITE))
+                        .fill(PANEL_ALT)
+                        .min_size(Vec2::new(280.0, 44.0));
+                if ui.add_enabled(!self.leaving, retry_button).clicked() {
+                    self.start_client();
+                }
+            }
+            ui.add_space(10.0);
+            let leave_button = egui::Button::new(
+                RichText::new(if self.leaving {
+                    "종료 중..."
+                } else {
+                    "방 나가고 앱 종료"
+                })
+                .color(RED),
+            )
+            .fill(Color32::from_rgb(50, 20, 22))
+            .stroke(Stroke::new(1.0_f32, RED));
+            if ui
+                .add_enabled(!self.leaving, leave_button.min_size(Vec2::new(280.0, 44.0)))
+                .clicked()
             {
-                self.start_client();
+                self.leave_room_from_error();
             }
             ui.add_space(12.0);
             ui.label(
-                RichText::new("계속 실패하면 웹에서 방을 나간 뒤 초대 코드를 다시 입력해주세요.")
+                RichText::new("재시도가 계속 실패하면 방을 나간 뒤 웹에서 다시 입장해주세요.")
                     .size(11.0)
                     .color(MUTED),
             );
@@ -3396,6 +3478,7 @@ impl eframe::App for App {
             self.start_client();
         }
         self.poll_app_session();
+        self.poll_direct_leave();
         self.poll_events();
         self.poll_backend_events();
         self.poll_mr_events();
