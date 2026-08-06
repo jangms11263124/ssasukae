@@ -68,8 +68,21 @@ export function useRoomBootstrap(roomIdFromUrl: number | null): RoomBootstrapSta
   const session = useRoomStore((state) => state.session);
   const [bootstrapFailed, setBootstrapFailed] = useState(false);
 
+  // 이 화면에서 세션이 있었다가 비워졌다면 의도적 퇴장(나가기·강퇴·방 종료)이다.
+  // 새로고침 복구로 오인해 스냅샷을 재조회하면 서버가 이미 나간 참가자라며 409를 돌려준다.
+  const [hadSession, setHadSession] = useState(false);
+  if (session !== null && !hadSession) {
+    setHadSession(true);
+  }
+  const exitedRoom = session === null && hadSession;
+
   const needsBootstrap =
-    session === null && !authLoading && user !== null && roomIdFromUrl !== null && !bootstrapFailed;
+    session === null &&
+    !exitedRoom &&
+    !authLoading &&
+    user !== null &&
+    roomIdFromUrl !== null &&
+    !bootstrapFailed;
 
   useEffect(() => {
     if (!needsBootstrap || roomIdFromUrl === null || user === null) {
@@ -112,7 +125,7 @@ export function useRoomBootstrap(roomIdFromUrl: number | null): RoomBootstrapSta
   const shouldRedirect =
     session === null &&
     !authLoading &&
-    (user === null || roomIdFromUrl === null || bootstrapFailed);
+    (exitedRoom || user === null || roomIdFromUrl === null || bootstrapFailed);
 
   useEffect(() => {
     if (!shouldRedirect) {
