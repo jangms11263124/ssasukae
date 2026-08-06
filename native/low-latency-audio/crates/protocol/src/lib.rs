@@ -32,6 +32,8 @@ pub enum PacketKind {
     MrAbort = 15,
     MrCancel = 16,
     RendezvousError = 17,
+    /// 서버가 남은 피어들에게 알리는 이탈 통보. client_id가 사라진 피어다.
+    PeerGone = 18,
 }
 
 impl TryFrom<u8> for PacketKind {
@@ -56,6 +58,7 @@ impl TryFrom<u8> for PacketKind {
             15 => Ok(Self::MrAbort),
             16 => Ok(Self::MrCancel),
             17 => Ok(Self::RendezvousError),
+            18 => Ok(Self::PeerGone),
             _ => Err(DecodeError::UnknownKind(value)),
         }
     }

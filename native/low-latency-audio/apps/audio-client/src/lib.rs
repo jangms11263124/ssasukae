@@ -71,6 +71,8 @@ const TRIM_CROSSFADE_SAMPLES: usize = 48;
 const RECOVERY_CROSSFADE_SAMPLES: usize = 16;
 const FRAME_CLOCK_MAX_ADJUSTMENT_PPM: i64 = 3_000;
 const OPUS_MAX_PACKET_BYTES: usize = 512;
+/// 랑데부 서버에 생존을 알리는 주기. 서버의 PEER_TIMEOUT(12초)보다 충분히 짧아야 한다.
+const RENDEZVOUS_PING_INTERVAL: Duration = Duration::from_secs(5);
 const MAX_RECEIVE_TO_MAIN_DELAY: Duration = Duration::from_millis(20);
 const CANCEL_GUARD: Duration = Duration::from_millis(150);
 
@@ -162,6 +164,10 @@ pub enum EmbeddedEvent {
     PeerConnection {
         client_id: u64,
         connected: bool,
+    },
+    /// 서버가 알려준 피어 이탈. 참가자 목록에서 제거해야 한다.
+    PeerGone {
+        client_id: u64,
     },
     Metrics {
         connected_peers: usize,
@@ -657,6 +663,9 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
     let mut connection_states = BTreeMap::<u64, bool>::new();
     let mut capture_queue_us = Vec::new();
     let mut signaling_buffer = vec![0_u8; MAX_PACKET_BYTES];
+    // P2P 모드에서는 오디오가 서버를 거치지 않아, 이 Ping이 없으면 서버가 통화 중인
+    // 우리를 PEER_TIMEOUT 뒤에 만료시킨다. 서버의 last_seen을 살려 두는 유일한 신호다.
+    let mut next_rendezvous_ping = Instant::now();
     let mut previous_live_received = 0_u64;
     let mut previous_live_concealed = 0_u64;
     let mut previous_live_resyncs = 0_u64;
@@ -998,6 +1007,23 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             };
         }
 
+        if Instant::now() >= next_rendezvous_ping {
+            let ping = PacketHeader {
+                kind: PacketKind::Ping,
+                sequence: VERSION as u64,
+                client_sent_ns: elapsed_ns(epoch),
+                server_received_ns: 0,
+                server_sent_ns: 0,
+                session_id,
+                client_id,
+            };
+            if let Ok(packet) = encode(ping, HEADER_LEN) {
+                // 유실은 서버 타임아웃이 흡수한다. 여기서 실패를 통화 중단으로 올리지 않는다.
+                let _ = socket.send_to(&packet, server_address);
+            }
+            next_rendezvous_ping = Instant::now() + RENDEZVOUS_PING_INTERVAL;
+        }
+
         loop {
             match socket.recv_from(&mut signaling_buffer) {
                 Ok((size, source)) => {
@@ -1017,6 +1043,18 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                             .map(|code| code.to_string())
                             .unwrap_or_else(|_| "rendezvous rejected the registration".into());
                         return Err(message.into());
+                    }
+                    if packet.kind == PacketKind::PeerGone
+                        && packet.session_id == session_id
+                        && packet.client_id != client_id
+                        && packet.client_id <= MAX_CLIENTS
+                    {
+                        if let Some(events) = &embedded_events {
+                            let _ = events.send(EmbeddedEvent::PeerGone {
+                                client_id: packet.client_id,
+                            });
+                        }
+                        continue;
                     }
                     if packet.session_id != session_id
                         || packet.kind != PacketKind::PeerInfo

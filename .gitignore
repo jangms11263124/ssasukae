@@ -43,3 +43,6 @@ npm-debug.log*
 native/*
 !native/low-latency-audio/
 !native/low-latency-audio/**
+
+# Secrets
+*.pem

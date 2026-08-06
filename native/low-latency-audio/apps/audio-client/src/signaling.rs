@@ -3,7 +3,7 @@ use protocol::{
     decode, encode, encode_with_payload,
     registration::{self, RegistrationSigner},
     DecodeError, PacketHeader, PacketKind, RendezvousErrorCode, HEADER_LEN,
-    MAX_ICE_DESCRIPTION_BYTES, VERSION,
+    MAX_ICE_DESCRIPTION_BYTES, MAX_PACKET_BYTES, VERSION,
 };
 use std::{
     collections::BTreeMap,
@@ -16,6 +16,27 @@ use std::{
 pub(crate) const MAX_CLIENTS: u64 = 4;
 const ICE_BUNDLE_MARKER: &str = "@@ultra-sync-target:";
 const NICKNAME_MARKER: &str = "@@ultra-sync-nickname-hex:";
+
+/// Windows WSAEMSGSIZE. 데이터그램이 수신 버퍼보다 크면 잘린 채 이 오류가 온다.
+/// 다른 OS는 조용히 잘라내고 성공을 반환하므로 Windows에서만 나타난다.
+#[cfg(windows)]
+const WSAEMSGSIZE: i32 = 10_040;
+
+/// 등록 대기 루프에서 무시해도 되는 수신 오류인지 판단한다.
+///
+/// 이 소켓은 등록 응답만 오는 전용 소켓이 아니다. 서버가 피어 ICE 정보를
+/// 페이로드로 실어 보내므로(최대 MAX_ICE_DESCRIPTION_BYTES) 등록을 기다리는 동안
+/// 큰 패킷이 끼어들 수 있다. 그때 루프를 죽이지 않고 다음 패킷을 기다린다.
+fn is_skippable_recv_error(error: &io::Error) -> bool {
+    if error.kind() == io::ErrorKind::WouldBlock {
+        return true;
+    }
+    #[cfg(windows)]
+    if error.raw_os_error() == Some(WSAEMSGSIZE) {
+        return true;
+    }
+    false
+}
 
 pub(crate) fn ice_description_bundle(
     transports: &BTreeMap<u64, IceTransport>,
@@ -71,7 +92,7 @@ pub(crate) fn register(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(3);
     let mut next_send = Instant::now();
-    let mut buffer = [0_u8; HEADER_LEN];
+    let mut buffer = vec![0_u8; MAX_PACKET_BYTES];
     while Instant::now() < deadline {
         if Instant::now() >= next_send {
             send_registration(
@@ -100,7 +121,7 @@ pub(crate) fn register(
                     return Ok(());
                 }
             }
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+            Err(error) if is_skippable_recv_error(&error) => {
                 thread::sleep(Duration::from_millis(5));
             }
             Err(error) => return Err(error.into()),
@@ -118,7 +139,7 @@ pub(crate) fn request_client_id(
 ) -> Result<u64, Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(3);
     let mut next_send = Instant::now();
-    let mut buffer = [0_u8; HEADER_LEN];
+    let mut buffer = vec![0_u8; MAX_PACKET_BYTES];
     while Instant::now() < deadline {
         if Instant::now() >= next_send {
             send_registration(
@@ -145,7 +166,7 @@ pub(crate) fn request_client_id(
                 }
             }
             Ok(_) => {}
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+            Err(error) if is_skippable_recv_error(&error) => {
                 thread::sleep(Duration::from_millis(5));
             }
             Err(error) => return Err(error.into()),
