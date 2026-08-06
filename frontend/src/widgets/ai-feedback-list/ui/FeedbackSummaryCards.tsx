@@ -1,9 +1,15 @@
 import { memo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { feedbackQueryKeys, getFeedbackSummary } from '@/entities/feedback';
+import {
+  feedbackQueryKeys,
+  getFeedbackSummary,
+  type FeedbackSummary,
+} from '@/entities/feedback';
+import { usePerformanceStat } from '@/entities/user';
 import { cn } from '@/shared/lib/cn';
 import { getScoreGrade, NO_SCORE_LABEL, type ScoreGrade } from '@/shared/lib/scoreGrade';
+import { RefreshIcon } from '@/shared/ui/icons/RefreshIcon';
 import { Skeleton } from '@/shared/ui/skeleton/Skeleton';
 
 const EMPTY_VALUE = '--';
@@ -44,11 +50,26 @@ function FigureSkeleton({ className }: { className?: string }) {
 
 // 필터 변경·무한 스크롤 등 부모 상태 변화에 리렌더될 이유가 없는 컴포넌트라 memo.
 export const FeedbackSummaryCards = memo(function FeedbackSummaryCards() {
+  const queryClient = useQueryClient();
   const { data: summary, isPending } = useQuery({
     queryKey: feedbackQueryKeys.summary(),
     queryFn: getFeedbackSummary,
     staleTime: 60 * 1000,
   });
+
+  // 요약 GET은 집계 테이블(UserPerformanceStat)을 읽기만 해서, 최신화하려면
+  // 마이페이지와 같은 재계산 PATCH를 불러야 한다. 응답에 총 곡 수·평균이
+  // 그대로 있으므로 재조회 없이 요약 캐시에 직접 반영한다.
+  const { refresh, isFetching: isSyncing, isError: isSyncError } = usePerformanceStat();
+
+  const handleRefresh = async () => {
+    const { data: stat } = await refresh();
+    if (!stat) return;
+    queryClient.setQueryData<FeedbackSummary>(feedbackQueryKeys.summary(), {
+      totalSongs: stat.totalSongs,
+      avgScore: stat.avgScore,
+    });
+  };
 
   // 기록이 없으면 서버가 avgScore 0을 줄 수 있어, 그대로 계산하면 F로 오인된다.
   const grade = summary && summary.totalSongs > 0 ? getScoreGrade(summary.avgScore) : undefined;
@@ -118,6 +139,33 @@ export const FeedbackSummaryCards = memo(function FeedbackSummaryCards() {
           </p>
         </SummaryCell>
       </div>
+
+      {/* grid(relative)보다 뒤에 둬야 겹치는 영역에서 클릭이 가로채이지 않는다 */}
+      <button
+        type="button"
+        onClick={() => void handleRefresh()}
+        disabled={isSyncing}
+        className={cn(
+          'absolute right-5 top-5 flex items-center gap-1.5 border px-2.5 py-1.5 font-mono text-[0.5rem] font-bold tracking-[0.12em] transition-colors',
+          'border-white/10 bg-black/25 text-zinc-400 hover:border-cyan-300/50 hover:text-cyan-200',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300',
+          'disabled:cursor-wait disabled:text-zinc-600',
+        )}
+      >
+        <span className={cn(isSyncing && 'animate-spin')}>
+          <RefreshIcon />
+        </span>
+        {isSyncing ? 'SYNCING...' : 'REFRESH'}
+      </button>
+
+      {isSyncError && (
+        <p
+          role="alert"
+          className="relative border-t border-white/[0.06] px-8 py-3 font-mono text-[0.5rem] tracking-[0.12em] text-fuchsia-400"
+        >
+          [ERROR] 통계를 갱신하지 못했습니다. 다시 시도해 주세요.
+        </p>
+      )}
     </section>
   );
 });

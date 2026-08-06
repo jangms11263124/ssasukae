@@ -3,13 +3,14 @@
 import { usePerformanceStat } from '@/entities/user';
 import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
+import { RefreshIcon } from '@/shared/ui/icons/RefreshIcon';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 import { Skeleton } from '@/shared/ui/skeleton/Skeleton';
 
 import { getScoreGrade, GRADE_CLASS, NO_SCORE_LABEL } from '@/shared/lib/scoreGrade';
 
 import { formatCount, formatUpdatedAt } from '../lib/formatters';
-import { ChartIcon, RefreshIcon } from './icons';
+import { ChartIcon } from './icons';
 
 const EMPTY_VALUE = '--';
 
