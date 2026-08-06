@@ -1,5 +1,6 @@
 package com.ssafy.ssasukae.domain.song.controller;
 
+import com.ssafy.ssasukae.domain.song.dto.SongLyricsResponse;
 import com.ssafy.ssasukae.domain.song.dto.SongResponseDTO;
 import com.ssafy.ssasukae.domain.song.service.SongService;
 import com.ssafy.ssasukae.global.security.jwt.AuthenticatedUser;
@@ -9,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,6 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/songs")
 public class SongController {
     private final SongService songService;
+
+    @GetMapping("/{songId}/lyrics")
+    public ResponseEntity<SongLyricsResponse> getLyrics(@PathVariable Long songId) {
+        return ResponseEntity.ok(songService.getLyrics(songId));
+    }
 
     @GetMapping()
     public ResponseEntity<SongResponseDTO.searchDTO> search(
