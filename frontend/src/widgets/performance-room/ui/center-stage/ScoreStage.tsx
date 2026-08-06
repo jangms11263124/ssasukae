@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 
 import { useRoomStore } from '@/entities/room';
+import { getScoreGrade, type ScoreGrade } from '@/shared/lib/scoreGrade';
 
 import { useStageStore } from '../../model/stageStore';
 import { MediaControlsOverlay } from './overlays/MediaControlsOverlay';
@@ -14,11 +15,15 @@ const SCORE_DISPLAY_MS = 5000;
 /** WaitingControls의 시작 최소 인원과 같은 기준 — 그 아래로 줄면 대기 화면으로 돌아간다 */
 const MIN_PARTICIPANTS_TO_CONTINUE = 2;
 
-function scoreLabel(score: number) {
-  if (score >= 95) return 'PERFECT';
-  if (score >= 80) return 'GREAT';
-  return 'GOOD';
-}
+/** 등급별 결과 문구 — 구간(S~F)은 마이페이지·AI 피드백과 같은 scoreGrade.ts 기준을 쓴다 */
+const SCORE_LABEL: Record<ScoreGrade, string> = {
+  S: 'PERFECT',
+  A: 'EXCELLENT',
+  B: 'GREAT',
+  C: 'GOOD',
+  D: 'NICE TRY',
+  F: 'TRY AGAIN',
+};
 
 export function ScoreStage() {
   // 점수는 채점 완료 후 LEADERBOARD_UPDATED 이벤트가 채운다. 그 전까지 채점 중으로 표시한다.
@@ -74,7 +79,7 @@ export function ScoreStage() {
                 {score}
               </p>
               <p className="mt-1 text-4xl font-black tracking-tight text-cyan-300">
-                {scoreLabel(score)}
+                {SCORE_LABEL[getScoreGrade(score)]}
               </p>
             </>
           )}

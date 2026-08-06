@@ -5,12 +5,23 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRoomStore } from '@/entities/room';
 import { cn } from '@/shared/lib/cn';
 
-import { useChatStore } from '../../model/chatStore';
+import { useChatStore, type ChatMessage } from '../../model/chatStore';
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
+import { ParticipantAvatar } from '../ParticipantAvatar';
 import { RoomPanel } from '../RoomPanel';
 
 /** 백엔드 ParticipantChatRequest의 message 최대 길이 */
 const MAX_MESSAGE_LENGTH = 300;
+
+/**
+ * 같은 사람이 이어서 보낸 메시지인지. 카톡처럼 첫 줄에만 프사·닉네임을 붙이고
+ * 이어지는 줄은 말풍선만 남겨 목록이 얼굴로 뒤덮이지 않게 한다.
+ */
+function isSameSpeakerAsPrevious(messages: ChatMessage[], index: number): boolean {
+  const previous = messages[index - 1];
+
+  return previous !== undefined && previous.participantId === messages[index].participantId;
+}
 
 function SendIcon() {
   return (
@@ -65,28 +76,54 @@ export function TalkPanel() {
       <ul
         ref={listRef}
         className={cn(
-          'mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto',
+          'mt-3 min-h-0 flex-1 overflow-y-auto',
           // 스크롤은 가능하되 스크롤바는 숨긴다.
           '[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
         )}
         aria-label="채팅 메시지"
       >
-        {messages.map((message) => {
+        {messages.map((message, index) => {
           const mine = message.participantId === myParticipantId;
+          const grouped = isSameSpeakerAsPrevious(messages, index);
 
           return (
-            <li key={message.id} className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
-              <p
-                className={cn(
-                  'max-w-[85%] break-words border px-2.5 py-1.5 text-xs',
-                  mine
-                    ? 'border-white/10 border-r-2 border-r-cyan-300 bg-white/10 text-zinc-100'
-                    : 'border-white/10 bg-white/5 text-zinc-300',
+            <li
+              key={message.id}
+              className={cn(
+                'flex gap-2',
+                // 말한 사람이 바뀌는 자리에만 여백을 줘 덩어리로 읽히게 한다.
+                grouped ? 'mt-0.5' : 'mt-2.5 first:mt-0',
+                mine ? 'justify-end' : 'justify-start',
+              )}
+            >
+              {mine ? null : grouped ? (
+                // 프사 자리를 비워 두면 이어지는 말풍선이 위와 세로로 맞는다.
+                <span aria-hidden="true" className="size-8 shrink-0" />
+              ) : (
+                <ParticipantAvatar
+                  className="size-8"
+                  nickname={message.nickname}
+                  profileImageUrl={message.profileImageUrl}
+                />
+              )}
+
+              <div className={cn('flex min-w-0 max-w-[80%] flex-col', mine && 'items-end')}>
+                {mine || grouped ? null : (
+                  <span className="mb-1 truncate text-[11px] text-zinc-400">
+                    {message.nickname}
+                  </span>
                 )}
-              >
-                {mine ? '' : `${message.nickname}: `}
-                {message.message}
-              </p>
+                <p
+                  className={cn(
+                    'break-words border px-2.5 py-1.5 text-xs',
+                    mine
+                      ? 'border-white/10 border-r-2 border-r-cyan-300 bg-white/10 text-zinc-100'
+                      : 'border-white/10 bg-white/5 text-zinc-300',
+                  )}
+                >
+                  {message.message}
+                </p>
+              </div>
             </li>
           );
         })}

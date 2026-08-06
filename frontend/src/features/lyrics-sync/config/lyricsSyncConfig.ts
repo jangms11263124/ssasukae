@@ -60,3 +60,26 @@ export const LYRICS_LEAD_MS = 200;
  * 양수면 가사가 더 빨리, 음수면 더 늦게 넘어간다.
  */
 export const LYRICS_SYNC_OFFSET_MS = 0;
+
+/**
+ * 청자에게만 더 빼는 지연(ms).
+ *
+ * 가창자의 MR·목소리는 WebRTC를 타고 오느라 지터 버퍼와 네트워크만큼 늦게 들린다.
+ * 가사 시계는 가창자와 같은 이벤트로 출발하므로, 보정하지 않으면 참가자 화면에서는
+ * 들리는 소리보다 가사가 이만큼 먼저 넘어간다. 값을 올리면 가사가 더 늦게 넘어간다.
+ */
+export const LISTENER_LYRICS_DELAY_MS = 220;
+
+/**
+ * 다음 소절까지 노래방식 3·2·1을 띄우기 시작하는 시점.
+ * 3초를 넘기면 숫자가 4, 5로 올라가 카운트다운으로 읽히지 않는다.
+ */
+export const LYRICS_COUNTDOWN_LEAD_MS = 3_000;
+
+/**
+ * 카운트다운을 띄울 최소 공백 길이.
+ *
+ * 소절 사이의 짧은 숨 자리마다 숫자가 튀면 오히려 방해가 된다. 인트로나 제대로 된
+ * 간주처럼 이만큼 비어 있을 때만 센다.
+ */
+export const LYRICS_COUNTDOWN_MIN_GAP_MS = 4_000;

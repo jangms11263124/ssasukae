@@ -25,6 +25,8 @@ import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectTargetType;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
+import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardEntry;
+import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardStore;
 import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -67,6 +69,7 @@ class RoomInfoGetTest {
   @Mock private WebSocketEventPublisher webSocketEventPublisher;
   @Mock private CardService cardService;
   @Mock private PerformanceStore performanceStore;
+  @Mock private RoomLeaderboardStore roomLeaderboardStore;
   @Mock private SongRepository songRepository;
   @Mock private S3StorageService s3StorageService;
 
@@ -87,6 +90,7 @@ class RoomInfoGetTest {
                     webSocketEventPublisher,
                     cardService,
                     performanceStore,
+                    roomLeaderboardStore,
                     clock,
                     songRepository,
                     s3StorageService);
@@ -107,6 +111,10 @@ class RoomInfoGetTest {
     when(roomParticipantRepository
             .findAllByRoomIdAndConnectionStatusInOrderByJoinedAtAsc(eq(ROOM_ID), any()))
         .thenReturn(List.of(hostParticipant, requester));
+    when(roomLeaderboardStore.findAllRanked(ROOM_ID))
+        .thenReturn(List.of(
+            new RoomLeaderboardEntry(301L, 100L, "host", 401L, "First song", 95),
+            new RoomLeaderboardEntry(302L, 200L, "guest", 402L, "Second song", 88)));
 
     RoomSnapshotResponse response =
         roomService.getRoomSnapshot(REQUESTER_USER_ID, ROOM_ID);
@@ -117,6 +125,11 @@ class RoomInfoGetTest {
     assertThat(response.status()).isEqualTo(RoomStatus.PREPARING);
     assertThat(response.hostUserId()).isEqualTo(1L);
     assertThat(response.maxParticipants()).isEqualTo(Room.MAX_PARTICIPANTS);
+    assertThat(response.leaderboard())
+        .extracting(item -> item.rank(), item -> item.performanceId(), item -> item.finalScore())
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(1, 301L, 95),
+            org.assertj.core.groups.Tuple.tuple(2, 302L, 88));
     assertThat(response.participants())
         .extracting(
             item -> item.participantId(),

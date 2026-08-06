@@ -6,6 +6,7 @@ import {
   type PerformanceResumedPayload,
   type PerformanceSettings,
   type PerformanceStartedPayload,
+  type PerformanceSuspendedPayload,
 } from '@/entities/performance';
 import type { RoomSnapshotResponse } from '@/entities/room';
 
@@ -57,6 +58,8 @@ interface StageStore {
   scoringFailed: boolean;
   /** 가창자 연결 끊김으로 공연이 일시 중지된 상태 */
   isSuspended: boolean;
+  /** 가창자 연결이 끊긴 시각(ISO). 재접속 유예 카운트다운의 기준점 */
+  suspendedAt: string | null;
   /** 재개 시 MR을 이어 재생할 위치(ms). 새 공연 시작 시 0으로 돌아간다 */
   resumeOffsetMs: number;
   // 무대 진행 전이. 서버 이벤트 수신 시 apply* 액션이 상태를 덮어쓴다.
@@ -87,7 +90,7 @@ interface StageStore {
   /** AI 채점 결과 수신 (LEADERBOARD_UPDATED의 updatedFinalScore) */
   applyScore: (score: number) => void;
   applyScoringFailed: () => void;
-  applyPerformanceSuspended: () => void;
+  applyPerformanceSuspended: (payload: PerformanceSuspendedPayload) => void;
   applyPerformanceResumed: (payload: PerformanceResumedPayload) => void;
   /** 입장 또는 소켓 재연결 시 놓친 공연 이벤트를 서버 스냅샷으로 복원한다. */
   hydrateFromRoomSnapshot: (snapshot: RoomSnapshotResponse) => void;
@@ -106,6 +109,7 @@ const INITIAL_PERFORMANCE_STATE = {
   settings: DEFAULT_PERFORMANCE_SETTINGS,
   scoringFailed: false,
   isSuspended: false,
+  suspendedAt: null,
   resumeOffsetMs: 0,
 };
 
@@ -179,7 +183,13 @@ export const useStageStore = create<StageStore>((set) => ({
   // 처음부터 재생하는 경우이므로 이전 공연의 재개 위치를 버린다.
   // 패널도 닫아, 앞 순서 가창자가 열어 둔 상태가 다음 곡까지 따라오지 않게 한다.
   applyPlaybackStarted: () =>
-    set({ phase: 'PERFORMING', isSuspended: false, resumeOffsetMs: 0, dspPanelOpen: false }),
+    set({
+      phase: 'PERFORMING',
+      isSuspended: false,
+      suspendedAt: null,
+      resumeOffsetMs: 0,
+      dspPanelOpen: false,
+    }),
 
   // 점수는 채점 완료 후 LEADERBOARD_UPDATED가 채운다. 그때까지 "채점 중"으로 표시된다.
   applyPlaybackFinished: () => set({ phase: 'SCORE', score: null, scoringFailed: false }),
@@ -197,11 +207,14 @@ export const useStageStore = create<StageStore>((set) => ({
 
   applyScoringFailed: () => set({ phase: 'SCORE', scoringFailed: true }),
 
-  applyPerformanceSuspended: () => set({ isSuspended: true }),
+  // suspendedAt은 서버가 유예를 재기 시작한 시각이다. 재접속 카운트다운의 기준이라 payload 값을 그대로 쓴다.
+  applyPerformanceSuspended: (payload) =>
+    set({ isSuspended: true, suspendedAt: payload.suspendedAt }),
 
   applyPerformanceResumed: (payload) =>
     set((state) => ({
       isSuspended: false,
+      suspendedAt: null,
       performanceId: payload.performanceId,
       performerParticipantId: payload.performerParticipantId,
       resumeOffsetMs: payload.resumePositionMs,
@@ -264,6 +277,12 @@ export const useStageStore = create<StageStore>((set) => ({
         scoringFailed: performance.status === 'ANALYSIS_FAILED',
         // 로컬이 더 진행된 경우 스냅샷의 낡은 정지 상태·재생 위치로 덮어쓰지 않는다.
         isSuspended: localIsAhead ? state.isSuspended : isSuspended,
+        // 일시 중지 중 새로고침해도 카운트다운이 처음부터 다시 세지 않도록 서버 시각을 복원한다.
+        suspendedAt: localIsAhead
+          ? state.suspendedAt
+          : isSuspended
+            ? performance.suspendedAt
+            : null,
         resumeOffsetMs: localIsAhead
           ? state.resumeOffsetMs
           : (snapshot.playback?.playbackPositionMs ?? 0),

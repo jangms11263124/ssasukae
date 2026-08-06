@@ -1,0 +1,28 @@
+/* perspective(바깥)와 transform(안쪽)을 분리 — 같은 요소에 두면 기울기가 안 보임 */
+
+.attack-card-tilt {
+  perspective: 900px;
+  transform-style: preserve-3d;
+}
+
+.attack-card-tilt__plane {
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
+  width: 100%;
+  transform: rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  transform-style: preserve-3d;
+}
+
+.attack-card-tilt[data-tilting='false'] .attack-card-tilt__plane {
+  transition: transform 160ms ease-out;
+}
+
+.attack-card-tilt[data-tilting='true'] .attack-card-tilt__plane {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .attack-card-tilt__plane {
+    transform: none !important;
+  }
+}

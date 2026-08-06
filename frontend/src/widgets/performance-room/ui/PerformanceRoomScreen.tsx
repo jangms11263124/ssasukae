@@ -18,11 +18,12 @@ import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
 import { RoomSocketProvider } from '../model/RoomSocketContext';
 import { StageAudioProvider } from '../model/StageAudioContext';
 import { useCardEffectSideEffects } from '../model/useCardEffectSideEffects';
+import { useLeaveRoomOnBack } from '../model/useLeaveRoomOnBack';
 import { useOpenViduSession } from '../model/useOpenViduSession';
 import { useRoomBootstrap } from '../model/useRoomBootstrap';
 import { useRoomSocket } from '../model/useRoomSocket';
 import { useStageStore } from '../model/stageStore';
-import { MyCardDock } from './cards/MyCardDock';
+import { CardDealOverlay } from './cards/CardDealOverlay';
 import { CenterStage } from './center-stage/CenterStage';
 import { RoomHelpFloatingButton } from './help/RoomHelpFloatingButton';
 import { LeaderboardPanel } from './LeaderboardPanel';
@@ -89,6 +90,8 @@ function PerformanceRoomContent() {
   }
 
   useCardEffectSideEffects(session?.myParticipantId ?? null);
+  // 뒤로가기도 나가기 버튼과 같은 확인을 거친다 — 서버에 유령 참가자를 남기지 않는다.
+  useLeaveRoomOnBack(() => setLeaveConfirmOpen(true));
 
   if (session === null) {
     return null;
@@ -137,7 +140,9 @@ function PerformanceRoomContent() {
     } finally {
       endStage();
       leaveRoomStore();
-      router.push('/lobby');
+      // 뒤로가기 가드로 쌓아 둔 항목이 남아 있어, push로 나가면 다시 뒤로가기했을 때
+      // 세션 없는 방 화면으로 돌아간다. 떠난 방은 히스토리에 남기지 않는다.
+      router.replace('/lobby');
     }
   };
 
@@ -204,10 +209,6 @@ function PerformanceRoomContent() {
                     participants={stagedParticipants}
                   />
                 </div>
-
-                <div className="shrink-0">
-                  <MyCardDock />
-                </div>
               </section>
 
               <RoomRightSidebar />
@@ -232,9 +233,15 @@ function PerformanceRoomContent() {
               open={leaveConfirmOpen}
               title="방에서 나가시겠어요?"
               description={
-                session.isHost
-                  ? '방장이 나가면 방이 종료되고, 모든 참가자가 함께 퇴장돼요.'
-                  : '퇴장하면 로비로 이동해요.'
+                session.isHost ? (
+                  <>
+                    방장이 나가면 방이 종료되고,
+                    <br />
+                    모든 참가자가 함께 나가요.
+                  </>
+                ) : (
+                  '나가면 로비로 이동해요.'
+                )
               }
               confirmLabel="나가기"
               danger
@@ -242,6 +249,9 @@ function PerformanceRoomContent() {
               onConfirm={handleLeaveRoom}
               onCancel={() => setLeaveConfirmOpen(false)}
             />
+
+            {/* 스테이지가 아니라 브라우저 전체 기준 배분 연출 */}
+            <CardDealOverlay />
           </div>
         </StageAudioProvider>
       </OpenViduSessionProvider>

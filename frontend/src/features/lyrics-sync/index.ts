@@ -2,9 +2,12 @@ export { fetchLyricsCandidates, fetchPlainLyrics } from './api/lyricsApi';
 export type { LyricsLookupParams } from './api/lyricsApi';
 export {
   DURATION_TOLERANCE_SEC,
+  LISTENER_LYRICS_DELAY_MS,
   LRCLIB_BASE_URL,
   LRCLIB_CLIENT,
   LYRICS_CACHE_SECONDS,
+  LYRICS_COUNTDOWN_LEAD_MS,
+  LYRICS_COUNTDOWN_MIN_GAP_MS,
   LYRICS_LEAD_MS,
   LYRICS_SYNC_OFFSET_MS,
   MAX_CANDIDATES,

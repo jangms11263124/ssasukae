@@ -1,6 +1,7 @@
 export type { LeaderboardEntry } from './types';
 export {
   DEFAULT_PERFORMANCE_SETTINGS,
+  PERFORMER_RECONNECT_GRACE_SECONDS,
   type PerformanceStatus,
   type RoomStatus,
   type PerformanceSettings,

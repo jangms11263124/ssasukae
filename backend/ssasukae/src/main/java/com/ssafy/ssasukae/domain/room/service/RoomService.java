@@ -1,6 +1,8 @@
 package com.ssafy.ssasukae.domain.room.service;
 
 import com.ssafy.ssasukae.domain.card.service.CardService;
+import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardEntry;
+import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardStore;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceCancelReason;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
@@ -70,6 +72,7 @@ public class RoomService {
     private final WebSocketEventPublisher webSocketEventPublisher;
     private final CardService cardService;
     private final PerformanceStore performanceStore;
+    private final RoomLeaderboardStore roomLeaderboardStore;
     private final Clock clock;
     private final SongRepository songRepository;
     private final S3StorageService s3StorageService;
@@ -220,6 +223,11 @@ public class RoomService {
                                                                 ActiveCardSnapshotResponse.from(
                                                                         card, assignment)))
                         .orElse(null);
+        List<RoomLeaderboardEntry> rankedEntries = roomLeaderboardStore.findAllRanked(roomId);
+        List<LeaderboardSnapshotResponse> leaderboard = java.util.stream.IntStream
+                .range(0, rankedEntries.size())
+                .mapToObj(index -> LeaderboardSnapshotResponse.from(rankedEntries.get(index), index + 1))
+                .toList();
 
         return RoomSnapshotResponse.from(
                 room,
@@ -227,6 +235,7 @@ public class RoomService {
                 serverNow,
                 performanceResponse,
                 playback,
+                leaderboard,
                 myCard,
                 cardUsageStatuses,
                 activeCard);

@@ -36,7 +36,7 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
     """)
     List<Favorite> search(User user, String query, LocalDateTime cursorCreatedAt, Long cursorId, Pageable pageable);
 
-    @Query("SELECT COUNT(f) FROM Favorite f JOIN f.song s WHERE f.user = :user AND :query = '' OR LOWER(s.title) LIKE LOWER(CONCAT('%', :query, '%'))")
+    @Query("SELECT COUNT(f) FROM Favorite f JOIN f.song s WHERE f.user = :user AND (:query = '' OR LOWER(s.title) LIKE LOWER(CONCAT('%', :query, '%')))")
     int countByUserAndQuery(User user, String query);
 
     int countByUser(User user);

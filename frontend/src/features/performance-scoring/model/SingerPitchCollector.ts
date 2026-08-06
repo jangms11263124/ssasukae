@@ -14,6 +14,8 @@ interface SingerPitchCollectorOptions {
   analyser: AnalyserNode;
   /** 프레임 시각(ms). MR 재생 위치를 넘긴다 — 정답 MIDI와 같은 시간축이어야 한다 */
   getTimeMs: () => number;
+  /** 지금 MR에 적용된 키 오프셋(반음). 정답 MIDI는 원곡 키라 이만큼 빼서 축을 맞춘다 */
+  getKeyOffset: () => number;
 }
 
 /** A4(440Hz) = MIDI 69 기준 반음 환산 */
@@ -34,6 +36,7 @@ function hzToMidi(hz: number): number {
 export class SingerPitchCollector {
   private readonly analyser: AnalyserNode;
   private readonly getTimeMs: () => number;
+  private readonly getKeyOffset: () => number;
   private readonly detector: PitchDetector<Float32Array>;
   private readonly buffer: Float32Array<ArrayBuffer>;
   private readonly notes: SingerMidiNote[] = [];
@@ -44,6 +47,7 @@ export class SingerPitchCollector {
   constructor(options: SingerPitchCollectorOptions) {
     this.analyser = options.analyser;
     this.getTimeMs = options.getTimeMs;
+    this.getKeyOffset = options.getKeyOffset;
 
     const size = this.analyser.fftSize;
     this.buffer = new Float32Array(size);
@@ -84,6 +88,10 @@ export class SingerPitchCollector {
     // 배음·잡음이 만든 극단값은 중앙값·표준편차를 크게 흔든다.
     if (midi < PITCH_MIN_MIDI || midi > PITCH_MAX_MIDI) return;
 
+    // 가창자는 키가 바뀐 MR을 따라 부르지만 정답 MIDI는 원곡 키다. 전송 직전 일괄 보정이
+    // 아니라 프레임마다 빼야 한다 — 수성전 카드로 키가 곡 중간에 바뀌었다 돌아오기 때문이다.
+    const midiInOriginalKey = midi - this.getKeyOffset();
+
     const startMs = Math.round(this.getTimeMs());
     const previous = this.notes.at(-1);
     // 일시 중지 등으로 MR 시간이 멈춰 있으면 길이 0인 note가 생겨 AI가 400으로 거절한다.
@@ -93,7 +101,7 @@ export class SingerPitchCollector {
       start_ms: startMs,
       end_ms: startMs + PITCH_SAMPLE_INTERVAL_MS,
       // 소수점을 유지한다 — 반올림하면 안정성 점수의 표준편차가 계단처럼 튄다.
-      midi: Number(midi.toFixed(3)),
+      midi: Number(midiInOriginalKey.toFixed(3)),
     });
   }
 }

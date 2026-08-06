@@ -11,12 +11,33 @@ export const PARAM_RAMP_SECONDS = 0.05;
 /** PitchShift 그레인 크기(초). 이 값만큼 MR이 지연된다 — 줄이면 지연 대신 음이 뭉개진다 */
 export const PITCH_SHIFT_WINDOW_SIZE = 0.1;
 
-/** 에코 반복 간격. 데모와 같은 8분음표(기본 BPM 120 기준 0.25초) */
-export const ECHO_DELAY_TIME = '8n';
+/**
+ * 에코(`echoLevel`)는 딜레이가 아니라 `Tone.Reverb`로 구현한다.
+ * 딜레이(FeedbackDelay)는 원리상 원음을 일정 간격으로 되풀이하므로, 간격을 줄여도
+ * 피드백이 남는 한 반복이 쌓여 "말이 두 번" 들린다. 데모에서 옮겨온 0.25초는 물론
+ * 0.11초로 줄여도 레벨을 올리면 220ms·330ms 반복이 또렷하게 분리됐다.
+ * 리버브는 수천 개의 반사를 흩어 꼬리로 만들기 때문에 되풀이가 아니라 울림으로 들린다.
+ *
+ * decay는 생성 시 임펄스 응답을 굽는 값이라 런타임에 못 바꾼다(비동기 재생성 필요).
+ * 그래서 decay·preDelay는 고정하고 사용자가 조절하는 것은 wet 하나뿐이다.
+ */
+/** 울림 꼬리 길이(초). 길면 넓은 홀, 짧으면 작은 방 */
+export const ECHO_DECAY_SECONDS = 1.6;
 
-/** echoLevel 0~100 → 피드백 0~0.7 / 웻 0~0.8 사상 (데모 계수 유지) */
-export const ECHO_FEEDBACK_PER_PERCENT = 0.007;
-export const ECHO_WET_PER_PERCENT = 0.008;
+/** 원음과 반사음 사이 간격(초). 목소리 윤곽이 뭉개지지 않게 살짝 띄운다 */
+export const ECHO_PRE_DELAY_SECONDS = 0.02;
+
+/**
+ * echoLevel 100에서의 웻 상한. 여기서 원음은 25%만 남아 목소리가 상당히 젖는다.
+ *
+ * 매핑은 선형이 아니라 제곱근이다(`max * sqrt(level / 100)`).
+ * 실기 테스트에서 기본값 30이 너무 밋밋하고 선형 매핑의 100이 딱 맞는다는 결론이 나왔는데,
+ * 백엔드 defaults()가 30이라 기본값 자체는 옮길 수 없다(재개 시 서버 값과 어긋난다).
+ * 선형 계수만 올리면 레벨 75에서 웻이 1.0(원음 0%)에 닿아 75~100이 전부 같은 소리가 된다.
+ * 제곱근은 낮은 쪽 해상도를 키워 30에서 약 0.41(= 이전 선형 100과 같은 울림)을 주면서
+ * 위쪽 구간도 살려 둔다.
+ */
+export const ECHO_WET_MAX = 0.75;
 
 /** 음량 0%의 바닥값. -Infinity는 램프 목표가 될 수 없어 유한한 무음 레벨을 쓴다 */
 export const SILENCE_DB = -80;
