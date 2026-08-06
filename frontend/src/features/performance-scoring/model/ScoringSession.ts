@@ -9,6 +9,8 @@ interface ScoringSessionOptions {
   analyser: AnalyserNode;
   /** MR 재생 위치(ms). STT 구간 경계와 음정 프레임이 같은 시간축을 쓴다 */
   getTimeMs: () => number;
+  /** 지금 MR에 적용된 키 오프셋(반음). 가창 음정을 원곡 키 기준으로 되돌리는 데 쓴다 */
+  getKeyOffset: () => number;
 }
 
 /**
@@ -29,6 +31,7 @@ export class ScoringSession {
     this.collector = new SingerPitchCollector({
       analyser: options.analyser,
       getTimeMs: options.getTimeMs,
+      getKeyOffset: options.getKeyOffset,
     });
   }
 

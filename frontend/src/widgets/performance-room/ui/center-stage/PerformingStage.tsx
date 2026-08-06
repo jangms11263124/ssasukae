@@ -21,6 +21,7 @@ import { useStageStore } from '../../model/stageStore';
 import { SoundIcon } from '../media-controls/MediaIcons';
 import { MediaToggleButton } from '../media-controls/MediaToggleButton';
 import { LyricsBlackout } from './overlays/LyricsBlackout';
+import { LyricsCountdown } from './overlays/LyricsCountdown';
 import { LyricsNotice } from './overlays/LyricsNotice';
 import { LyricsOverlay } from './overlays/LyricsOverlay';
 import { MediaControlsOverlay } from './overlays/MediaControlsOverlay';
@@ -107,6 +108,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
     showToast('제스처로 공연을 취소했어요.');
   };
 
+  const isBattleMode = useRoomStore((state) => state.session?.mode === 'BATTLE');
   const canUseGesture = isPerformer && gestureOn && camOn;
 
   const gesture = useGestureDspControl({
@@ -174,7 +176,11 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
       {lyricsHidden ? (
         <LyricsBlackout />
       ) : lyrics.status === 'READY' ? (
-        <LyricsOverlay currentLine={lyrics.currentLine} nextLine={lyrics.nextLine} />
+        <>
+          <LyricsOverlay currentLine={lyrics.currentLine} nextLine={lyrics.nextLine} />
+          {/* 가사 가리기 카드에 걸렸을 때는 들어갈 타이밍도 같이 가려져야 공격이 성립한다 */}
+          {lyrics.countdown !== null ? <LyricsCountdown seconds={lyrics.countdown} /> : null}
+        </>
       ) : lyrics.message !== null ? (
         <LyricsNotice message={lyrics.message} />
       ) : null}
@@ -193,13 +199,16 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
             <GestureCancelCountdown progress={gesture.cancelProgress} />
           ) : null}
 
-          <button
-            type="button"
-            onClick={handleCancel}
-            className="absolute bottom-4 right-4 border border-white/30 bg-black/60 px-5 py-2 font-mono text-xs tracking-[0.18em] text-zinc-400 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
-          >
-            공연 취소
-          </button>
+          {/* 수성전은 공연 취소가 없다 — 제스처와 함께 버튼도 내린다 */}
+          {!isBattleMode ? (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="absolute bottom-4 right-4 border border-white/30 bg-black/60 px-5 py-2 font-mono text-xs tracking-[0.18em] text-zinc-400 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
+            >
+              공연 취소
+            </button>
+          ) : null}
         </>
       ) : null}
     </StageBackdrop>

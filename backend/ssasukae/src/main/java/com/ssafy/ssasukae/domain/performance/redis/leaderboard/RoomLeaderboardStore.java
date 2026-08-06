@@ -7,6 +7,8 @@ public interface RoomLeaderboardStore {
 
   Optional<RoomLeaderboardEntry> find(Long roomId, Long performanceId);
 
+  List<RoomLeaderboardEntry> findAllRanked(Long roomId);
+
   List<RoomLeaderboardEntry> saveAndGetRanked(Long roomId, RoomLeaderboardEntry entry);
 
   void delete(Long roomId, Long performanceId);

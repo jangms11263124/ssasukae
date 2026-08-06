@@ -1,5 +1,9 @@
 import type { CardAssignmentStatus, CardEffectType } from '@/entities/card';
-import type { PerformanceSettings, PerformanceStatus } from '@/entities/performance';
+import type {
+  LeaderboardEntry,
+  PerformanceSettings,
+  PerformanceStatus,
+} from '@/entities/performance';
 import type {
   ParticipantConnectionStatus,
   ParticipantStageRole,
@@ -100,6 +104,8 @@ export interface RoomSnapshotResponse {
   participants: RoomSnapshotParticipant[];
   performance: RoomSnapshotPerformance | null;
   playback: RoomSnapshotPlayback | null;
+  /** 방에서 끝난 공연들의 순위. 서버가 정렬·rank까지 계산해 내려준다 */
+  leaderboard?: LeaderboardEntry[];
   myCard?: RoomSnapshotMyCard | null;
   cardUsageStatuses?: RoomSnapshotCardUsageStatus[];
   activeCard?: RoomSnapshotActiveCard | null;

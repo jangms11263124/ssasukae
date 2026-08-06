@@ -19,6 +19,7 @@ import type {
   PerformanceSettingsChangedPayload,
   PerformanceStartedPayload,
   PerformanceStateChangedPayload,
+  PerformanceSuspendedPayload,
 } from '@/entities/performance';
 import {
   getRoomSnapshot,
@@ -276,7 +277,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           break;
         }
         case 'PERFORMANCE_SUSPENDED':
-          stageStore.applyPerformanceSuspended();
+          stageStore.applyPerformanceSuspended(event.payload as PerformanceSuspendedPayload);
           showToast('가창자 연결이 끊겨 공연을 잠시 멈췄어요.', 'info');
           break;
         case 'PERFORMANCE_RESUMED':

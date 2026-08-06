@@ -63,6 +63,7 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
           captureStream: engine.getVocalCaptureStream(),
           analyser: engine.getVocalAnalyser(),
           getTimeMs: () => engine.getMrPositionMs(),
+          getKeyOffset: () => engine.getAppliedKeyOffset(),
         });
 
         if (!session.isSttSupported) {

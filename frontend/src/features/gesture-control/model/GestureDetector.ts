@@ -40,6 +40,8 @@ export class GestureDetector {
     private readonly video: HTMLVideoElement,
     private readonly getViewport: () => Viewport,
     private readonly callbacks: GestureCallbacks,
+    /** 양손 X자(취소) 판정 여부. 취소가 없는 모드에서는 꺼서 오조작·카운트다운을 원천 차단한다 */
+    private readonly cancelEnabled = true,
   ) {
     const { width, height } = getViewport();
     this.cursorX = width / 2;
@@ -117,8 +119,8 @@ export class GestureDetector {
       return;
     }
 
-    // 공연 종료가 일반 제어보다 우선이다.
-    if (hands.length >= 2 && isTwoHandXGesture(hands[0], hands[1])) {
+    // 취소가 일반 제어보다 우선이다.
+    if (this.cancelEnabled && hands.length >= 2 && isTwoHandXGesture(hands[0], hands[1])) {
       this.handleCancelGesture();
 
       return;

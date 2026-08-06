@@ -37,6 +37,12 @@ public class RedisRoomLeaderboardStore implements RoomLeaderboardStore {
   }
 
   @Override
+  public List<RoomLeaderboardEntry> findAllRanked(Long roomId) {
+    validatePositive(roomId, "roomId");
+    return rankedEntries(leaderboardKey(roomId));
+  }
+
+  @Override
   public List<RoomLeaderboardEntry> saveAndGetRanked(
           Long roomId,
           RoomLeaderboardEntry entry
@@ -52,18 +58,7 @@ public class RedisRoomLeaderboardStore implements RoomLeaderboardStore {
     try {
       redisTemplate.expire(key, LEADERBOARD_TTL);
 
-      return redisTemplate.opsForHash()
-              .entries(key)
-              .values()
-              .stream()
-              .map(Object::toString)
-              .map(this::deserialize)
-              .sorted(
-                      Comparator.comparing(RoomLeaderboardEntry::finalScore)
-                              .reversed()
-                              .thenComparing(RoomLeaderboardEntry::performanceId)
-              )
-              .toList();
+      return rankedEntries(key);
 
     } catch (RuntimeException exception) {
       redisTemplate.opsForHash().delete(key, hashKey);
@@ -96,6 +91,17 @@ public class RedisRoomLeaderboardStore implements RoomLeaderboardStore {
 
   private String leaderboardKey(Long roomId) {
     return KEY_PREFIX + roomId + KEY_SUFFIX;
+  }
+
+  private List<RoomLeaderboardEntry> rankedEntries(String key) {
+    return redisTemplate.opsForHash().entries(key).values().stream()
+        .map(Object::toString)
+        .map(this::deserialize)
+        .sorted(
+            Comparator.comparing(RoomLeaderboardEntry::finalScore)
+                .reversed()
+                .thenComparing(RoomLeaderboardEntry::performanceId))
+        .toList();
   }
 
   private void validatePositive(Long value, String fieldName) {

@@ -14,6 +14,8 @@ export interface UseGestureControlOptions {
   enabled: boolean;
   isPanelOpen: boolean;
   rowCount: number;
+  /** 양손 X자(취소) 제스처 사용 여부. false면 판정도 카운트다운도 하지 않는다 */
+  cancelEnabled: boolean;
   onOpenPanel: () => void;
   onClosePanel: () => void;
   onCancelHold: () => void;
@@ -25,7 +27,7 @@ export interface UseGestureControlOptions {
 
 export interface GestureControlState {
   isHandDetected: boolean;
-  /** 공연 종료 카운트다운. 진행 중이 아니면 null */
+  /** 취소 카운트다운. 진행 중이 아니거나 취소를 쓰지 않는 모드면 null */
   cancelProgress: GestureCancelProgress | null;
   error: string | null;
 }
@@ -38,6 +40,7 @@ export function useGestureControl(options: UseGestureControlOptions): GestureCon
     enabled,
     isPanelOpen,
     rowCount,
+    cancelEnabled,
     onOpenPanel,
     onClosePanel,
     onCancelHold,
@@ -153,7 +156,9 @@ export function useGestureControl(options: UseGestureControlOptions): GestureCon
       onClosePanel: () => handlersRef.current.onClosePanel(),
       onCancelHold: () => handlersRef.current.onCancelHold(),
       onCancelProgress: applyCancelProgress,
-    });
+    },
+    cancelEnabled,
+    );
 
     detectorRef.current = detector;
     detector.setPanelOpen(isPanelOpen);
@@ -183,7 +188,7 @@ export function useGestureControl(options: UseGestureControlOptions): GestureCon
     };
     // isPanelOpen은 아래 별도 effect에서 반영한다(디텍터 재생성 방지).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, rowCount, videoRef, containerRef, cursorRef, applyCancelProgress]);
+  }, [enabled, rowCount, cancelEnabled, videoRef, containerRef, cursorRef, applyCancelProgress]);
 
   useEffect(() => {
     detectorRef.current?.setPanelOpen(isPanelOpen);

@@ -16,8 +16,8 @@ export interface PerformanceSettings {
   tempoPercent: number;
   mrVolumePercent: number;
   micVolumePercent: number;
+  /** 목소리 울림 양. 이름은 서버 계약을 따르지만 구현은 리버브다 */
   echoLevel: number;
-  reverbLevel: number;
   /** 가창자 모니터에서 들리는 자기 목소리 크기. 로컬 전용 — 서버 계약(4필드)에 없음 */
   monitorVoicePercent: number;
 }
@@ -30,9 +30,15 @@ export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceSettings = {
   // 조절 없이 시작해도 목소리에 기본 울림이 걸리도록 한다. 백엔드 defaults()와 값을 맞춰야
   // 재개 시 서버 기본값이 내려와도 어긋나지 않는다.
   echoLevel: 30,
-  reverbLevel: 0,
   monitorVoicePercent: 30,
 };
+
+/**
+ * 가창자 연결이 끊긴 뒤 서버가 기다려 주는 재접속 유예(초). 만료되면 서버가 해당 참가자를
+ * 방에서 내보내고 공연을 취소한다. 마감 시각은 따로 내려오지 않아 FE가 연결이 끊긴 시각에
+ * 이 값을 더해 계산하므로, 백엔드 performance.recovery.performer-disconnect-grace와 맞춰야 한다.
+ */
+export const PERFORMER_RECONNECT_GRACE_SECONDS = 15;
 
 // ── 이벤트 payload ──────────────────────────────────────────
 

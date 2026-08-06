@@ -1,59 +1,65 @@
-import { cn } from '@/shared/lib/cn';
+'use client';
 
-import { CARD_CLIP_PATH, CARD_TIER_VISUALS } from '../config/cardVisuals';
+import { CARD_ASPECT, CARD_RADIUS, CARD_TIER_VISUALS } from '../config/cardVisuals';
 import type { CardTier } from '../types';
+import { CardTiltShell } from './CardTiltShell';
 import { StarCubeIcon } from './CardIcons';
 
 interface AttackCardBackProps {
   className?: string;
+  /** 호버 틸트. 기본 true */
+  interactive?: boolean;
   tier: CardTier;
 }
 
-/** 수성전 공격 카드 뒷면. 등급(실버/골드/플래티넘) 프레임으로 렌더링한다. */
-export function AttackCardBack({ className, tier }: AttackCardBackProps) {
+/** 수성전 공격 카드 뒷면. TCG 비율·둥근 모서리 + 기존 등급 프레임 UI. */
+export function AttackCardBack({ className, interactive = true, tier }: AttackCardBackProps) {
   const tierVisual = CARD_TIER_VISUALS[tier];
 
   return (
-    <div
-      className={cn('relative aspect-[63/88] select-none p-[2px]', className)}
-      style={{
-        background: tierVisual.frameGradient,
-        boxShadow: tierVisual.glow,
-        clipPath: CARD_CLIP_PATH,
-      }}
-    >
+    <CardTiltShell className={className} interactive={interactive}>
       <div
-        className="relative flex size-full flex-col items-center justify-center gap-4 overflow-hidden bg-[#101016] p-4"
-        style={{ clipPath: CARD_CLIP_PATH }}
+        className="relative size-full select-none overflow-hidden p-[2px]"
+        style={{
+          aspectRatio: CARD_ASPECT,
+          borderRadius: CARD_RADIUS,
+          background: tierVisual.frameGradient,
+          boxShadow: tierVisual.glow,
+        }}
       >
-        <div className="rounded-full p-[1.5px]" style={{ background: tierVisual.frameGradient }}>
-          <div
-            className="grid size-16 place-items-center rounded-full bg-[#101016]"
-            style={{ color: tierVisual.iconColor }}
-          >
-            <StarCubeIcon className="size-8" gradientStops={tierVisual.iconGradientStops} />
+        <div
+          className="relative flex size-full flex-col items-center justify-center gap-4 overflow-hidden bg-[#101016] p-4"
+          style={{ borderRadius: CARD_RADIUS }}
+        >
+          <div className="rounded-full p-[1.5px]" style={{ background: tierVisual.frameGradient }}>
+            <div
+              className="grid size-16 place-items-center rounded-full bg-[#101016]"
+              style={{ color: tierVisual.iconColor }}
+            >
+              <StarCubeIcon className="size-8" gradientStops={tierVisual.iconGradientStops} />
+            </div>
+          </div>
+
+          <div className="text-center">
+            <p className="font-sans text-2xl font-black italic tracking-[0.04em] text-white">STAR</p>
+            <p
+              className="mt-1 font-mono text-[10px] tracking-[0.3em]"
+              style={
+                tier === 'P'
+                  ? {
+                      backgroundImage: tierVisual.frameGradient,
+                      WebkitBackgroundClip: 'text',
+                      backgroundClip: 'text',
+                      color: 'transparent',
+                    }
+                  : { color: tierVisual.iconColor }
+              }
+            >
+              {tierVisual.label} CARD
+            </p>
           </div>
         </div>
-
-        <div className="text-center">
-          <p className="font-sans text-2xl font-black italic tracking-[0.04em] text-white">STAR</p>
-          <p
-            className="mt-1 font-mono text-[10px] tracking-[0.3em]"
-            style={
-              tier === 'P'
-                ? {
-                    backgroundImage: tierVisual.frameGradient,
-                    WebkitBackgroundClip: 'text',
-                    backgroundClip: 'text',
-                    color: 'transparent',
-                  }
-                : { color: tierVisual.iconColor }
-            }
-          >
-            {tierVisual.label} CARD
-          </p>
-        </div>
       </div>
-    </div>
+    </CardTiltShell>
   );
 }

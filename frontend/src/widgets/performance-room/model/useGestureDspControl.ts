@@ -15,7 +15,7 @@ interface UseGestureDspControlOptions {
   isPanelOpen: boolean;
   onOpenPanel: () => void;
   onClosePanel: () => void;
-  /** 양손 X자 3초 유지 완료 → 공연 취소 */
+  /** 양손 X자 3초 유지 완료 → 공연 취소. 수성전에서는 호출되지 않는다 */
   onCancelPerformance: () => void;
 }
 
@@ -85,6 +85,8 @@ export function useGestureDspControl(
     enabled: options.enabled,
     isPanelOpen: options.isPanelOpen,
     rowCount: rows.length,
+    // 수성전은 공연 취소가 없다. 판정을 꺼서 오조작도 카운트다운도 생기지 않게 한다.
+    cancelEnabled: !isBattleMode,
     onOpenPanel: options.onOpenPanel,
     onClosePanel: options.onClosePanel,
     onCancelHold: options.onCancelPerformance,

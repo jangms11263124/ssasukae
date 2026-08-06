@@ -9,15 +9,15 @@ import {
   BROADCAST_MR_TRIM_DB,
   BROADCAST_VOICE_COMPRESSOR,
   BROADCAST_VOICE_MAKEUP_DB,
-  ECHO_DELAY_TIME,
-  ECHO_FEEDBACK_PER_PERCENT,
-  ECHO_WET_PER_PERCENT,
   MIC_INPUT_LATENCY_ESTIMATE_SECONDS,
   PARAM_RAMP_SECONDS,
   RNNOISE_LATENCY_SECONDS,
   RNNOISE_WASM_SIMD_URL,
   RNNOISE_WASM_URL,
   RNNOISE_WORKLET_URL,
+  ECHO_DECAY_SECONDS,
+  ECHO_PRE_DELAY_SECONDS,
+  ECHO_WET_MAX,
   PITCH_BYPASS_EPSILON,
   PITCH_SHIFT_WINDOW_SIZE,
   SILENCE_DB,
@@ -29,7 +29,7 @@ import type { VocalAudioEngine, VocalDspValues } from './types';
 /*
  * 오디오 그래프 (모니터/송출 믹스 분리):
  *
- *   [송출]  mic(NS) → FeedbackDelay(에코) → Compressor → micGain ─┐
+ *   [송출]  mic(NS) → voiceEcho(울림) → Compressor → micGain ─┐
  *           mrGain → broadcastMrDelay(싱크) → mrBroadcastTrim ─────┴→ broadcastBus
  *                  → Limiter → MediaStreamDestination (→ OpenVidu publisher)
  *
@@ -103,7 +103,8 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   private readonly broadcastDestination: MediaStreamAudioDestinationNode;
   private readonly pitchShift: Tone.PitchShift;
   private readonly mrGain: Tone.Volume;
-  private readonly echoDelay: Tone.FeedbackDelay;
+  /** 목소리 울림(`echoLevel`). 딜레이는 되풀이로 들려 리버브 노드로 구현한다 */
+  private readonly voiceEcho: Tone.Reverb;
   /** 송출 전용 목소리 컴프레서. AGC 없이 캡처한 목소리의 큰 편차만 눌러 준다 */
   private readonly voiceCompressor: Tone.Compressor;
   private readonly micGain: Tone.Volume;
@@ -111,8 +112,8 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   private readonly mrBroadcastTrim: Tone.Volume;
   /** 송출 믹스 마지막 단. 목소리 메이크업으로 커진 합산 피크를 잡는다 */
   private readonly broadcastLimiter: Tone.Limiter;
-  /** 모니터 전용 목소리 경로 (원음 → 에코 → 게인). NS가 도입돼도 이 경로는 거치지 않는다 */
-  private readonly monitorVoiceEcho: Tone.FeedbackDelay;
+  /** 모니터 전용 목소리 경로 (원음 → 울림 → 게인). NS가 도입돼도 이 경로는 거치지 않는다 */
+  private readonly monitorVoiceEcho: Tone.Reverb;
   private readonly monitorVoiceGain: Tone.Volume;
   /** 송출 MR 싱크 보정 — 가창자가 들은 MR에 맞춰 부른 목소리가 믹스에서 정렬되도록 MR을 늦춘다 */
   private readonly broadcastMrDelay: DelayNode;
@@ -186,14 +187,18 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.micGain.connect(this.broadcastBus);
     this.voiceCompressor = new Tone.Compressor(BROADCAST_VOICE_COMPRESSOR);
     this.voiceCompressor.connect(this.micGain);
-    this.echoDelay = new Tone.FeedbackDelay({ delayTime: ECHO_DELAY_TIME, feedback: 0, wet: 0 });
-    this.echoDelay.connect(this.voiceCompressor);
+    this.voiceEcho = new Tone.Reverb({
+      decay: ECHO_DECAY_SECONDS,
+      preDelay: ECHO_PRE_DELAY_SECONDS,
+      wet: 0,
+    });
+    this.voiceEcho.connect(this.voiceCompressor);
 
     // 목소리 모니터 경로 — 원음에서 바로 따서 NS(추후) 지연이 가창 경험에 붙지 않는다.
-    // 에코는 송출과 같은 echoLevel로 연동되는 별도 노드 (dry 통과라 지연 추가 없음).
-    this.monitorVoiceEcho = new Tone.FeedbackDelay({
-      delayTime: ECHO_DELAY_TIME,
-      feedback: 0,
+    // 울림은 송출과 같은 echoLevel로 연동되는 별도 노드 (dry 통과라 지연 추가 없음).
+    this.monitorVoiceEcho = new Tone.Reverb({
+      decay: ECHO_DECAY_SECONDS,
+      preDelay: ECHO_PRE_DELAY_SECONDS,
       wet: 0,
     });
     this.monitorVoiceGain = new Tone.Volume(volumePercentToDb(DEFAULT_DSP.monitorVoicePercent));
@@ -209,6 +214,15 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     if (context.state !== 'running') {
       document.addEventListener('pointerdown', this.resumeOnPointerDown, { once: true });
     }
+  }
+
+  /**
+   * 리버브 임펄스 응답 생성을 기다린다. 생성 전에는 컨볼버에 버퍼가 없어 wet 경로가
+   * 소리를 내지 않으므로, 엔진을 넘기기 전에 한 번 끝내 둔다.
+   */
+  async prepareEcho(): Promise<void> {
+    // Tone.Reverb는 임펄스 응답을 오프라인으로 구워야 소리가 난다.
+    await Promise.all([this.voiceEcho.generate(), this.monitorVoiceEcho.generate()]);
   }
 
   async loadMr(url: string): Promise<void> {
@@ -296,6 +310,10 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     return this.mrPositionSeconds() * 1000;
   }
 
+  getAppliedKeyOffset(): number {
+    return this.lastDsp.keyOffset;
+  }
+
   async openMic(deviceId: string): Promise<void> {
     if (this.disposed) return;
     this.closeMic();
@@ -321,7 +339,7 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     if (this.rnnoise !== null) {
       this.micSource.connect(this.rnnoise);
     }
-    Tone.connect(broadcastVoiceSource, this.echoDelay);
+    Tone.connect(broadcastVoiceSource, this.voiceEcho);
     Tone.connect(this.micSource, this.monitorVoiceEcho);
     // 채점 탭은 에코 앞에서 갈라진다 — 사용자가 건 이펙트가 STT·음정 분석에 섞이지 않는다.
     broadcastVoiceSource.connect(this.vocalAnalyser);
@@ -362,12 +380,12 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
       this.pitchShift.wet.rampTo(1, PARAM_RAMP_SECONDS);
     }
 
-    const echoFeedback = safe.echoLevel * ECHO_FEEDBACK_PER_PERCENT;
-    const echoWet = safe.echoLevel * ECHO_WET_PER_PERCENT;
-    this.echoDelay.feedback.rampTo(echoFeedback, PARAM_RAMP_SECONDS);
-    this.echoDelay.wet.rampTo(echoWet, PARAM_RAMP_SECONDS);
-    // 가창자 본인도 같은 울림을 듣도록 모니터 에코를 함께 움직인다
-    this.monitorVoiceEcho.feedback.rampTo(echoFeedback, PARAM_RAMP_SECONDS);
+    // decay는 임펄스 응답에 구워져 런타임에 못 바꾸므로 wet만 움직인다.
+    // 음수 레벨이 들어오면 sqrt가 NaN이 되어 rampTo가 터지므로 0~1로 먼저 가둔다.
+    const echoRatio = Math.min(1, Math.max(0, safe.echoLevel / 100));
+    const echoWet = ECHO_WET_MAX * Math.sqrt(echoRatio);
+    this.voiceEcho.wet.rampTo(echoWet, PARAM_RAMP_SECONDS);
+    // 가창자 본인도 같은 울림을 듣도록 모니터 리버브를 함께 움직인다
     this.monitorVoiceEcho.wet.rampTo(echoWet, PARAM_RAMP_SECONDS);
 
     this.mrGain.volume.rampTo(volumePercentToDb(safe.mrVolumePercent), PARAM_RAMP_SECONDS);
@@ -417,7 +435,7 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.mrGain.dispose();
     this.broadcastMrDelay.disconnect();
     this.mrBroadcastTrim.dispose();
-    this.echoDelay.dispose();
+    this.voiceEcho.dispose();
     this.voiceCompressor.dispose();
     this.micGain.dispose();
     this.broadcastLimiter.dispose();
@@ -459,6 +477,9 @@ export async function createVocalAudioEngine(): Promise<VocalAudioEngine> {
   // (React StrictMode 이중 마운트) 노드가 다른 컨텍스트에 섞이지 않는다.
   Tone.setContext(context);
   const engine = new ToneVocalAudioEngine(context, rnnoise);
+
+  // 임펄스 응답이 없으면 울림만 조용히 빠진다 — 실패해도 공연은 계속돼야 한다
+  await engine.prepareEcho().catch(() => undefined);
 
   // 방 진입까지의 클릭으로 사용자 활성화가 있으면 즉시 살아난다
   await context.resume().catch(() => undefined);
