@@ -151,10 +151,10 @@ trim to:     10ms
 - 재생 sequence보다 늦은 frame은 sample ring 진입 전에 폐기
 - 재생 시각에 frame이 없을 때만 zero-lookahead concealment
 - 장치 clock drift와 과도한 출력 큐 회수용 adaptive linear resampling 최대 ±0.3%
-- 최종 출력 ring 30ms 초과 시 15ms 정리는 비상 안전장치로만 유지
+- 최종 출력 ring 10ms 초과 시 5ms 정리는 비상 안전장치로 유지
 - 누락 frame에 zero-lookahead Opus PLC를 적용하고 실패 시 기존 감쇠 concealment로 fallback
 - late frame 거부와 resync
-- stale frame 기한은 목표 jitter 10ms+30ms로 계산
+- stale frame 기한은 목표 jitter 10ms+10ms인 총 20ms로 계산
 - 새 peer는 자신의 jitter prebuffer가 준비된 뒤 기존 전역 재생 시계를 변경하지 않고 mixer에 합류
 - 명시적 `Leave` 또는 ICE `Disconnected`에서만 해당 peer의 live playout buffer와 concealment 상태를 초기화하고 다른 peer 재생은 유지
 - 단순 음성 무수신과 긴 지연은 퇴장으로 판정하지 않고 jitter buffer와 concealment로 처리
@@ -457,7 +457,7 @@ Phase 0~2와 Phase 3의 최대 4명 Full Mesh 구조는 실행 가능한 상태�
 
 1. **Phase 3 최대 4명 실제 장치 검증**
    - local monitor 100%와 40/10ms local queue 확인
-   - remote 30/15ms queue와 2.5ms capture packet pacing 정책 확인
+   - remote 10/5ms queue와 2.5ms capture packet pacing 정책 확인
    - ICE attempt 2 동작 확인
    - 10분 실제 음성 run 확보
    - 구현된 다중 ICE, peer별 jitter buffer, fan-out, mixer 회귀 확인

@@ -108,10 +108,10 @@ pub fn start(
     input_stats: InputCallbackStats,
     playback_stats: PlaybackStats,
     selection: AudioDeviceSelection,
-) -> Result<(WasapiStreams, Consumer, Producer), String> {
+) -> Result<(WasapiStreams, Consumer, Producer, Producer), String> {
     let (capture_producer, capture_consumer) = ring_buffer(RING_SAMPLES);
-    let (monitor_producer, monitor_consumer) = ring_buffer(RING_SAMPLES);
     let (playback_producer, playback_consumer) = ring_buffer(RING_SAMPLES);
+    let (mr_producer, mr_consumer) = ring_buffer(RING_SAMPLES);
     let stop = Arc::new(AtomicBool::new(false));
     let (ready_tx, ready_rx) = mpsc::channel();
 
@@ -125,7 +125,6 @@ pub fn start(
             let result = run_capture(
                 capture_stop,
                 capture_producer,
-                monitor_producer,
                 KaraokeEffects::new(effects_config),
                 live_effects,
                 input_stats,
@@ -150,7 +149,7 @@ pub fn start(
             let result = run_render(
                 render_stop,
                 playback_consumer,
-                monitor_consumer,
+                mr_consumer,
                 playback_stats,
                 render_device_id.as_deref(),
                 &render_ready,
@@ -191,6 +190,7 @@ pub fn start(
         },
         capture_consumer,
         playback_producer,
+        mr_producer,
     ))
 }
 
@@ -198,7 +198,6 @@ pub fn start(
 fn run_capture(
     stop: Arc<AtomicBool>,
     mut producer: Producer,
-    mut monitor_producer: Producer,
     mut effects: KaraokeEffects,
     live_effects: Arc<LiveEffects>,
     stats: InputCallbackStats,
@@ -261,7 +260,6 @@ fn run_capture(
                     stats.record_sample(mono);
                     let processed = effects.process_sample(mono);
                     let _ = producer.push(processed);
-                    let _ = monitor_producer.push(processed);
                 }
                 capture
                     .ReleaseBuffer(actual_frames)
@@ -280,7 +278,7 @@ fn run_capture(
 fn run_render(
     stop: Arc<AtomicBool>,
     mut consumer: Consumer,
-    monitor_consumer: Consumer,
+    mut mr_consumer: Consumer,
     stats: PlaybackStats,
     device_id: Option<&str>,
     ready: &mpsc::Sender<Result<String, String>>,
@@ -316,8 +314,7 @@ fn run_render(
             playback_policy.target_queue_samples as f64 * 1_000.0 / SAMPLE_RATE as f64,
             negotiation
         )));
-        let mut state = PlaybackOutputState::new(false, period_frames as usize);
-        let mut local_consumer = Some(monitor_consumer);
+        let mut state = PlaybackOutputState::new(false);
         let mut previous_event = None;
         let mut event_intervals_us = Vec::new();
         while !stop.load(Ordering::Acquire) {
@@ -340,7 +337,7 @@ fn run_render(
                 samples,
                 format.channels as usize,
                 &mut consumer,
-                &mut local_consumer,
+                &mut mr_consumer,
                 playback_policy,
                 &stats,
                 &mut state,

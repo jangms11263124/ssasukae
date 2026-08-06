@@ -921,7 +921,6 @@ impl App {
                     ping_ms,
                     concealment_percent,
                     underruns,
-                    local_monitor_underruns,
                     resyncs,
                 }) => {
                     self.connected_peers = connected_peers;
@@ -938,7 +937,6 @@ impl App {
                                 "pingMs": ping_ms,
                                 "concealmentPercent": concealment_percent,
                                 "underruns": underruns,
-                                "localMonitorUnderruns": local_monitor_underruns,
                                 "resyncs": resyncs,
                             }),
                         );

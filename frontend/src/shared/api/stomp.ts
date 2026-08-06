@@ -42,7 +42,13 @@ export function createStompClient(callbacks: StompConnectionCallbacks = {}): Cli
     beforeConnect: async () => {
       let accessToken = getAccessToken();
       if (accessToken && tokenNeedsRefresh(accessToken)) {
-        accessToken = await refreshStoredAccessToken();
+        try {
+          accessToken = await refreshStoredAccessToken();
+        } catch {
+          // refresh 실패는 공통 인증 처리에서 메모리 토큰을 제거한다. 여기서 오류를
+          // 다시 전파하면 STOMP 내부 Promise가 unhandledRejection으로 노출된다.
+          accessToken = null;
+        }
       }
       client.connectHeaders = accessToken
         ? { Authorization: `Bearer ${accessToken}` }

@@ -60,19 +60,18 @@ pub use wasapi::{
 
 const RING_SAMPLES: usize = SAMPLE_RATE as usize * 2;
 const MAX_CAPTURE_BURST_FRAMES: usize = 16;
-const LOCAL_MONITOR_MAX_QUEUE_SAMPLES: usize = SAMPLE_RATE as usize * 40 / 1_000;
-const LOCAL_MONITOR_MAX_SPEED_ADJUSTMENT_PPM: i64 = 500;
-const LOCAL_MONITOR_RATIO_SMOOTHING: f64 = 0.0005;
-const LOCAL_MONITOR_GAIN: f32 = 1.0;
-const LOCAL_MONITOR_FADE_SAMPLES: usize = 48;
 const PLAYBACK_OUTPUT_CEILING: f32 = 0.92;
 const PLAYBACK_LIMITER_RELEASE_PER_SAMPLE: f32 = 0.0005;
+const MR_DUCK_MIN_GAIN: f32 = 0.35;
+const MR_DUCK_THRESHOLD: f32 = 0.01;
+const MR_DUCK_FULL_LEVEL: f32 = 0.15;
+const MR_DUCK_RELEASE_PER_SAMPLE: f32 = 0.0005;
 const MAX_CONCEALED_FRAMES_PER_GAP: u64 = 4;
 const TRIM_CROSSFADE_SAMPLES: usize = 48;
 const RECOVERY_CROSSFADE_SAMPLES: usize = 16;
 const FRAME_CLOCK_MAX_ADJUSTMENT_PPM: i64 = 3_000;
 const OPUS_MAX_PACKET_BYTES: usize = 512;
-const MAX_RECEIVE_TO_MAIN_DELAY: Duration = Duration::from_millis(25);
+const MAX_RECEIVE_TO_MAIN_DELAY: Duration = Duration::from_millis(20);
 const CANCEL_GUARD: Duration = Duration::from_millis(150);
 
 #[derive(Clone, Debug)]
@@ -169,7 +168,6 @@ pub enum EmbeddedEvent {
         ping_ms: Option<f64>,
         concealment_percent: f64,
         underruns: u64,
-        local_monitor_underruns: u64,
         resyncs: u64,
     },
     MrFinished {
@@ -547,12 +545,13 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
 
     let mut capture = None;
     let mut playback = None;
+    let mut mr_playback = None;
     let mut streams = None;
     let playback_stats = PlaybackStats::default();
     let input_callback_stats = InputCallbackStats::default();
     let live_effects = LiveEffects::new(effects_config);
     if !synthetic {
-        let (wasapi_streams, capture_consumer, playback_producer) = wasapi::start(
+        let (wasapi_streams, capture_consumer, playback_producer, mr_producer) = wasapi::start(
             effects_config,
             Arc::clone(&live_effects),
             input_callback_stats.clone(),
@@ -562,6 +561,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
         .map_err(|error| format!("WASAPI input/output initialization failed: {error}"))?;
         capture = Some(capture_consumer);
         playback = Some(playback_producer);
+        mr_playback = Some(mr_producer);
         streams = Some(wasapi_streams);
     }
 
@@ -661,7 +661,6 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
     let mut previous_live_concealed = 0_u64;
     let mut previous_live_resyncs = 0_u64;
     let mut previous_live_underruns = 0_u64;
-    let mut previous_local_monitor_underruns = 0_u64;
     let mut mr_track: Option<MrTrack> = None;
     let mut mr_volume = 0.72_f32;
     let mut cancel_request = None::<u64>;
@@ -773,6 +772,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             streams = None;
             capture = None;
             playback = None;
+            mr_playback = None;
             if let Some(events) = &embedded_events {
                 let _ = events.send(EmbeddedEvent::AudioDeviceRecovery {
                     recovered: false,
@@ -786,10 +786,16 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                 playback_stats.clone(),
                 audio_selection.clone(),
             ) {
-                Ok((restarted_streams, restarted_capture, restarted_playback)) => {
+                Ok((
+                    restarted_streams,
+                    restarted_capture,
+                    restarted_playback,
+                    restarted_mr_playback,
+                )) => {
                     streams = Some(restarted_streams);
                     capture = Some(restarted_capture);
                     playback = Some(restarted_playback);
+                    mr_playback = Some(restarted_mr_playback);
                     audio_restart_needed = false;
                     playout_started = false;
                     next_playout = Instant::now();
@@ -1387,6 +1393,9 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             let Some(destination) = playback.as_mut() else {
                 break;
             };
+            let Some(mr_destination) = mr_playback.as_mut() else {
+                break;
+            };
             let mut remote_frames = Vec::<[f32; SAMPLES_PER_FRAME]>::new();
             let mut has_remote_playout = false;
             let mut minimum_buffered = JITTER_MAX_FRAMES;
@@ -1507,10 +1516,11 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             if !has_remote_playout {
                 playout_started = false;
             }
-            let mut mixed = mix_remote_frames(&remote_frames);
+            let mut vocals = mix_remote_frames(&remote_frames);
+            let mut mr_frame = [0.0_f32; SAMPLES_PER_FRAME];
             let has_mr_audio = mr_track
                 .as_mut()
-                .is_some_and(|track| track.mix_next_frame(&mut mixed));
+                .is_some_and(|track| track.mix_next_frame(&mut mr_frame));
             if has_mr_audio {
                 if let Some(track) = mr_track.as_ref().filter(|track| !track.playing) {
                     if let Some(events) = &embedded_events {
@@ -1523,8 +1533,9 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             if !has_remote_playout && !has_mr_audio {
                 break;
             }
-            limit_output(&mut mixed);
-            push_playback_frame(destination, &mixed, &mut playback_overflows);
+            limit_output(&mut vocals);
+            push_playback_frame(destination, &vocals, &mut playback_overflows);
+            push_playback_frame(mr_destination, &mr_frame, &mut playback_overflows);
             let (clock_interval, clock_adjustment_ppm) = if has_remote_playout {
                 frame_clock_interval(minimum_buffered, JITTER_PREBUFFER_FRAMES - 1)
             } else {
@@ -1546,9 +1557,6 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             let total_concealed: u64 = peers.values().map(|peer| peer.concealed_frames).sum();
             let total_resyncs: u64 = peers.values().map(|peer| peer.playback_resyncs).sum();
             let total_underruns = playback_stats.underrun_events.load(Ordering::Relaxed);
-            let total_local_monitor_underruns = playback_stats
-                .local_monitor_underrun_events
-                .load(Ordering::Relaxed);
             let incoming_queue_drops: u64 = transports
                 .values()
                 .map(IceTransport::incoming_queue_drops)
@@ -1580,10 +1588,8 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                 -60.0
             };
             println!(
-                "Live status: peers={connected_peers} ping_ms={ping_ms:.1} concealment_percent={concealment_percent:.2} underruns={} local_monitor_underruns={} resyncs={} input_peak_dbfs={peak_dbfs:.1} clipped_samples={clipped_samples} incoming_queue_drops={incoming_queue_drops} stale_outgoing_drops={stale_outgoing_drops}",
+                "Live status: peers={connected_peers} ping_ms={ping_ms:.1} concealment_percent={concealment_percent:.2} underruns={} resyncs={} input_peak_dbfs={peak_dbfs:.1} clipped_samples={clipped_samples} incoming_queue_drops={incoming_queue_drops} stale_outgoing_drops={stale_outgoing_drops}",
                 total_underruns.saturating_sub(previous_live_underruns),
-                total_local_monitor_underruns
-                    .saturating_sub(previous_local_monitor_underruns),
                 total_resyncs.saturating_sub(previous_live_resyncs),
             );
             if let Some(events) = &embedded_events {
@@ -1592,7 +1598,6 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                     ping_ms: (ping_ms >= 0.0).then_some(ping_ms),
                     concealment_percent,
                     underruns: total_underruns.saturating_sub(previous_live_underruns),
-                    local_monitor_underruns: total_local_monitor_underruns,
                     resyncs: total_resyncs.saturating_sub(previous_live_resyncs),
                 });
                 let _ = events.send(EmbeddedEvent::InputLevel {
@@ -1605,7 +1610,6 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             previous_live_concealed = total_concealed;
             previous_live_resyncs = total_resyncs;
             previous_live_underruns = total_underruns;
-            previous_local_monitor_underruns = total_local_monitor_underruns;
             while next_live_status <= live_now {
                 next_live_status += Duration::from_secs(1);
             }
@@ -1903,8 +1907,6 @@ fn supported_config(
 fn build_input_stream(
     device: &Device,
     mut producer: Producer,
-    mut local_monitor: Option<Producer>,
-    local_monitor_level: f32,
     mut effects: Option<KaraokeEffects>,
     stats: InputCallbackStats,
 ) -> Result<Stream, Box<dyn std::error::Error>> {
@@ -1916,15 +1918,7 @@ fn build_input_stream(
             &config,
             move |data: &[f32], _| {
                 let started = Instant::now();
-                push_input(
-                    data,
-                    channels,
-                    &mut producer,
-                    &mut local_monitor,
-                    local_monitor_level,
-                    &mut effects,
-                    |v| v,
-                );
+                push_input(data, channels, &mut producer, &mut effects, |v| v);
                 stats.record(started.elapsed());
             },
             error,
@@ -1934,15 +1928,9 @@ fn build_input_stream(
             &config,
             move |data: &[i16], _| {
                 let started = Instant::now();
-                push_input(
-                    data,
-                    channels,
-                    &mut producer,
-                    &mut local_monitor,
-                    local_monitor_level,
-                    &mut effects,
-                    |v| v as f32 / 32768.0,
-                );
+                push_input(data, channels, &mut producer, &mut effects, |v| {
+                    v as f32 / 32768.0
+                });
                 stats.record(started.elapsed());
             },
             error,
@@ -1952,15 +1940,9 @@ fn build_input_stream(
             &config,
             move |data: &[u16], _| {
                 let started = Instant::now();
-                push_input(
-                    data,
-                    channels,
-                    &mut producer,
-                    &mut local_monitor,
-                    local_monitor_level,
-                    &mut effects,
-                    |v| (v as f32 - 32768.0) / 32768.0,
-                );
+                push_input(data, channels, &mut producer, &mut effects, |v| {
+                    (v as f32 - 32768.0) / 32768.0
+                });
                 stats.record(started.elapsed());
             },
             error,
@@ -1976,8 +1958,6 @@ fn push_input<T: Copy>(
     data: &[T],
     channels: usize,
     producer: &mut Producer,
-    local_monitor: &mut Option<Producer>,
-    local_monitor_level: f32,
     effects: &mut Option<KaraokeEffects>,
     convert: impl Fn(T) -> f32,
 ) {
@@ -1987,9 +1967,6 @@ fn push_input<T: Copy>(
             .as_mut()
             .map_or(mono, |effects| effects.process_sample(mono));
         let _ = producer.push(processed);
-        if let Some(monitor) = local_monitor.as_mut() {
-            let _ = monitor.push(processed * local_monitor_level);
-        }
     }
 }
 
@@ -1997,17 +1974,14 @@ fn push_input<T: Copy>(
 fn build_output_stream(
     device: &Device,
     mut consumer: Consumer,
-    mut local_consumer: Option<Consumer>,
+    mut mr_consumer: Consumer,
     policy: PlaybackBufferPolicy,
     stats: PlaybackStats,
 ) -> Result<Stream, Box<dyn std::error::Error>> {
     let (config, format) = supported_config(device, false)?;
     let channels = config.channels as usize;
     let error = |value| eprintln!("audio output error: {value}");
-    let mut state = PlaybackOutputState::new(
-        policy.prebuffer_samples == 0,
-        policy.target_queue_samples.max(1),
-    );
+    let mut state = PlaybackOutputState::new(policy.prebuffer_samples == 0);
     let stream = match format {
         SampleFormat::F32 => device.build_output_stream(
             &config,
@@ -2016,7 +1990,7 @@ fn build_output_stream(
                     data,
                     channels,
                     &mut consumer,
-                    &mut local_consumer,
+                    &mut mr_consumer,
                     policy,
                     &stats,
                     &mut state,
@@ -2033,7 +2007,7 @@ fn build_output_stream(
                     data,
                     channels,
                     &mut consumer,
-                    &mut local_consumer,
+                    &mut mr_consumer,
                     policy,
                     &stats,
                     &mut state,
@@ -2050,7 +2024,7 @@ fn build_output_stream(
                     data,
                     channels,
                     &mut consumer,
-                    &mut local_consumer,
+                    &mut mr_consumer,
                     policy,
                     &stats,
                     &mut state,
@@ -2070,29 +2044,12 @@ fn fill_output<T: Copy>(
     data: &mut [T],
     channels: usize,
     consumer: &mut Consumer,
-    local_consumer: &mut Option<Consumer>,
+    mr_consumer: &mut Consumer,
     policy: PlaybackBufferPolicy,
     stats: &PlaybackStats,
     state: &mut PlaybackOutputState,
     convert: impl Fn(f32) -> T,
 ) {
-    let local_device_period_samples = state.output_period_samples.max(SAMPLES_PER_FRAME);
-    let local_target_queue_samples = (local_device_period_samples
-        .saturating_mul(2)
-        .saturating_add(SAMPLES_PER_FRAME))
-    .min(LOCAL_MONITOR_MAX_QUEUE_SAMPLES);
-    if let Some(local) = local_consumer.as_mut() {
-        if local.available() > LOCAL_MONITOR_MAX_QUEUE_SAMPLES {
-            let discard = local.available().saturating_sub(local_target_queue_samples);
-            for _ in 0..discard {
-                let _ = local.pop();
-            }
-            state.local_resampler.reset();
-            state.local_started = false;
-            state.local_ratio = 1.0;
-            state.local_fade_gain = 0.0;
-        }
-    }
     if policy.max_queue_samples > 0 && consumer.available() > policy.max_queue_samples {
         let needed = consumer.available().saturating_sub(policy.trim_to_samples);
         let discard_frames = needed.div_ceil(SAMPLES_PER_FRAME);
@@ -2102,15 +2059,17 @@ fn fill_output<T: Copy>(
             .fetch_add(discard as u64, Ordering::Relaxed);
         for _ in 0..discard {
             let _ = consumer.pop();
+            let _ = mr_consumer.pop();
         }
         state.resampler.reset();
+        state.mr_resampler.reset();
         state.trim_crossfade_from = state.last_remote_sample;
         state.trim_crossfade_remaining = TRIM_CROSSFADE_SAMPLES;
         state.limiter_gain = 1.0;
     }
     let remote_ready = state.started
         || (consumer.available() > 0 && consumer.available() >= policy.prebuffer_samples);
-    if !remote_ready && local_consumer.is_none() {
+    if !remote_ready {
         data.fill(convert(0.0));
         return;
     }
@@ -2120,28 +2079,15 @@ fn fill_output<T: Copy>(
     let adjustment_ppm = playback_speed_adjustment_ppm(policy, consumer.available());
     stats.record_speed(adjustment_ppm);
     let ratio = 1.0 + adjustment_ppm as f64 / 1_000_000.0;
-    let local_available = local_consumer.as_ref().map_or(0, Consumer::available);
-    if !state.local_started && local_available >= local_target_queue_samples {
-        state.local_started = true;
-        state.local_fade_gain = 0.0;
-        state.local_dropout_remaining = 0;
-    }
-    let local_error = local_available as i64 - local_target_queue_samples as i64;
-    let local_response_range = (local_target_queue_samples as i64 / 2).max(1);
-    let local_adjustment_ppm =
-        (local_error * LOCAL_MONITOR_MAX_SPEED_ADJUSTMENT_PPM / local_response_range).clamp(
-            -LOCAL_MONITOR_MAX_SPEED_ADJUSTMENT_PPM,
-            LOCAL_MONITOR_MAX_SPEED_ADJUSTMENT_PPM,
-        );
-    let local_target_ratio = 1.0 + local_adjustment_ppm as f64 / 1_000_000.0;
     for frame in data.chunks_exact_mut(channels) {
-        let mut remote = if state.started {
+        let mut remote_vocals = if state.started {
             match state.resampler.render(consumer, ratio) {
                 Some(sample) => sample,
                 None => {
                     stats.underrun_events.fetch_add(1, Ordering::Relaxed);
                     state.started = false;
                     state.resampler.reset();
+                    state.mr_resampler.reset();
                     0.0
                 }
             }
@@ -2151,49 +2097,20 @@ fn fill_output<T: Copy>(
         if state.trim_crossfade_remaining > 0 {
             let progress = (TRIM_CROSSFADE_SAMPLES - state.trim_crossfade_remaining + 1) as f32
                 / TRIM_CROSSFADE_SAMPLES as f32;
-            remote = state.trim_crossfade_from * (1.0 - progress) + remote * progress;
+            remote_vocals = state.trim_crossfade_from * (1.0 - progress) + remote_vocals * progress;
             state.trim_crossfade_remaining -= 1;
         }
-        state.last_remote_sample = remote;
-        let local_sample = if state.local_started {
-            // Smooth the asynchronous device-clock correction sample by sample.
-            // Abrupt callback-level ratio changes can sound like low-level sizzling.
-            state.local_ratio +=
-                (local_target_ratio - state.local_ratio) * LOCAL_MONITOR_RATIO_SMOOTHING;
-            local_consumer
-                .as_mut()
-                .and_then(|local| state.local_resampler.render(local, state.local_ratio))
+        state.last_remote_sample = remote_vocals;
+        let mr = if state.started {
+            state.mr_resampler.render(mr_consumer, ratio).unwrap_or(0.0)
         } else {
-            None
+            0.0
         };
-        let local = if let Some(sample) = local_sample {
-            state.local_fade_gain =
-                (state.local_fade_gain + 1.0 / LOCAL_MONITOR_FADE_SAMPLES as f32).min(1.0);
-            state.last_local_sample = sample;
-            sample * state.local_fade_gain * LOCAL_MONITOR_GAIN
-        } else {
-            if state.local_started {
-                stats
-                    .local_monitor_underrun_events
-                    .fetch_add(1, Ordering::Relaxed);
-                state.local_started = false;
-                state.local_resampler.reset();
-                state.local_ratio = 1.0;
-                state.local_fade_gain = 0.0;
-                state.local_dropout_from = state.last_local_sample;
-                state.local_dropout_remaining = LOCAL_MONITOR_FADE_SAMPLES;
-            }
-            if state.local_dropout_remaining > 0 {
-                let gain = state.local_dropout_remaining as f32 / LOCAL_MONITOR_FADE_SAMPLES as f32;
-                state.local_dropout_remaining -= 1;
-                state.local_dropout_from * gain * LOCAL_MONITOR_GAIN
-            } else {
-                0.0
-            }
-        };
-        let combined = remote + local;
-        let required_gain = if combined.abs() > PLAYBACK_OUTPUT_CEILING {
-            PLAYBACK_OUTPUT_CEILING / combined.abs()
+        // Protect the vocal bus first. MR never participates in this limiter, so a
+        // loud backing track cannot turn down the remote singers.
+        let vocals = remote_vocals;
+        let required_gain = if vocals.abs() > PLAYBACK_OUTPUT_CEILING {
+            PLAYBACK_OUTPUT_CEILING / vocals.abs()
         } else {
             1.0
         };
@@ -2203,7 +2120,30 @@ fn fill_output<T: Copy>(
             state.limiter_gain += (1.0 - state.limiter_gain) * PLAYBACK_LIMITER_RELEASE_PER_SAMPLE;
             state.limiter_gain = state.limiter_gain.min(required_gain);
         }
-        frame.fill(convert(combined * state.limiter_gain));
+        let protected_vocals = vocals * state.limiter_gain;
+
+        // Side-chain duck only the MR while somebody is singing. The headroom cap
+        // is conservative (absolute magnitudes) and prevents the final sum from
+        // engaging another full-mix limiter.
+        let vocal_activity = ((protected_vocals.abs() - MR_DUCK_THRESHOLD)
+            / (MR_DUCK_FULL_LEVEL - MR_DUCK_THRESHOLD))
+            .clamp(0.0, 1.0);
+        let activity_gain = 1.0 - vocal_activity * (1.0 - MR_DUCK_MIN_GAIN);
+        let available_headroom = (PLAYBACK_OUTPUT_CEILING - protected_vocals.abs()).max(0.0);
+        let headroom_gain = if mr.abs() > 0.000_001 {
+            (available_headroom / mr.abs()).min(1.0)
+        } else {
+            1.0
+        };
+        let target_mr_gain = activity_gain.min(headroom_gain);
+        if target_mr_gain < state.mr_duck_gain {
+            state.mr_duck_gain = target_mr_gain;
+        } else {
+            state.mr_duck_gain += (1.0 - state.mr_duck_gain) * MR_DUCK_RELEASE_PER_SAMPLE;
+            state.mr_duck_gain = state.mr_duck_gain.min(target_mr_gain);
+        }
+        let combined = protected_vocals + mr * state.mr_duck_gain;
+        frame.fill(convert(combined));
     }
 }
 
@@ -2252,6 +2192,7 @@ mod tests {
     #[test]
     fn playback_rebuffers_after_an_underrun() {
         let (mut producer, mut consumer) = ring_buffer(16);
+        let (_mr_producer, mut mr_consumer) = ring_buffer(16);
         producer.push(0.1).unwrap();
         producer.push(0.2).unwrap();
         let policy = PlaybackBufferPolicy {
@@ -2261,15 +2202,14 @@ mod tests {
             trim_to_samples: 0,
             max_speed_adjustment_ppm: 0,
         };
-        let mut state = PlaybackOutputState::new(false, 1);
+        let mut state = PlaybackOutputState::new(false);
         let stats = PlaybackStats::default();
-        let mut local_consumer = None;
         let mut output = [0.0; 4];
         fill_output(
             &mut output,
             1,
             &mut consumer,
-            &mut local_consumer,
+            &mut mr_consumer,
             policy,
             &stats,
             &mut state,
@@ -2283,7 +2223,7 @@ mod tests {
             &mut output,
             1,
             &mut consumer,
-            &mut local_consumer,
+            &mut mr_consumer,
             policy,
             &stats,
             &mut state,
@@ -2296,7 +2236,7 @@ mod tests {
             &mut output,
             1,
             &mut consumer,
-            &mut local_consumer,
+            &mut mr_consumer,
             policy,
             &stats,
             &mut state,
@@ -2309,6 +2249,7 @@ mod tests {
     #[test]
     fn zero_prebuffer_waits_for_the_first_sample() {
         let (_producer, mut consumer) = ring_buffer(8);
+        let (_mr_producer, mut mr_consumer) = ring_buffer(8);
         let policy = PlaybackBufferPolicy {
             prebuffer_samples: 0,
             target_queue_samples: 0,
@@ -2316,16 +2257,15 @@ mod tests {
             trim_to_samples: 0,
             max_speed_adjustment_ppm: 0,
         };
-        let mut state = PlaybackOutputState::new(false, 1);
+        let mut state = PlaybackOutputState::new(false);
         let stats = PlaybackStats::default();
-        let mut local_consumer = None;
         let mut output = [1.0; 4];
 
         fill_output(
             &mut output,
             1,
             &mut consumer,
-            &mut local_consumer,
+            &mut mr_consumer,
             policy,
             &stats,
             &mut state,
@@ -2338,13 +2278,11 @@ mod tests {
     }
 
     #[test]
-    fn local_monitor_prebuffers_then_fades_in_at_full_level() {
-        let (_remote_producer, mut remote_consumer) = ring_buffer(16);
-        let (mut local_producer, local_consumer) = ring_buffer(1_024);
-        let local_target = SAMPLES_PER_FRAME * 3;
-        for _ in 0..local_target - 1 {
-            local_producer.push(0.5).unwrap();
-        }
+    fn mr_is_ducked_without_reducing_the_vocal_bus() {
+        let (mut vocal_producer, mut vocal_consumer) = ring_buffer(8);
+        let (mut mr_producer, mut mr_consumer) = ring_buffer(8);
+        vocal_producer.push(0.2).unwrap();
+        mr_producer.push(0.8).unwrap();
         let policy = PlaybackBufferPolicy {
             prebuffer_samples: 0,
             target_queue_samples: 0,
@@ -2353,41 +2291,23 @@ mod tests {
             max_speed_adjustment_ppm: 0,
         };
         let stats = PlaybackStats::default();
-        let mut state = PlaybackOutputState::new(false, SAMPLES_PER_FRAME);
-        let mut local_consumer = Some(local_consumer);
-        let mut output = [1.0; 64];
+        let mut state = PlaybackOutputState::new(false);
+        let mut output = [0.0; 1];
 
         fill_output(
             &mut output,
             1,
-            &mut remote_consumer,
-            &mut local_consumer,
-            policy,
-            &stats,
-            &mut state,
-            |sample| sample,
-        );
-        assert_eq!(output, [0.0; 64]);
-
-        for _ in 0..128 {
-            local_producer.push(0.5).unwrap();
-        }
-        fill_output(
-            &mut output,
-            1,
-            &mut remote_consumer,
-            &mut local_consumer,
+            &mut vocal_consumer,
+            &mut mr_consumer,
             policy,
             &stats,
             &mut state,
             |sample| sample,
         );
 
-        assert!(output[0] > 0.0 && output[0] < 0.5);
-        assert!((output[47] - 0.5).abs() < 0.0001);
-        assert!(output[48..]
-            .iter()
-            .all(|sample| (*sample - 0.5).abs() < 0.0001));
+        let expected = 0.2 + 0.8 * MR_DUCK_MIN_GAIN;
+        assert!((output[0] - expected).abs() < 0.0001);
+        assert_eq!(state.limiter_gain, 1.0);
     }
 
     #[test]
@@ -2510,6 +2430,11 @@ mod tests {
         assert_eq!(JITTER_TARGET_FRAMES, 4);
         assert_eq!(JITTER_MAX_FRAMES, 6);
         assert_eq!(peer.jitter_target_frames, 4);
+        assert_eq!(
+            Duration::from_micros(FRAME_DURATION_MICROS * JITTER_TARGET_FRAMES as u64)
+                + STALE_FRAME_MARGIN,
+            Duration::from_millis(20)
+        );
     }
 
     #[test]
@@ -2719,6 +2644,8 @@ mod tests {
         let five_ms = playback_policy_for_output_period(240);
         assert_eq!(five_ms.prebuffer_samples, 0);
         assert_eq!(five_ms.target_queue_samples, 240);
+        assert_eq!(five_ms.max_queue_samples, SAMPLE_RATE as usize / 100);
+        assert_eq!(five_ms.trim_to_samples, SAMPLE_RATE as usize / 200);
 
         let ten_ms = playback_policy_for_output_period(480);
         assert_eq!(ten_ms.prebuffer_samples, 0);
