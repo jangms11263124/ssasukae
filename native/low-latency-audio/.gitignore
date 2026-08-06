@@ -1,0 +1,15 @@
+# Rust build and downloaded toolchains
+/target/
+/target-linux/
+/.tools/
+
+# Test, measurement, and packaging outputs
+/.test-runs/
+/dist/
+/results/
+/coverage/
+/lcov.info
+/tarpaulin-report.html
+/ui-preview*.png
+*.csv
+*.profraw

@@ -3,6 +3,7 @@ import type { RoomMode } from '../types';
 const MODE_PATH_SEGMENT: Record<RoomMode, string> = {
   GENERAL: 'general',
   BATTLE: 'battle',
+  LOW_LATENCY: 'low-latency',
 };
 
 /** 모드별 방 화면 경로 */

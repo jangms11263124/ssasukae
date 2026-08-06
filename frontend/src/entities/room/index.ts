@@ -1,6 +1,7 @@
 export type { RoomMode, RoomSummary } from './types';
 export {
   createRoom,
+  getRoomByInviteCode,
   getRoomSnapshot,
   joinRoom,
   leaveRoom,
@@ -8,6 +9,7 @@ export {
   selectPerformer,
   terminateRoom,
   type CreateRoomRequest,
+  type RoomInviteResponse,
   type RoomSessionResponse,
   type RoomSnapshotActiveCard,
   type RoomSnapshotCardUsageStatus,
