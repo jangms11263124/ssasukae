@@ -64,6 +64,7 @@ interface StageStore {
   resumeOffsetMs: number;
   // 무대 진행 전이. 서버 이벤트 수신 시 apply* 액션이 상태를 덮어쓴다.
   startSingerSelect: () => void;
+  cancelSingerSelect: () => void;
   confirmSinger: (participantId: number) => void;
   confirmSong: (song: StageSong) => void;
   changeSong: () => void;
@@ -129,6 +130,7 @@ export const useStageStore = create<StageStore>((set) => ({
   micOn: true,
   ...INITIAL_PERFORMANCE_STATE,
   startSingerSelect: () => set({ phase: 'SINGER_SELECT' }),
+  cancelSingerSelect: () => set({ phase: 'WAITING' }),
   confirmSinger: (participantId) =>
     set({ performerParticipantId: participantId, phase: 'SONG_SELECT' }),
   confirmSong: (song) => set({ phase: 'READY', selectedSong: song }),

@@ -37,6 +37,7 @@ import { ParticipantList } from './ParticipantList';
 import { ParticipantVideoStrip } from './participant-video/ParticipantVideoStrip';
 import { RemoteAudioSink } from './participant-video/RemoteAudioSink';
 import { RoomTopBar } from './RoomTopBar';
+import { SingerSelectModalHost } from './stage-control/SingerSelectModalHost';
 
 interface PerformanceRoomScreenProps {
   roomIdFromUrl: number | null;
@@ -228,6 +229,15 @@ function PerformanceRoomContent() {
             </footer>
 
             <RoomHelpFloatingButton />
+
+            {phase === 'SINGER_SELECT' && session.isHost ? (
+              <SingerSelectModalHost
+                participants={stagedParticipants}
+                currentParticipantId={session.myParticipantId}
+                hostParticipantId={hostParticipantId ?? -1}
+                maxParticipants={session.maxParticipants}
+              />
+            ) : null}
 
             <ConfirmDialog
               open={leaveConfirmOpen}

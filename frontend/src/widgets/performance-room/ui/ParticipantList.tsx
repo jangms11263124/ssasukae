@@ -185,8 +185,10 @@ export function ParticipantList({
             <ParticipantLeadingSlot>
               <span className="size-2 rounded-full bg-zinc-700" aria-hidden />
             </ParticipantLeadingSlot>
-            <span className="size-7 shrink-0 rounded-full border border-dashed border-white/15 bg-white/[0.03]" />
-            <span className="min-w-0 flex-1 truncate text-zinc-500">입장 대기</span>
+            <span
+              aria-hidden
+              className="size-7 shrink-0 rounded-full border border-dashed border-white/15 bg-white/[0.03]"
+            />
           </li>
         ))}
       </ul>

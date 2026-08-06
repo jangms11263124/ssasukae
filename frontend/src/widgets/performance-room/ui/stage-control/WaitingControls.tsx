@@ -1,3 +1,5 @@
+'use client';
+
 import { useStageStore } from '../../model/stageStore';
 import { StageButton } from '../center-stage/StageButton';
 import { ControlMessage } from './ControlMessage';
