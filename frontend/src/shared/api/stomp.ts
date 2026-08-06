@@ -23,8 +23,11 @@ function tokenNeedsRefresh(token: string): boolean {
 export interface StompConnectionCallbacks {
   onConnect?: () => void;
   onDisconnect?: () => void;
-  /** STOMP ERROR 프레임(인증 실패 등) 수신 시 호출 */
-  onStompError?: (message: string) => void;
+  /**
+   * STOMP ERROR 프레임(인증 실패 등) 수신 시 호출.
+   * 브로커 원문 헤더라 사용자에게 노출하기 전에 반드시 걸러야 한다.
+   */
+  onStompError?: (brokerMessage: string) => void;
 }
 
 /**
@@ -57,7 +60,7 @@ export function createStompClient(callbacks: StompConnectionCallbacks = {}): Cli
     onConnect: () => callbacks.onConnect?.(),
     onWebSocketClose: () => callbacks.onDisconnect?.(),
     onStompError: (frame) => {
-      callbacks.onStompError?.(frame.headers['message'] ?? 'STOMP 오류가 발생했습니다.');
+      callbacks.onStompError?.(frame.headers['message'] ?? '');
     },
   });
 

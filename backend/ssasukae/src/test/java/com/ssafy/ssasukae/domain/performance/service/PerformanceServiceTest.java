@@ -46,6 +46,7 @@ import com.ssafy.ssasukae.domain.performance.websocket.payload.PerformanceStarte
 import com.ssafy.ssasukae.domain.performance.websocket.payload.PlaybackFinishedPayload;
 import com.ssafy.ssasukae.domain.performance.websocket.payload.PlaybackStartedPayload;
 import com.ssafy.ssasukae.domain.performance.websocket.request.PerformancePrepareRequest;
+import com.ssafy.ssasukae.domain.performance.websocket.request.PerformanceSettingsChangeRequest;
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
@@ -130,6 +131,27 @@ class PerformanceServiceTest {
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.clearSynchronization();
     }
+  }
+
+  @Test
+  void battleSettingsKeepLockedBaseValuesAndApplyMonitorSettings() {
+    Room room = battlePlayingRoom();
+    RoomParticipant performer = performer(room);
+    PerformanceSnapShot previous = preparingSnapshot().startPlayback(STARTED_AT);
+    stubPlayingContext(room, performer);
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(previous));
+
+    performanceService.changeSettings(
+        USER_ID,
+        ROOM_ID,
+        PERFORMANCE_ID,
+        new PerformanceSettingsChangeRequest(3, 120, 70, 40));
+
+    ArgumentCaptor<PerformanceSnapShot> changedCaptor =
+        ArgumentCaptor.forClass(PerformanceSnapShot.class);
+    verify(performanceStore).replace(eq(previous), changedCaptor.capture());
+    assertThat(changedCaptor.getValue().settings())
+        .isEqualTo(new PerformanceSettings(0, 100, 70, 40));
   }
 
   /*

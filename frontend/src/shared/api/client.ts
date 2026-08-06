@@ -3,7 +3,7 @@ import { isSessionKickedMessage } from '@/shared/config/session';
 import { getAccessToken, useAuthStore } from '@/shared/model/authStore';
 import { showToast } from '@/shared/model/toastStore';
 
-import { API_ERROR_CODE, parseErrorResponse } from './errorResponse';
+import { API_ERROR_CODE, parseErrorResponse, resolveApiErrorMessage } from './errorResponse';
 
 export class ApiError extends Error {
   constructor(
@@ -38,7 +38,11 @@ function handleSessionEnd(message: string, code?: string) {
   getQueryClient().removeQueries({ queryKey: ['user'] });
 
   if (hadSession && isSessionKickedError(message, code)) {
-    showToast(message, 'error');
+    // 서버 원문 대신 프론트 문구를 쓴다.
+    showToast(
+      resolveApiErrorMessage(message, API_ERROR_CODE.SESSION_EXPIRED),
+      'error',
+    );
   }
 }
 
@@ -110,7 +114,7 @@ export async function apiClient<T>(path: string, options: RequestOptions = {}): 
         throw error;
       }
 
-      throw new ApiError('인증이 필요합니다.', 401);
+      throw new ApiError('로그인이 필요해요.', 401);
     }
   }
 

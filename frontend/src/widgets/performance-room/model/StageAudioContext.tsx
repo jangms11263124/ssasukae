@@ -1,5 +1,3 @@
-'use client';
-
 import { createContext, useContext, type ReactNode } from 'react';
 
 import type { VocalAudioEngineState } from '@/features/vocal-audio-engine';
@@ -12,6 +10,7 @@ const FALLBACK_AUDIO: VocalAudioEngineState = {
   isEngineReady: false,
   isMrLoaded: false,
   error: null,
+  retryLoadMr: () => undefined,
   getBroadcastStream: () => null,
   engine: null,
 };

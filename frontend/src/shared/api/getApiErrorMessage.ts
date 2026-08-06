@@ -1,13 +1,14 @@
 import { ApiError } from './client';
-import { resolveApiErrorMessage } from './errorResponse';
+import { resolveApiErrorMessage, toUserFacingMessage } from './errorResponse';
 
 export function getApiErrorMessage(error: unknown, fallback = '요청에 실패했습니다.'): string {
   if (error instanceof ApiError) {
     return resolveApiErrorMessage(error.message, error.code, fallback);
   }
 
-  if (error instanceof Error && error.message) {
-    return error.message;
+  // TypeError: Failed to fetch 같은 브라우저 원문은 노출하지 않는다.
+  if (error instanceof Error) {
+    return toUserFacingMessage(error.message, fallback);
   }
 
   return fallback;

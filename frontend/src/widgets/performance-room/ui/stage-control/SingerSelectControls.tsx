@@ -1,10 +1,8 @@
-'use client';
-
 import { useState } from 'react';
 
 import type { RoomParticipant } from '@/entities/participant';
 import { selectPerformer, useRoomStore } from '@/entities/room';
-import { ApiError } from '@/shared/api/client';
+import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { showToast } from '@/shared/model/toastStore';
 
 import { useStageStore } from '../../model/stageStore';
@@ -35,8 +33,7 @@ export function SingerSelectControls({ isHost, participants }: SingerSelectContr
       // PERFORMER_SELECTED 이벤트로도 전이되지만, 지연에 대비해 즉시 반영한다.
       confirmSinger(selectedId);
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : '가창자 지정에 실패했습니다.';
-      showToast(message, 'error');
+      showToast(getApiErrorMessage(error, '가창자를 지정하지 못했어요.'), 'error');
     } finally {
       setIsSubmitting(false);
     }

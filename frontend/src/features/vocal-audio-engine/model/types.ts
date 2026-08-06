@@ -8,8 +8,10 @@ export interface VocalDspValues {
   echoLevel: number;
   /** MR 음량 (0~100) — 모니터·송출 양쪽에 반영 */
   mrVolumePercent: number;
-  /** 마이크 음량 (0~100) — 모니터·송출 양쪽에 반영 */
+  /** 마이크 음량 (0~100) — 송출 목소리에 반영 */
   micVolumePercent: number;
+  /** 내 목소리 모니터 크기 (0~100) — 가창자 이어폰에만 반영, 송출 불변 */
+  monitorVoicePercent: number;
 }
 
 export interface VocalAudioEngine {

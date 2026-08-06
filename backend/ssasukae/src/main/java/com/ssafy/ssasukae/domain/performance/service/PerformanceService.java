@@ -2,7 +2,6 @@ package com.ssafy.ssasukae.domain.performance.service;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.util.Objects;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -246,19 +245,16 @@ public class PerformanceService {
   @Transactional
   public void changeSettings(
       Long userId, Long roomId, Long performanceId, PerformanceSettingsChangeRequest request) {
-    validateSettings(request);
+    if (request == null) {
+      throw business(WebSocketErrorCode.INVALID_REQUEST, "공연 설정 변경 요청은 필수입니다.");
+    }
+
     Room room = validatePlayingRoomAndPerformer(userId, roomId);
+    validateSettings(room, request);
 
     PerformanceSnapShot previous = getValidatedSnapShot(roomId, performanceId, userId);
 
-    validateBattleModeSettings(room, previous.settings(), request);
-
-    PerformanceSettings settings =
-        new PerformanceSettings(
-            request.keyOffset(),
-            request.tempoPercent(),
-            request.mrVolumePercent(),
-            request.echoLevel());
+    PerformanceSettings settings = resolveSettings(room, previous.settings(), request);
 
     PerformanceSnapShot changed;
 
@@ -386,16 +382,17 @@ public class PerformanceService {
     }
   }
 
-  private void validateSettings(PerformanceSettingsChangeRequest request) {
-    if (request == null) {
-      throw business(WebSocketErrorCode.INVALID_REQUEST, "공연 설정 변경 요청은 필수입니다.");
-    }
-
+  private void validateSettings(Room room, PerformanceSettingsChangeRequest request) {
     boolean valid =
-        isBetween(request.keyOffset(), -6, 6)
-            && isBetween(request.tempoPercent(), 50, 150)
-            && isBetween(request.mrVolumePercent(), 0, 100)
+        isBetween(request.mrVolumePercent(), 0, 100)
             && isBetween(request.echoLevel(), 0, 100);
+
+    if (room.getMode() != RoomMode.BATTLE) {
+      valid =
+          valid
+              && isBetween(request.keyOffset(), -6, 6)
+              && isBetween(request.tempoPercent(), 50, 150);
+    }
 
     if (!valid) {
       throw business(WebSocketErrorCode.INVALID_PERFORMANCE_SETTING);
@@ -406,22 +403,21 @@ public class PerformanceService {
     return value != null && value >= minimum && value <= maximum;
   }
 
-  private void validateBattleModeSettings(
+  private PerformanceSettings resolveSettings(
       Room room, PerformanceSettings currentSettings, PerformanceSettingsChangeRequest request) {
-    if (room.getMode() != RoomMode.BATTLE) {
-      return;
+    if (room.getMode() == RoomMode.BATTLE) {
+      return new PerformanceSettings(
+          currentSettings.keyOffset(),
+          currentSettings.tempoPercent(),
+          request.mrVolumePercent(),
+          request.echoLevel());
     }
 
-    boolean restrictedSettingChanged =
-        !Objects.equals(request.keyOffset(), currentSettings.keyOffset())
-            || !Objects.equals(request.tempoPercent(), currentSettings.tempoPercent())
-            || !Objects.equals(request.mrVolumePercent(), currentSettings.mrVolumePercent());
-
-    if (restrictedSettingChanged) {
-      throw business(
-          WebSocketErrorCode.INVALID_PERFORMANCE_SETTING,
-          "BATTLE 모드에서는 공연자가 키, 템포, MR 볼륨을 직접 변경할 수 없습니다.");
-    }
+    return new PerformanceSettings(
+        request.keyOffset(),
+        request.tempoPercent(),
+        request.mrVolumePercent(),
+        request.echoLevel());
   }
 
   private WebSocketBusinessException invalidPerformanceState(IllegalStateException exception) {

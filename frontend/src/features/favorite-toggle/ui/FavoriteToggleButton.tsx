@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { addFavoriteSong, favoriteQueryKeys, removeFavoriteSong } from '@/entities/favorite';
+import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { cn } from '@/shared/lib/cn';
 import { showToast } from '@/shared/model/toastStore';
 import { HeartIcon } from '@/shared/ui/icons/HeartIcon';
@@ -25,7 +26,7 @@ export function FavoriteToggleButton({
   const { mutate: toggleFavorite, isPending } = useMutation({
     mutationFn: () => (favorite ? removeFavoriteSong(songId) : addFavoriteSong(songId)),
     onError: (error) => {
-      showToast(error instanceof Error ? error.message : '찜 처리에 실패했습니다.', 'error');
+      showToast(getApiErrorMessage(error, '찜 설정을 바꾸지 못했어요.'), 'error');
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: favoriteQueryKeys.all });

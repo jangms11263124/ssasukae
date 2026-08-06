@@ -3,9 +3,9 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { useRoomStore, type RoomMode } from '@/entities/room';
+import { buildRoomPath, useRoomStore, type RoomMode } from '@/entities/room';
 import { useAuth } from '@/entities/user';
-import { ApiError } from '@/shared/api/client';
+import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { cn } from '@/shared/lib/cn';
 import { showToast } from '@/shared/model/toastStore';
 
@@ -69,16 +69,11 @@ export function RoomCreateForm() {
               profileImageUrl: user?.profileImageUrl ?? null,
             },
           });
-          router.push(
-            mode === 'LOW_LATENCY'
-              ? `/rooms/low-latency?roomId=${response.roomId}`
-              : `/rooms/general?roomId=${response.roomId}`,
-          );
+          showToast(`'${trimmedName}' 방을 만들었어요.`, 'success');
+          router.push(buildRoomPath(mode, response.roomId));
         },
         onError: (error) => {
-          const message =
-            error instanceof ApiError ? error.message : '방 생성에 실패했습니다.';
-          showToast(message, 'error');
+          showToast(getApiErrorMessage(error, '방을 만들지 못했어요.'), 'error');
         },
       },
     );

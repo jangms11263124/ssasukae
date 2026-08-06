@@ -6,13 +6,18 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { favoriteQueryKeys, getFavoriteSongs } from '@/entities/favorite';
 import { FavoriteToggleButton } from '@/features/favorite-toggle';
 import { SongSearchModal } from '@/features/song-search';
+import { cn } from '@/shared/lib/cn';
 import { useInfiniteScrollTrigger } from '@/shared/lib/useInfiniteScrollTrigger';
 
 import { LikedSongCard } from './LikedSongCard';
+import { LikedSongCardSkeleton } from './LikedSongCardSkeleton';
 
 const SEARCH_DEBOUNCE_MS = 300;
 // 백엔드 제약: size는 20~50
 const PAGE_SIZE = 20;
+// 첫 로딩은 2열 그리드 두 줄을 채워 목록이 들어올 자리를 보여준다.
+const SKELETON_COUNT = 4;
+const NEXT_PAGE_SKELETON_COUNT = 2;
 
 function SearchIcon() {
   return (
@@ -44,6 +49,18 @@ function PlusIcon() {
     >
       <path d="M12 5v14M5 12h14" />
     </svg>
+  );
+}
+
+function SkeletonGrid({ count, className }: { count: number; className?: string }) {
+  return (
+    <ul aria-hidden="true" className={cn('grid gap-6 lg:grid-cols-2', className)}>
+      {Array.from({ length: count }, (_, index) => (
+        <li key={index}>
+          <LikedSongCardSkeleton />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -124,9 +141,12 @@ export function LikedSongsSection() {
       </div>
 
       {isPending ? (
-        <p className="py-24 text-center font-mono text-xs tracking-[0.2em] text-zinc-600">
-          LOADING_TRACKS...
-        </p>
+        <>
+          <p role="status" className="sr-only">
+            찜한 노래 목록을 불러오고 있어요.
+          </p>
+          <SkeletonGrid count={SKELETON_COUNT} className="mt-8" />
+        </>
       ) : null}
       {isError ? (
         <p className="py-24 text-center font-mono text-xs tracking-[0.2em] text-red-400/80">
@@ -155,9 +175,7 @@ export function LikedSongsSection() {
       ) : null}
 
       {isFetchingNextPage ? (
-        <p className="py-6 text-center font-mono text-xs tracking-[0.2em] text-zinc-600">
-          LOADING_MORE...
-        </p>
+        <SkeletonGrid count={NEXT_PAGE_SKELETON_COUNT} className="mt-6" />
       ) : null}
       {/* IntersectionObserver는 높이 0짜리 요소를 교차로 판정하지 않으므로 최소 높이를 준다. */}
       <div ref={sentinelRef} aria-hidden="true" className="h-px" />

@@ -1,5 +1,3 @@
-'use client';
-
 import type { ReactNode } from 'react';
 
 import { useRoomStore } from '@/entities/room';
@@ -51,6 +49,7 @@ export function StageControlPanel() {
         canRequestStart={performanceId !== null}
         isMrLoaded={audioEngine.isMrLoaded}
         prepareError={audioEngine.error}
+        onRetryPrepare={audioEngine.retryLoadMr}
       />
     ),
     PERFORMING: (

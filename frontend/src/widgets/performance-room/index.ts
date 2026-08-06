@@ -1,3 +1,2 @@
-export { GeneralRoomScreen } from './ui/GeneralRoomScreen';
 export { LowLatencyRoomScreen } from './ui/LowLatencyRoomScreen';
-export { RoomLeftSection } from './ui/RoomLeftSection';
+export { PerformanceRoomScreen } from './ui/PerformanceRoomScreen';

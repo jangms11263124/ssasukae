@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { feedbackQueryKeys, getFeedbackSummary } from '@/entities/feedback';
 import { cn } from '@/shared/lib/cn';
 import { getScoreGrade, NO_SCORE_LABEL, type ScoreGrade } from '@/shared/lib/scoreGrade';
+import { Skeleton } from '@/shared/ui/skeleton/Skeleton';
 
 const EMPTY_VALUE = '--';
 
@@ -36,9 +37,14 @@ function SummaryCell({ label, children, showMarker = false }: SummaryCellProps) 
   );
 }
 
+/** 숫자 자리(text-5xl)와 같은 높이의 스켈레톤. 값이 들어와도 칸 높이가 변하지 않는다. */
+function FigureSkeleton({ className }: { className?: string }) {
+  return <Skeleton tone="strong" className={cn('h-11', className)} />;
+}
+
 // 필터 변경·무한 스크롤 등 부모 상태 변화에 리렌더될 이유가 없는 컴포넌트라 memo.
 export const FeedbackSummaryCards = memo(function FeedbackSummaryCards() {
-  const { data: summary } = useQuery({
+  const { data: summary, isPending } = useQuery({
     queryKey: feedbackQueryKeys.summary(),
     queryFn: getFeedbackSummary,
     staleTime: 60 * 1000,
@@ -60,41 +66,53 @@ export const FeedbackSummaryCards = memo(function FeedbackSummaryCards() {
 
       <div className="relative grid grid-cols-3 divide-x divide-white/[0.08]">
         <SummaryCell label="TOTAL SONGS" showMarker>
-          <p className="font-sans text-5xl font-black leading-none tracking-tight text-white">
-            {summary ? summary.totalSongs : EMPTY_VALUE}
-          </p>
+          {isPending ? (
+            <FigureSkeleton className="w-20" />
+          ) : (
+            <p className="font-sans text-5xl font-black leading-none tracking-tight text-white">
+              {summary ? summary.totalSongs : EMPTY_VALUE}
+            </p>
+          )}
           <p className="pb-0.5 font-mono text-[0.55rem] font-bold tracking-[0.18em] text-zinc-600">
             ALL_TIME
           </p>
         </SummaryCell>
 
         <SummaryCell label="AVERAGE PERFORMANCE">
-          <p className="font-sans text-5xl font-black leading-none tracking-tight text-white">
-            {summary ? summary.avgScore.toFixed(1) : EMPTY_VALUE}
-          </p>
+          {isPending ? (
+            <FigureSkeleton className="w-28" />
+          ) : (
+            <p className="font-sans text-5xl font-black leading-none tracking-tight text-white">
+              {summary ? summary.avgScore.toFixed(1) : EMPTY_VALUE}
+            </p>
+          )}
           <p className="pb-0.5 font-mono text-[0.55rem] font-bold tracking-[0.18em] text-zinc-600">
             / 100 PTS
           </p>
         </SummaryCell>
 
         <SummaryCell label="CURRENT RANK">
-          <p
-            className={cn(
-              'font-sans text-5xl font-black leading-none tracking-tight',
-              // 광택: 등급색 그라디언트를 글자에 클리핑하고 holo-shift로 하이라이트를 훑는다
-              grade ? 'animate-holo-shift bg-clip-text text-transparent' : 'text-zinc-500',
-            )}
-            style={
-              grade
-                ? {
-                    backgroundImage: `linear-gradient(115deg, ${GRADE_SHINE[grade][0]} 38%, ${GRADE_SHINE[grade][1]} 50%, ${GRADE_SHINE[grade][0]} 62%)`,
-                    backgroundSize: '250% 100%',
-                  }
-                : undefined
-            }
-          >
-            {grade ?? (summary ? NO_SCORE_LABEL : EMPTY_VALUE)}
-          </p>
+          {isPending ? (
+            <FigureSkeleton className="w-12" />
+          ) : (
+            <p
+              className={cn(
+                'font-sans text-5xl font-black leading-none tracking-tight',
+                // 광택: 등급색 그라디언트를 글자에 클리핑하고 holo-shift로 하이라이트를 훑는다
+                grade ? 'animate-holo-shift bg-clip-text text-transparent' : 'text-zinc-500',
+              )}
+              style={
+                grade
+                  ? {
+                      backgroundImage: `linear-gradient(115deg, ${GRADE_SHINE[grade][0]} 38%, ${GRADE_SHINE[grade][1]} 50%, ${GRADE_SHINE[grade][0]} 62%)`,
+                      backgroundSize: '250% 100%',
+                    }
+                  : undefined
+              }
+            >
+              {grade ?? (summary ? NO_SCORE_LABEL : EMPTY_VALUE)}
+            </p>
+          )}
           <p className="pb-0.5 font-mono text-[0.55rem] font-bold tracking-[0.18em] text-zinc-600">
             AVG_BASED
           </p>

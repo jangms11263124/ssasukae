@@ -4,6 +4,7 @@ import { resolveDeviceId, useMediaDevices } from '@/entities/media-device';
 import { showToast } from '@/shared/model/toastStore';
 import { ActionButton } from '@/shared/ui/button/ActionButton';
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
+import { LiveFeedFooter } from '@/widgets/live-feed-footer';
 
 import { useDeviceSettingsDraft } from '../model/useDeviceSettingsDraft';
 import { AudioInputCard } from './AudioInputCard';
@@ -18,12 +19,12 @@ export function DeviceSettingsPanel() {
 
   const handleSave = () => {
     saveDraft();
-    showToast('기기 설정을 저장했습니다.');
+    showToast('기기 설정을 저장했어요.');
   };
 
   const handleReset = () => {
     resetDraft();
-    showToast('기기 설정을 기본값으로 되돌렸습니다.');
+    showToast('기기 설정을 기본값으로 되돌렸어요.');
   };
 
   const isReady = permission === 'granted';
@@ -105,6 +106,8 @@ export function DeviceSettingsPanel() {
             />
           </div>
         </main>
+
+        <LiveFeedFooter />
       </div>
     </div>
   );
