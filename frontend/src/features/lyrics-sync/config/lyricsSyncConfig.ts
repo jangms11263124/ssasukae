@@ -60,3 +60,12 @@ export const LYRICS_LEAD_MS = 200;
  * 양수면 가사가 더 빨리, 음수면 더 늦게 넘어간다.
  */
 export const LYRICS_SYNC_OFFSET_MS = 0;
+
+/**
+ * 청자에게만 더 빼는 지연(ms).
+ *
+ * 가창자의 MR·목소리는 WebRTC를 타고 오느라 지터 버퍼와 네트워크만큼 늦게 들린다.
+ * 가사 시계는 가창자와 같은 이벤트로 출발하므로, 보정하지 않으면 참가자 화면에서는
+ * 들리는 소리보다 가사가 이만큼 먼저 넘어간다. 값을 올리면 가사가 더 늦게 넘어간다.
+ */
+export const LISTENER_LYRICS_DELAY_MS = 220;

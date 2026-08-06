@@ -3,20 +3,11 @@ import { useCallback, useEffect } from 'react';
 import { useDeviceSettingsStore } from '@/entities/media-device';
 import { useVocalAudioEngine, type VocalAudioEngineState } from '@/features/vocal-audio-engine';
 
-import { TEMPO_STEP_PERCENT } from '../config/dspParams';
 import { useCardStore } from './cardStore';
+import { resolveEffectiveSettings } from './effectiveSettings';
 import { useOpenViduSessionContext } from './OpenViduSessionContext';
 import { useRoomSocketContext } from './RoomSocketContext';
 import { useStageStore } from './stageStore';
-
-const KEY_OFFSET_MIN = -6;
-const KEY_OFFSET_MAX = 6;
-const TEMPO_PERCENT_MIN = 50;
-const TEMPO_PERCENT_MAX = 150;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 /**
  * 무대 상태를 도메인 무지인 오디오 엔진 훅에 연결한다 (useGestureDspControl과 같은 역할).
@@ -33,25 +24,8 @@ export function useStageAudioEngine(isPerformer: boolean): VocalAudioEngineState
   const resumeOffsetMs = useStageStore((state) => state.resumeOffsetMs);
   const activeEffect = useCardStore((state) => state.activeEffect);
 
-  // 수성전 공격 카드: 가창자 대상 키/템포 효과를 서버와 같은 식(base + value, clamp)으로 겹친다.
-  // 기본 설정(stageStore.settings)은 건드리지 않으므로 CARD_EFFECT_ENDED로 효과가 사라지면 자동 복구된다.
-  let keyOffset = settings.keyOffset;
-  let tempoPercent = settings.tempoPercent;
-  if (
-    activeEffect !== null &&
-    activeEffect.targetType === 'PERFORMER' &&
-    activeEffect.effectValue !== null
-  ) {
-    if (activeEffect.effectType === 'MR_KEY_CHANGE') {
-      keyOffset = clamp(settings.keyOffset + activeEffect.effectValue, KEY_OFFSET_MIN, KEY_OFFSET_MAX);
-    } else if (activeEffect.effectType === 'MR_TEMPO_CHANGE') {
-      tempoPercent = clamp(
-        settings.tempoPercent + activeEffect.effectValue * TEMPO_STEP_PERCENT,
-        TEMPO_PERCENT_MIN,
-        TEMPO_PERCENT_MAX,
-      );
-    }
-  }
+  // 수성전 공격 카드의 키/템포 효과를 겹친다. 가사 시계·무대 표시도 같은 값을 본다.
+  const { keyOffset, tempoPercent } = resolveEffectiveSettings(settings, activeEffect);
 
   const deviceSettings = useDeviceSettingsStore((state) => state.settings);
   const isHydrated = useDeviceSettingsStore((state) => state.isHydrated);

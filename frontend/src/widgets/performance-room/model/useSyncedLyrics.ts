@@ -8,6 +8,7 @@ import {
   findLineIndexAt,
   findNextTextIndex,
   selectLyrics,
+  LISTENER_LYRICS_DELAY_MS,
   LYRICS_LEAD_MS,
   LYRICS_SYNC_OFFSET_MS,
   SONG_DURATION_WAIT_MS,
@@ -16,6 +17,8 @@ import {
 } from '@/features/lyrics-sync';
 import type { VocalAudioEngine } from '@/features/vocal-audio-engine';
 
+import { useCardStore } from './cardStore';
+import { resolveEffectiveSettings } from './effectiveSettings';
 import { useStageAudioContext } from './StageAudioContext';
 import { useStageStore } from './stageStore';
 
@@ -54,6 +57,14 @@ export interface SyncedLyricsState {
   message: string | null;
 }
 
+/** 카드 효과까지 반영한 실제 배속. MR 시간축이 벽시계보다 이 비율만큼 빨리 흐른다 */
+function usePlaybackRate(): number {
+  const settings = useStageStore((state) => state.settings);
+  const activeEffect = useCardStore((state) => state.activeEffect);
+
+  return resolveEffectiveSettings(settings, activeEffect).tempoPercent / 100;
+}
+
 /**
  * 가사 시간축의 현재 위치(ms)를 읽는 함수를 만든다.
  *
@@ -62,33 +73,51 @@ export interface SyncedLyricsState {
  *
  * 청자는 엔진이 없다(가창자만 MR을 재생한다). 그래서 재생이 흐른 만큼을 로컬에서 세되,
  * 시작 위치는 서버가 준 값(resumeOffsetMs)을 쓴다 — 공연 중에 입장한 참가자나 재개된
- * 공연에서도 중간부터 맞물린다. 다만 벽시계라서, 가창자가 템포를 바꾸면 그만큼 어긋난다.
+ * 공연에서도 중간부터 맞물린다.
+ *
+ * 중요한 건 배속이다. MR 시간축은 벽시계가 아니라 재생 배속으로 흐른다(엔진의
+ * mrPositionSeconds가 흐른 시간에 playbackRate를 곱한다). 벽시계로 세면 템포 110%짜리
+ * 3분 곡에서 끝날 때쯤 18초가 밀린다 — 참가자 화면에서만 가사가 어긋나던 원인이다.
+ * 그래서 호출될 때마다 "지난 시간 × 지금 배속"을 더하는 적분식으로 센다. 템포가 바뀌어도
+ * 그 시점까지 쌓인 위치는 그대로 두고 이후 속도만 갈린다.
+ *
+ * 반환 함수는 호출할 때마다 시계를 감으므로, 한 틱에서 한 번만 읽는다.
  */
 function useLyricsClock(isPerformer: boolean, engine: VocalAudioEngine | null): () => number {
   const phase = useStageStore((state) => state.phase);
   const isSuspended = useStageStore((state) => state.isSuspended);
   const resumeOffsetMs = useStageStore((state) => state.resumeOffsetMs);
+  const rate = usePlaybackRate();
 
   const isRunning = phase === 'PERFORMING' && !isSuspended;
-  const baselineRef = useRef<{ startedAt: number; offsetMs: number } | null>(null);
+  const clockRef = useRef<{ positionMs: number; readAt: number } | null>(null);
+  const rateRef = useRef(rate);
+
+  useEffect(() => {
+    rateRef.current = rate;
+  }, [rate]);
 
   // 재생이 시작·재개될 때 기준점을 새로 잡고, 멈춘 동안에는 비워 시간이 흐르지 않게 한다.
   // 공연마다 resumeOffsetMs가 0으로 돌아오므로 기준점도 반드시 함께 갱신되어야 한다.
   useEffect(() => {
     if (isPerformer) return;
 
-    baselineRef.current = isRunning
-      ? { startedAt: performance.now(), offsetMs: resumeOffsetMs }
+    clockRef.current = isRunning
+      ? { positionMs: resumeOffsetMs, readAt: performance.now() }
       : null;
   }, [isPerformer, isRunning, resumeOffsetMs]);
 
   return useCallback(() => {
     if (isPerformer) return engine?.getMrPositionMs() ?? 0;
 
-    const baseline = baselineRef.current;
-    if (baseline === null) return resumeOffsetMs;
+    const clock = clockRef.current;
+    if (clock === null) return resumeOffsetMs;
 
-    return baseline.offsetMs + (performance.now() - baseline.startedAt);
+    const now = performance.now();
+    clock.positionMs += (now - clock.readAt) * rateRef.current;
+    clock.readAt = now;
+
+    return clock.positionMs;
   }, [isPerformer, engine, resumeOffsetMs]);
 }
 
@@ -213,7 +242,12 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
     let lastIndex = -1;
 
     const tick = () => {
-      const timeMs = getPositionMs() + LYRICS_LEAD_MS + LYRICS_SYNC_OFFSET_MS;
+      // 시계는 호출할 때마다 감기므로 한 틱에서 한 번만 읽는다.
+      const timeMs =
+        getPositionMs() +
+        LYRICS_LEAD_MS +
+        LYRICS_SYNC_OFFSET_MS -
+        (isPerformer ? 0 : LISTENER_LYRICS_DELAY_MS);
       const index = findLineIndexAt(lines, timeMs);
 
       if (index !== lastIndex) {
@@ -226,7 +260,7 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
     const intervalId = setInterval(tick, LINE_TICK_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, [phase, requestKey, lines, getPositionMs]);
+  }, [phase, requestKey, lines, getPositionMs, isPerformer]);
 
   if (load.status === 'IDLE' || load.status === 'LOADING') {
     return {
