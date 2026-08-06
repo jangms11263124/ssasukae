@@ -1,37 +1,73 @@
 import { cn } from '@/shared/lib/cn';
 
+import { CARD_ASPECT, CARD_RADIUS } from '../config/cardVisuals';
 import { StarCubeIcon } from './CardIcons';
 
 interface HoloMiniCardProps {
   className?: string;
   /** true면 사용 완료 상태(회색 탈색) */
   used?: boolean;
+  /** 호버·대기 애니메이션 (캠 독 트리거용). 목록 축소 표시에는 끈다. */
+  interactive?: boolean;
 }
 
 /**
- * 참가자 캠 하단에 표시하는 카드 보유 상태 미니 카드.
- * 미사용은 무지개 홀로그램, 사용 완료는 회색으로 표시한다.
+ * 참가자 캠 모서리에 표시하는 카드 보유 상태 미니 카드.
+ * TCG 실물 비율·모서리를 따르며, 대기 중은 어두운 면 + 시안 포인트로 표시한다.
  */
-export function HoloMiniCard({ className, used = false }: HoloMiniCardProps) {
+export function HoloMiniCard({
+  className,
+  used = false,
+  interactive = false,
+}: HoloMiniCardProps) {
   return (
     <div
       className={cn(
-        'relative aspect-[63/88] w-10 select-none overflow-hidden border',
-        used ? 'border-zinc-600' : 'animate-holo-shift border-cyan-300',
+        'relative w-10 select-none overflow-hidden border transition-[transform,border-color,box-shadow] duration-200 ease-out',
+        used
+          ? 'border-zinc-600 bg-zinc-800'
+          : 'border-cyan-300/50 bg-[#1a1a1e]',
+        interactive && !used && 'animate-mini-card-pulse group-hover:scale-110 group-hover:border-cyan-200 group-active:scale-95',
+        interactive && used && 'group-hover:scale-105 group-active:scale-95',
         className,
       )}
       style={{
-        // backgroundSize와 같이 쓰므로 축약형(background)이 아니라 backgroundImage를 쓴다 —
-        // 축약형은 backgroundSize를 초기화해서 리렌더 때 둘이 서로를 덮어쓴다.
-        backgroundImage: used
-          ? 'linear-gradient(135deg, #3f3f46 0%, #27272a 50%, #3f3f46 100%)'
-          : 'linear-gradient(115deg, #f87171 0%, #a855f7 22%, #facc15 45%, #4ade80 68%, #22d3ee 85%, #f87171 100%)',
-        backgroundSize: '250% 250%',
-        boxShadow: used ? 'none' : '0 0 10px rgb(34 211 238 / 45%)',
+        aspectRatio: CARD_ASPECT,
+        borderRadius: CARD_RADIUS,
+        // interactive 대기는 CSS pulse 애니메이션이 box-shadow를 맡는다.
+        boxShadow:
+          used || interactive ? undefined : '0 0 0 1px rgb(34 211 238 / 12%)',
       }}
     >
-      <div className="grid size-full place-items-center">
-        <StarCubeIcon className={cn('size-4', used ? 'text-zinc-500' : 'text-black/70')} />
+      <div
+        className={cn(
+          'absolute inset-0 opacity-80 transition-opacity duration-200',
+          used
+            ? 'bg-gradient-to-br from-zinc-700/40 to-zinc-900/80'
+            : 'bg-gradient-to-br from-cyan-950/50 via-transparent to-zinc-900/60',
+          interactive && !used && 'group-hover:opacity-100',
+        )}
+      />
+
+      {/* 대각선 빛 스윕 — 무지개가 아니라 시안 하이라이트만 */}
+      {interactive && !used ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 overflow-hidden"
+          style={{ borderRadius: CARD_RADIUS }}
+        >
+          <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-cyan-200/35 to-transparent animate-mini-card-sheen group-hover:[animation-duration:1.4s]" />
+        </div>
+      ) : null}
+
+      <div className="relative grid size-full place-items-center">
+        <StarCubeIcon
+          className={cn(
+            'size-4 transition-transform duration-200 ease-out',
+            used ? 'text-zinc-500' : 'text-cyan-200/80',
+            interactive && !used && 'group-hover:scale-110 group-hover:text-cyan-100',
+          )}
+        />
       </div>
     </div>
   );
