@@ -33,7 +33,9 @@ const PANEL: Color32 = Color32::from_rgb(25, 26, 28);
 const PANEL_ALT: Color32 = Color32::from_rgb(32, 33, 35);
 const BORDER: Color32 = Color32::from_rgb(70, 73, 75);
 const MUTED: Color32 = Color32::from_rgb(151, 153, 156);
-const PRODUCTION_BACKEND_URL: &str = "https://ssafystar-k.site";
+// 프론트 도메인이 아니라 API 도메인이다. 프론트를 거치면 /ws 업그레이드가 프록시를
+// 통과하지 못해 방 이벤트 구독이 끊긴다.
+const PRODUCTION_BACKEND_URL: &str = "https://api.ssafystar-k.site";
 const PRODUCTION_RENDEZVOUS_SERVER: &str = "15.165.205.31:50000";
 const LEAVE_TIMEOUT: Duration = Duration::from_secs(3);
 

@@ -1076,8 +1076,8 @@ mod tests {
     #[test]
     fn backend_url_maps_to_websocket_endpoint() {
         assert_eq!(
-            websocket_url("https://ssafystar-k.site/").as_deref(),
-            Ok("wss://ssafystar-k.site/ws")
+            websocket_url("https://api.ssafystar-k.site/").as_deref(),
+            Ok("wss://api.ssafystar-k.site/ws")
         );
         assert_eq!(
             websocket_url("http://localhost:8080").as_deref(),
