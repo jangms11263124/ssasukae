@@ -15,15 +15,34 @@ const INPUT_CLASS =
 
 const LABEL_CLASS = 'block text-[0.58rem] font-bold tracking-[0.16em] text-zinc-500';
 
-type AttachmentKind = 'wav' | 'png' | 'txt';
+type AttachmentKind = 'mp3' | 'albumImg' | 'lyrics';
 
-const ATTACHMENTS: { kind: AttachmentKind; label: string; extension: string }[] = [
-  { kind: 'wav', label: 'WAV ATTACHMENT', extension: '.wav' },
-  { kind: 'png', label: 'PNG ATTACHMENT', extension: '.png' },
-  { kind: 'txt', label: 'TXT ATTACHMENT', extension: '.txt' },
+const ATTACHMENTS: {
+  kind: AttachmentKind;
+  label: string;
+  extensions: readonly string[];
+  maxSizeMb: number;
+}[] = [
+  { kind: 'mp3', label: 'ORIGINAL MP3 ATTACHMENT', extensions: ['.mp3'], maxSizeMb: 200 },
+  {
+    kind: 'albumImg',
+    label: 'ALBUM IMAGE ATTACHMENT',
+    extensions: ['.jpg', '.jpeg', '.png', '.webp'],
+    maxSizeMb: 20,
+  },
+  {
+    kind: 'lyrics',
+    label: 'LYRICS ATTACHMENT',
+    extensions: ['.txt', '.lrc', '.json'],
+    maxSizeMb: 5,
+  },
 ];
 
-const EMPTY_FILES: Record<AttachmentKind, File | null> = { wav: null, png: null, txt: null };
+const EMPTY_FILES: Record<AttachmentKind, File | null> = {
+  mp3: null,
+  albumImg: null,
+  lyrics: null,
+};
 
 function UploadIcon() {
   return (
@@ -50,10 +69,11 @@ interface TextFieldProps {
   label: string;
   placeholder: string;
   value: string;
+  disabled: boolean;
   onChange: (value: string) => void;
 }
 
-function TextField({ id, label, placeholder, value, onChange }: TextFieldProps) {
+function TextField({ id, label, placeholder, value, disabled, onChange }: TextFieldProps) {
   return (
     <div>
       <label htmlFor={id} className={LABEL_CLASS}>
@@ -64,6 +84,7 @@ function TextField({ id, label, placeholder, value, onChange }: TextFieldProps) 
         name={id}
         type="text"
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className={cn(INPUT_CLASS, 'mt-3')}
@@ -75,12 +96,22 @@ function TextField({ id, label, placeholder, value, onChange }: TextFieldProps) 
 interface FileFieldProps {
   id: string;
   label: string;
-  extension: string;
+  extensions: readonly string[];
+  maxSizeMb: number;
   file: File | null;
+  disabled: boolean;
   onSelect: (file: File) => void;
 }
 
-function FileField({ id, label, extension, file, onSelect }: FileFieldProps) {
+function FileField({
+  id,
+  label,
+  extensions,
+  maxSizeMb,
+  file,
+  disabled,
+  onSelect,
+}: FileFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,8 +124,14 @@ function FileField({ id, label, extension, file, onSelect }: FileFieldProps) {
     }
 
     // accept는 탐색기 필터일 뿐 강제가 아니라서(모든 파일 선택 가능) 확장자를 직접 검증한다.
-    if (!selected.name.toLowerCase().endsWith(extension)) {
-      showToast(`${extension} 파일만 첨부할 수 있어요.`, 'error');
+    const lowerCaseName = selected.name.toLowerCase();
+    if (!extensions.some((extension) => lowerCaseName.endsWith(extension))) {
+      showToast(`${extensions.join(', ')} 형식의 파일만 첨부할 수 있어요.`, 'error');
+      return;
+    }
+
+    if (selected.size > maxSizeMb * 1024 * 1024) {
+      showToast(`파일 크기는 ${maxSizeMb}MB 이하여야 해요.`, 'error');
       return;
     }
 
@@ -115,14 +152,19 @@ function FileField({ id, label, extension, file, onSelect }: FileFieldProps) {
       </div>
 
       <div className="mt-3 flex justify-end">
-        <ActionButton onClick={() => inputRef.current?.click()} className="w-36">
+        <ActionButton
+          onClick={() => inputRef.current?.click()}
+          disabled={disabled}
+          className="w-36"
+        >
           SELECT FILE
         </ActionButton>
         <input
           ref={inputRef}
           id={id}
           type="file"
-          accept={extension}
+          accept={extensions.join(',')}
+          disabled={disabled}
           onChange={handleChange}
           className="hidden"
         />
@@ -138,8 +180,9 @@ export function AddSongForm() {
 
   const { mutate: uploadSong, isPending } = useUploadSongMutation();
 
-  // 필수: 곡명·가수명·WAV. PNG(썸네일)/TXT(가사)는 백엔드 DTO 확정 전까지 선택으로 둔다.
-  const canSubmit = Boolean(title.trim() && artist.trim() && files.wav) && !isPending;
+  const canSubmit =
+    Boolean(title.trim() && artist.trim() && files.mp3 && files.albumImg && files.lyrics) &&
+    !isPending;
   const isPristine = !title && !artist && Object.values(files).every((file) => !file);
 
   const resetForm = () => {
@@ -154,7 +197,7 @@ export function AddSongForm() {
   };
 
   const handleSubmit = () => {
-    if (!canSubmit || !files.wav) {
+    if (!canSubmit || !files.mp3 || !files.albumImg || !files.lyrics) {
       return;
     }
 
@@ -162,17 +205,17 @@ export function AddSongForm() {
       {
         title: title.trim(),
         artist: artist.trim(),
-        wavFile: files.wav,
-        pngFile: files.png,
-        txtFile: files.txt,
+        originalMp3: files.mp3,
+        albumImg: files.albumImg,
+        lyrics: files.lyrics,
       },
       {
         onSuccess: () => {
           resetForm();
-          showToast('곡을 추가했어요.');
+          showToast('곡 분석 요청을 접수했어요.');
         },
         onError: (error) => {
-          showToast(getApiErrorMessage(error, '곡을 추가하지 못했어요.'), 'error');
+          showToast(getApiErrorMessage(error, '곡 분석 요청을 접수하지 못했어요.'), 'error');
         },
       },
     );
@@ -186,6 +229,7 @@ export function AddSongForm() {
           label="SONG NAME_"
           placeholder="ENTER_SONG_NAME"
           value={title}
+          disabled={isPending}
           onChange={setTitle}
         />
         <TextField
@@ -193,17 +237,20 @@ export function AddSongForm() {
           label="SINGER NAME_"
           placeholder="ENTER_SINGER_NAME"
           value={artist}
+          disabled={isPending}
           onChange={setArtist}
         />
       </div>
 
-      {ATTACHMENTS.map(({ kind, label, extension }) => (
+      {ATTACHMENTS.map(({ kind, label, extensions, maxSizeMb }) => (
         <FileField
           key={kind}
           id={`admin-song-${kind}`}
           label={label}
-          extension={extension}
+          extensions={extensions}
+          maxSizeMb={maxSizeMb}
           file={files[kind]}
+          disabled={isPending}
           onSelect={(file) => setFiles((prev) => ({ ...prev, [kind]: file }))}
         />
       ))}
