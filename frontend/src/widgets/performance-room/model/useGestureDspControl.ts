@@ -85,7 +85,7 @@ export function useGestureDspControl(
     enabled: options.enabled,
     isPanelOpen: options.isPanelOpen,
     rowCount: rows.length,
-    // 수성전은 공연 취소가 없다. 판정을 꺼서 오조작도 카운트다운도 생기지 않게 한다.
+    // 수성전은 공연 취소가 없다. X자 포즈는 무입력 처리돼 취소도 잡기 오인도 생기지 않는다.
     cancelEnabled: !isBattleMode,
     onOpenPanel: options.onOpenPanel,
     onClosePanel: options.onClosePanel,
