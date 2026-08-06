@@ -1,6 +1,6 @@
-'use client';
-
 import { cn } from '@/shared/lib/cn';
+
+import { SongThumbnailImage } from './SongThumbnailImage';
 
 interface SongThumbnailProps {
   src: string | null;
@@ -17,17 +17,7 @@ export function SongThumbnail({ src, className }: SongThumbnailProps) {
         className,
       )}
     >
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt=""
-          onError={(event) => {
-            event.currentTarget.style.display = 'none';
-          }}
-          className="absolute inset-0 size-full object-cover"
-        />
-      ) : null}
+      {src ? <SongThumbnailImage src={src} /> : null}
     </div>
   );
 }

@@ -80,6 +80,8 @@ export function useFavoriteToggle(songId: number, initialFavorite: boolean): Use
       if (bagRef.current.songId === id) {
         bagRef.current.confirmed = desired;
       }
+      // PUT/DELETE 직후 검색 refetch가 옛 값을 가져와도 찜 상태가 유지되게 다시 패치한다.
+      patchFavoriteCaches(queryClient, id, desired);
       void queryClient.invalidateQueries({ queryKey: favoriteQueryKeys.all });
     } catch (error) {
       if (bagRef.current.songId === id) {
@@ -122,13 +124,17 @@ export function useFavoriteToggle(songId: number, initialFavorite: boolean): Use
       const desired = bag.favorite;
       const confirmed = bag.confirmed;
       if (desired === confirmed || bag.inFlight) return;
-      void syncFavorite(songId, desired).catch(() => {
-        // 전환/언마운트 실패는 다음 조회 시 서버 상태로 복구된다.
-      });
+      void syncFavorite(songId, desired)
+        .then(() => {
+          patchFavoriteCaches(queryClient, songId, desired);
+        })
+        .catch(() => {
+          // 전환/언마운트 실패는 다음 조회 시 서버 상태로 복구된다.
+        });
     };
     // initialFavorite는 곡 진입 시점 스냅샷만 사용한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- songId 변경 시에만 리셋
-  }, [songId]);
+  }, [queryClient, songId]);
 
   function toggle() {
     const bag = bagRef.current;

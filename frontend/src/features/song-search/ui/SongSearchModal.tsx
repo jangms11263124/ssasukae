@@ -139,6 +139,8 @@ export function SongSearchModal({ onClose, renderSongAction }: SongSearchModalPr
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (lastPage) => lastPage.cursor ?? undefined,
     placeholderData: keepPreviousData,
+    // 찜 낙관적 패치를 모달 재오픈 직후 refetch가 덮어쓰지 않도록 잠시 신선하게 본다.
+    staleTime: 30_000,
   });
 
   const sentinelRef = useInfiniteScrollTrigger(
