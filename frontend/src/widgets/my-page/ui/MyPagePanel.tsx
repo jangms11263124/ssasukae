@@ -11,19 +11,19 @@ import { cn } from '@/shared/lib/cn';
 import { showToast } from '@/shared/model/toastStore';
 
 import { FavoritesCard } from './FavoritesCard';
+import { MyPageSkeleton } from './MyPageSkeleton';
 import { PerformanceStatusCard } from './PerformanceStatusCard';
 import { ProfileCard } from './ProfileCard';
 import { RecentActivityCard } from './RecentActivityCard';
 
-function StatusMessage({ tone, children }: { tone: 'muted' | 'error'; children: React.ReactNode }) {
+function ErrorMessage({ children }: { children: React.ReactNode }) {
   return (
     // 배경 오버레이가 absolute라, static으로 두면 페인트 순서상 그라디언트에 가려진다.
     <div className="relative grid flex-1 place-items-center py-24">
       <p
         className={cn(
           jetBrainsMono.className,
-          'text-[0.6rem] tracking-[0.14em]',
-          tone === 'error' ? 'text-fuchsia-400' : 'text-zinc-500',
+          'text-[0.6rem] tracking-[0.14em] text-fuchsia-400',
         )}
       >
         {children}
@@ -34,7 +34,7 @@ function StatusMessage({ tone, children }: { tone: 'muted' | 'error'; children: 
 
 /** 마이페이지의 클라이언트 경계. 정적 셸은 app/mypage/page.tsx가 서버에서 렌더링한다. */
 export function MyPagePanel() {
-  const { data: profile, isLoading, isError, error } = useMyPageQuery();
+  const { data: profile, isError, error } = useMyPageQuery();
   const { mutateAsync: logout } = useLogoutMutation();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -46,7 +46,7 @@ export function MyPagePanel() {
     try {
       await logout();
     } catch {
-      showToast('로그아웃에 실패했습니다', 'error');
+      showToast('로그아웃하지 못했어요.', 'error');
     }
 
     // 요청이 실패해도 onSettled에서 로컬 세션은 정리되므로 로그인 페이지로 이동시킨다
@@ -55,13 +55,12 @@ export function MyPagePanel() {
 
   if (!profile) {
     return isError ? (
-      <StatusMessage tone="error">
-        [ERROR] {getApiErrorMessage(error, '마이페이지를 불러오지 못했습니다.')}
-      </StatusMessage>
+      <ErrorMessage>
+        [ERROR] {getApiErrorMessage(error, '마이페이지를 불러오지 못했어요.')}
+      </ErrorMessage>
     ) : (
-      <StatusMessage tone="muted">
-        {isLoading ? 'LOADING_PROFILE...' : 'WAITING_FOR_SESSION...'}
-      </StatusMessage>
+      // 토큰 복구 전에는 쿼리가 disabled라 isLoading이 false다. 둘 다 데이터 대기 상태이므로 스켈레톤으로 덮는다.
+      <MyPageSkeleton />
     );
   }
 

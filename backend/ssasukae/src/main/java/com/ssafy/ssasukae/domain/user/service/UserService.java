@@ -33,12 +33,16 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
+    private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
 
     private static final List<String> ALLOWED_PROFILE_IMAGE_TYPES = List.of(
             "image/jpeg",
@@ -95,7 +99,7 @@ public class UserService {
                 .provider(user.getProvider().name())
                 .email(user.getEmail())
                 .profileImageUrl(user.getProfileImageUrl())
-                .createdAt(user.getCreatedAt())
+                .createdAt(toSeoulTime(user.getCreatedAt()))
                 .favorites(FavoriteResponseDTO.SimpleFavoriteDTO.builder()
                         .count(favoritesCnt)
                         .items(recentFavorites.stream().map(f -> {
@@ -107,7 +111,7 @@ public class UserService {
                                     .artist(song.getArtist())
                                     .thumbnailUrl(song.getThumbnailImageUrl())
                                     .durationSeconds(song.getDuration())
-                                    .favoritedAt(f.getCreatedAt()).build();
+                                    .favoritedAt(toSeoulTime(f.getCreatedAt())).build();
                         }).toList()).build())
                 .recentPerformances(recentPerformances.stream().map(p -> {
                     Song song = p.getSong();
@@ -118,7 +122,7 @@ public class UserService {
                             .artist(song.getArtist())
                             .thumbnailUrl(song.getThumbnailImageUrl())
                             .score(p.getFinalScore())
-                            .performanceAt(p.getCreatedAt()).build();
+                            .performanceAt(toSeoulTime(p.getCreatedAt())).build();
                 }).toList()).build();
     }
 
@@ -176,7 +180,17 @@ public class UserService {
                 .avgScore(newAvg)
                 .difference(difference)
                 .totalSongs(newStat.getTotal())
-                .updatedAt(newStat.getUpdatedAt()).build();
+                .updatedAt(toSeoulTime(newStat.getUpdatedAt())).build();
+    }
+
+    private LocalDateTime toSeoulTime(LocalDateTime utcDateTime) {
+        if (utcDateTime == null) {
+            return null;
+        }
+
+        return utcDateTime.atOffset(ZoneOffset.UTC)
+                .atZoneSameInstant(SEOUL_ZONE_ID)
+                .toLocalDateTime();
     }
 
     private BigDecimal average(List<PerformanceResult> items) {

@@ -55,14 +55,22 @@ export function TalkPanel() {
   };
 
   return (
-    <RoomPanel className="flex h-full min-h-72 flex-col px-4 py-4">
-      <h2 className="border-b border-white/15 pb-2 font-mono text-sm tracking-[0.18em]">
+    <RoomPanel className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-4">
+      <h2 className="shrink-0 border-b border-white/15 pb-2 font-mono text-sm tracking-[0.18em]">
         <span className="text-cyan-200 underline decoration-cyan-300/70 underline-offset-4">
           TALK
         </span>
       </h2>
 
-      <ul ref={listRef} className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto" aria-label="채팅 메시지">
+      <ul
+        ref={listRef}
+        className={cn(
+          'mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto',
+          // 스크롤은 가능하되 스크롤바는 숨긴다.
+          '[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
+        )}
+        aria-label="채팅 메시지"
+      >
         {messages.map((message) => {
           const mine = message.participantId === myParticipantId;
 
@@ -84,13 +92,16 @@ export function TalkPanel() {
         })}
       </ul>
 
-      <form onSubmit={handleSubmit} className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
+      <form
+        onSubmit={handleSubmit}
+        className="mt-3 flex shrink-0 items-center gap-2 border-t border-white/10 pt-3"
+      >
         <input
           type="text"
           value={draft}
           maxLength={MAX_MESSAGE_LENGTH}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="대화를 입력하세요"
+          placeholder="대화 입력"
           aria-label="채팅 입력"
           className="h-9 min-w-0 flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
         />

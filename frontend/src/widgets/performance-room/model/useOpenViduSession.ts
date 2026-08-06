@@ -2,42 +2,39 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { Publisher, Session, StreamManager } from 'openvidu-browser';
+import type { Connection, Publisher, Session, StreamManager } from 'openvidu-browser';
 
-import { reissueMediaToken, useRoomStore } from '@/entities/room';
+import { useRoomStore } from '@/entities/room';
 import { showToast } from '@/shared/model/toastStore';
 
+import { fetchMediaToken } from './openViduMediaToken';
 import { useStageStore } from './stageStore';
+import { readMicBlocked, useMicBlocked } from './useMicBlocked';
 
 /**
  * 원격 참가자 한 명의 미디어 상태.
- * MediaStream 대신 StreamManager(Subscriber)를 보관한다 — 원격 MediaStream은
- * WebRTC 협상이 끝나야 생기므로, 시점 관리를 openvidu-browser의
- * addVideoElement()에 맡기는 것이 공식 커스텀 렌더링 패턴이다.
  */
 export interface RemoteMedia {
   streamManager: StreamManager;
+  /** 이 스트림이 속한 커넥션. 재입장 시 이전(유령) 커넥션의 늦은 이벤트를 구분하는 키 */
+  connectionId: string;
   audioActive: boolean;
   videoActive: boolean;
 }
 
 export interface OpenViduSessionApi {
   isConnected: boolean;
-  /** 내 캠·마이크 스트림. 권한 거부·장치 없음이면 null(시청 전용) */
   localStream: MediaStream | null;
-  /** participantId → 원격 미디어 */
   remoteStreams: ReadonlyMap<number, RemoteMedia>;
-  /**
-   * 송출 오디오 트랙 교체. track을 주면 원본 마이크 대신 그 트랙을 내보내고
-   * null이면 원본 마이크로 원복한다. publisher가 없으면(시청 전용) 조용히 무시한다.
-   */
   replaceAudioTrack: (track: MediaStreamTrack | null) => Promise<void>;
 }
 
-/** 반주 송출용 오디오 비트레이트 상한. 기본 음성 채팅 프리셋으로는 반주가 뭉개진다 */
 const MUSIC_AUDIO_MAX_BITRATE = 128_000;
+/** Strict Mode mount→cleanup→remount 사이클이 끝난 뒤 연결한다 */
+const CONNECT_DELAY_MS = 200;
 
-// 인코딩 상향 실패는 음질 저하일 뿐 송출 자체는 유지되므로 조용히 기본값으로 둔다.
+let connectGeneration = 0;
+
 function tuneAudioSender(publisher: Publisher, track: MediaStreamTrack) {
   try {
     const senders = publisher.stream.getRTCPeerConnection().getSenders();
@@ -49,13 +46,15 @@ function tuneAudioSender(publisher: Publisher, track: MediaStreamTrack) {
     encodings[0].maxBitrate = MUSIC_AUDIO_MAX_BITRATE;
     sender.setParameters({ ...parameters, encodings }).catch(() => undefined);
   } catch {
-    // getRTCPeerConnection 미지원 등 — 무시
+    // ignore
   }
 }
 
-// 백엔드가 토큰 serverData에 {"participantId":N}을 심는다.
-// clientData가 있으면 "client%/%server" 형태라 조각별로 파싱한다.
-function parseParticipantId(connectionData: string): number | null {
+function parseParticipantId(connectionData: string | undefined): number | null {
+  if (!connectionData) {
+    return null;
+  }
+
   for (const part of connectionData.split('%/%')) {
     try {
       const parsed: unknown = JSON.parse(part);
@@ -68,27 +67,141 @@ function parseParticipantId(connectionData: string): number | null {
         return parsed.participantId;
       }
     } catch {
-      // JSON이 아닌 조각은 무시한다.
+      // ignore
     }
   }
 
   return null;
 }
 
-// OpenVidu 세션 생명주기 훅. 방 입장 토큰으로 세션에 연결해
-// 내 미디어를 publish하고 다른 참가자 스트림을 participantId로 매핑해 노출한다.
+function stopPublisher(publisher: Publisher | null) {
+  publisher?.stream.getMediaStream()?.getTracks().forEach((track) => track.stop());
+}
+
+async function acquireMicrophoneTrack(): Promise<MediaStreamTrack | null> {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    return stream.getAudioTracks()[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+type OpenViduSessionHandlers = Session & {
+  onParticipantEvicted: (event: { connectionId: string; reason?: string }) => void;
+  onParticipantLeft: (event: { connectionId: string; reason?: string }) => void;
+  onParticipantUnpublished: (event: { connectionId: string; reason?: string }) => void;
+};
+
+/** 재접속·teardown 직후 SDK가 모르는 connection 이벤트를 처리하다 터지는 것을 막는다 */
+function guardStaleOpenViduHandlers(session: Session): void {
+  const handlers = session as OpenViduSessionHandlers;
+
+  const originalEvicted = handlers.onParticipantEvicted.bind(session);
+  handlers.onParticipantEvicted = (event) => {
+    if (!session.connection) {
+      return;
+    }
+
+    try {
+      originalEvicted(event);
+    } catch {
+      // ignore stale evict
+    }
+  };
+
+  const originalLeft = handlers.onParticipantLeft.bind(session);
+  handlers.onParticipantLeft = (event) => {
+    const connectionId = event.connectionId;
+    if (!connectionId || !session.remoteConnections.has(connectionId)) {
+      // 재접속 시 서버가 끊은 이전 connection의 leave 이벤트 — 이 세션에는 없음
+      return;
+    }
+
+    try {
+      originalLeft(event);
+    } catch {
+      // ignore stale leave
+    }
+  };
+
+  const originalUnpublished = handlers.onParticipantUnpublished.bind(session);
+  handlers.onParticipantUnpublished = (event) => {
+    const connectionId = event.connectionId;
+    if (!connectionId) {
+      return;
+    }
+
+    if (!session.connection) {
+      return;
+    }
+
+    if (connectionId !== session.connection.connectionId && !session.remoteConnections.has(connectionId)) {
+      return;
+    }
+
+    try {
+      originalUnpublished(event);
+    } catch {
+      // ignore stale unpublish
+    }
+  };
+}
+
+function disconnectSessionAsync(session: Session | null, publisher: Publisher | null): Promise<void> {
+  stopPublisher(publisher);
+
+  if (session === null || !session.connection) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve();
+    };
+
+    session.on('sessionDisconnected', finish);
+
+    try {
+      session.disconnect();
+    } catch {
+      finish();
+      return;
+    }
+
+    window.setTimeout(finish, 400);
+  });
+}
+
+/** roomId별 이전 OpenVidu teardown — Strict Mode remount 시 connect 레이스 방지 */
+const roomTeardowns = new Map<number, Promise<void>>();
+
+function isRemoteConnectionActive(session: Session, connection: Connection | undefined): boolean {
+  const connectionId = connection?.connectionId;
+  if (!connectionId) {
+    return false;
+  }
+
+  return session.remoteConnections.has(connectionId);
+}
+
 export function useOpenViduSession(): OpenViduSessionApi {
   const roomId = useRoomStore((state) => state.session?.roomId ?? null);
   const micOn = useStageStore((state) => state.micOn);
   const camOn = useStageStore((state) => state.camOn);
+  // 공연 중 가창자 외 송출 차단. 토글 상태와 곱해져 실제 송출 여부가 된다
+  const micBlocked = useMicBlocked();
 
   const [isConnected, setIsConnected] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<ReadonlyMap<number, RemoteMedia>>(new Map());
   const publisherRef = useRef<Publisher | null>(null);
-  /** 공연 믹스 송출 중 여부. 이때 마이크 토글이 트랙을 끄면 MR까지 꺼진다 */
   const isBroadcastingMixRef = useRef(false);
-  /** 원복용 원본 마이크 트랙. 공연 중에도 정지하지 않고 유지한다 */
   const originalAudioTrackRef = useRef<MediaStreamTrack | null>(null);
 
   useEffect(() => {
@@ -96,10 +209,19 @@ export function useOpenViduSession(): OpenViduSessionApi {
       return;
     }
 
+    const generation = ++connectGeneration;
     let cancelled = false;
     let activeSession: Session | null = null;
+    let activePublisher: Publisher | null = null;
+    let connectTimer: number | null = null;
+
+    const isStale = () => cancelled || generation !== connectGeneration;
 
     const updateRemote = (participantId: number, media: RemoteMedia | null) => {
+      if (isStale()) {
+        return;
+      }
+
       setRemoteStreams((previous) => {
         const next = new Map(previous);
         if (media === null) {
@@ -111,91 +233,142 @@ export function useOpenViduSession(): OpenViduSessionApi {
       });
     };
 
+    // 종료 이벤트를 보낸 커넥션이 지금 보관 중인 스트림의 커넥션일 때만 지운다 —
+    // 재입장 직후 이전(유령) 커넥션의 늦은 종료 이벤트가 새 스트림을 지우는 것을 막는다.
+    const removeRemote = (participantId: number, connectionId: string | undefined) => {
+      if (isStale() || connectionId === undefined) {
+        return;
+      }
+
+      setRemoteStreams((previous) => {
+        const current = previous.get(participantId);
+        if (current === undefined || current.connectionId !== connectionId) {
+          return previous;
+        }
+
+        const next = new Map(previous);
+        next.delete(participantId);
+        return next;
+      });
+    };
+
     const connect = async () => {
-      // openvidu-browser는 import 시점에 브라우저 API를 참조해 SSR에서 터진다.
+      setRemoteStreams(new Map());
+      setLocalStream(null);
+      setIsConnected(false);
+
+      const pendingTeardown = roomTeardowns.get(roomId);
+      if (pendingTeardown) {
+        await pendingTeardown;
+      }
+      if (isStale()) {
+        return;
+      }
+
+      const openviduToken = await fetchMediaToken(roomId);
+      if (isStale()) {
+        return;
+      }
+
+      useRoomStore.getState().setOpenViduToken(openviduToken);
+
       const { OpenVidu } = await import('openvidu-browser');
-      if (cancelled) {
+      if (isStale()) {
         return;
       }
 
       const openVidu = new OpenVidu();
       openVidu.enableProdMode();
+      const session = openVidu.initSession();
+      guardStaleOpenViduHandlers(session);
+      const myParticipantId = useRoomStore.getState().session?.myParticipantId ?? null;
 
-      const joinWithToken = async (token: string): Promise<Session> => {
-        const session = openVidu.initSession();
+      session.on('streamCreated', (event) => {
+        if (isStale()) {
+          return;
+        }
 
-        session.on('streamCreated', (event) => {
-          const participantId = parseParticipantId(event.stream.connection.data);
-          if (participantId === null) {
+        try {
+          const connection = event.stream.connection;
+          if (!isRemoteConnectionActive(session, connection)) {
+            return;
+          }
+
+          const participantId = parseParticipantId(connection?.data);
+          if (participantId === null || participantId === myParticipantId) {
             return;
           }
 
           const subscriber = session.subscribe(event.stream, undefined);
           updateRemote(participantId, {
             streamManager: subscriber,
+            connectionId: connection.connectionId,
             audioActive: event.stream.audioActive,
             videoActive: event.stream.videoActive,
           });
-        });
+        } catch {
+          // evict 직후 stale stream 이벤트는 무시
+        }
+      });
 
-        session.on('streamDestroyed', (event) => {
-          const participantId = parseParticipantId(event.stream.connection.data);
-          if (participantId !== null) {
-            updateRemote(participantId, null);
-          }
-        });
+      session.on('streamDestroyed', (event) => {
+        const connection = event.stream.connection;
+        const participantId = parseParticipantId(connection?.data);
+        if (participantId !== null) {
+          removeRemote(participantId, connection?.connectionId);
+        }
+      });
 
-        // 상대가 마이크·캠을 토글하면 이 이벤트로만 알 수 있다.
-        session.on('streamPropertyChanged', (event) => {
-          if (event.changedProperty !== 'audioActive' && event.changedProperty !== 'videoActive') {
-            return;
-          }
+      session.on('connectionDestroyed', (event) => {
+        const participantId = parseParticipantId(event.connection?.data);
+        if (participantId !== null) {
+          removeRemote(participantId, event.connection?.connectionId);
+        }
+      });
 
-          const participantId = parseParticipantId(event.stream.connection.data);
-          if (participantId === null) {
-            return;
-          }
-
-          setRemoteStreams((previous) => {
-            const current = previous.get(participantId);
-            if (current === undefined) {
-              return previous;
-            }
-
-            const next = new Map(previous);
-            next.set(participantId, {
-              ...current,
-              [event.changedProperty]: event.newValue as boolean,
-            });
-            return next;
-          });
-        });
-
-        await session.connect(token);
-        return session;
-      };
-
-      const initialToken = useRoomStore.getState().session?.openViduToken;
-      if (initialToken === undefined) {
-        return;
-      }
-
-      let session: Session;
-      try {
-        session = await joinWithToken(initialToken);
-      } catch {
-        // 토큰은 1회용이라 재마운트(StrictMode 포함)·재입장 시 소진돼 있을 수 있다.
-        // 재발급 받아 한 번만 재시도한다.
-        const { openviduToken } = await reissueMediaToken(roomId);
-        useRoomStore.getState().setOpenViduToken(openviduToken);
-        if (cancelled) {
+      session.on('streamPropertyChanged', (event) => {
+        if (isStale()) {
           return;
         }
-        session = await joinWithToken(openviduToken);
-      }
 
-      if (cancelled) {
-        session.disconnect();
+        if (event.changedProperty !== 'audioActive' && event.changedProperty !== 'videoActive') {
+          return;
+        }
+
+        const participantId = parseParticipantId(event.stream.connection?.data);
+        if (participantId === null) {
+          return;
+        }
+
+        setRemoteStreams((previous) => {
+          const current = previous.get(participantId);
+          // 유령 커넥션의 늦은 토글 이벤트가 새 스트림 상태를 덮어쓰지 않게 커넥션까지 맞춘다
+          if (current === undefined || current.connectionId !== event.stream.connection?.connectionId) {
+            return previous;
+          }
+
+          const next = new Map(previous);
+          next.set(participantId, {
+            ...current,
+            [event.changedProperty]: event.newValue as boolean,
+          });
+          return next;
+        });
+      });
+
+      session.on('sessionDisconnected', () => {
+        if (isStale()) {
+          return;
+        }
+
+        setIsConnected(false);
+        setLocalStream(null);
+        setRemoteStreams(new Map());
+      });
+
+      await session.connect(openviduToken);
+      if (isStale()) {
+        await disconnectSessionAsync(session, null);
         return;
       }
 
@@ -204,50 +377,68 @@ export function useOpenViduSession(): OpenViduSessionApi {
 
       try {
         const publisher = await openVidu.initPublisherAsync(undefined, {
-          publishAudio: useStageStore.getState().micOn,
+          // 공연 도중 입장·재접속이면 처음부터 막힌 채로 시작한다
+          publishAudio: useStageStore.getState().micOn && !readMicBlocked(),
           publishVideo: useStageStore.getState().camOn,
-          // 미러링은 렌더링 쪽(StageCameraFeed)에서 처리한다.
           mirror: false,
         });
 
-        if (cancelled) {
-          publisher.stream.getMediaStream()?.getTracks().forEach((track) => track.stop());
+        if (isStale()) {
+          stopPublisher(publisher);
+          await disconnectSessionAsync(session, null);
           return;
         }
 
         await session.publish(publisher);
+        activePublisher = publisher;
         publisherRef.current = publisher;
         setLocalStream(publisher.stream.getMediaStream());
       } catch {
-        // 권한 거부·장치 없음이어도 세션은 유지해 시청·청취는 가능하게 한다.
-        showToast('카메라·마이크를 사용할 수 없어 시청 전용으로 참여합니다.', 'info');
+        if (!isStale()) {
+          showToast('카메라와 마이크를 쓸 수 없어 시청만 할 수 있어요.', 'info');
+        }
       }
     };
 
-    connect().catch(() => {
-      if (!cancelled) {
-        showToast('미디어 서버 연결에 실패했습니다.', 'error');
-      }
-    });
+    connectTimer = window.setTimeout(() => {
+      connect().catch(() => {
+        if (!isStale()) {
+          showToast('화상 연결에 실패했어요. 잠시 후 다시 시도해 주세요.', 'error');
+        }
+      });
+    }, CONNECT_DELAY_MS);
 
     return () => {
       cancelled = true;
+      if (connectTimer !== null) {
+        window.clearTimeout(connectTimer);
+      }
       publisherRef.current = null;
       isBroadcastingMixRef.current = false;
+      // 원복용 clone은 publisher 스트림 밖에 있어 stopPublisher가 못 멈춘다 — 여기서 끊지 않으면 마이크 점유가 남는다
+      originalAudioTrackRef.current?.stop();
       originalAudioTrackRef.current = null;
-      activeSession?.disconnect();
+
+      const teardown = disconnectSessionAsync(activeSession, activePublisher);
+      roomTeardowns.set(roomId, teardown);
+      teardown.finally(() => {
+        if (roomTeardowns.get(roomId) === teardown) {
+          roomTeardowns.delete(roomId);
+        }
+      });
+
+      activeSession = null;
+      activePublisher = null;
       setIsConnected(false);
       setLocalStream(null);
       setRemoteStreams(new Map());
     };
   }, [roomId]);
 
-  // 토글 시점에 publisher가 아직 없으면 생성 시 스토어 값을 읽으므로 놓치지 않는다.
   useEffect(() => {
-    // 공연 믹스 송출 중에는 끄지 않는다 — 목소리 음소거는 엔진 마이크가 담당한다.
     if (isBroadcastingMixRef.current) return;
-    publisherRef.current?.publishAudio(micOn);
-  }, [micOn]);
+    publisherRef.current?.publishAudio(micOn && !micBlocked);
+  }, [micOn, micBlocked]);
 
   useEffect(() => {
     publisherRef.current?.publishVideo(camOn);
@@ -259,24 +450,41 @@ export function useOpenViduSession(): OpenViduSessionApi {
 
     if (track !== null) {
       if (originalAudioTrackRef.current === null) {
+        // replaceTrack은 교체되는 기존 트랙을 stop시킨다(SDK 내부 동작) — 원본은 clone으로 보관해야 살아남는다
+        const current = publisher.stream.getMediaStream()?.getAudioTracks()[0] ?? null;
         originalAudioTrackRef.current =
-          publisher.stream.getMediaStream()?.getAudioTracks()[0] ?? null;
+          current !== null && current.readyState === 'live' ? current.clone() : null;
       }
       await publisher.replaceTrack(track);
       isBroadcastingMixRef.current = true;
-      // 믹스 트랙에는 MR이 포함되므로 마이크 토글 상태와 무관하게 항상 내보낸다.
       publisher.publishAudio(true);
       tuneAudioSender(publisher, track);
       return;
     }
 
     isBroadcastingMixRef.current = false;
-    const original = originalAudioTrackRef.current;
+    let original = originalAudioTrackRef.current;
     originalAudioTrackRef.current = null;
-    if (original !== null && original.readyState === 'live') {
-      await publisher.replaceTrack(original);
+    if (original !== null && original.readyState !== 'live') {
+      original.stop();
+      original = null;
     }
-    publisher.publishAudio(useStageStore.getState().micOn);
+    if (original === null) {
+      // 보관한 원본이 없거나 죽어 있으면 마이크를 재획득한다 — 조용히 무음으로 방치하지 않는다
+      original = await acquireMicrophoneTrack();
+    }
+    if (original !== null) {
+      try {
+        await publisher.replaceTrack(original);
+      } catch {
+        original.stop();
+        original = null;
+      }
+    }
+    if (original === null) {
+      showToast('마이크를 다시 연결하지 못했어요. 새로고침해 주세요.', 'error');
+    }
+    publisher.publishAudio(useStageStore.getState().micOn && !readMicBlocked());
   }, []);
 
   return { isConnected, localStream, remoteStreams, replaceAudioTrack };

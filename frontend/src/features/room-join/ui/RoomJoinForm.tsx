@@ -6,11 +6,10 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-import { useRoomStore } from '@/entities/room';
+import { buildRoomPath, useRoomStore, type RoomMode } from '@/entities/room';
 import { useAuth } from '@/entities/user';
-import { ApiError } from '@/shared/api/client';
 import { showToast } from '@/shared/model/toastStore';
 
 import { useJoinRoomMutation } from '../api/useJoinRoomMutation';
@@ -19,13 +18,18 @@ import {
   mapKeyCodeToInviteChar,
   sanitizeInviteCode,
 } from '../lib/inviteCodeInput';
+import { resolveJoinErrorMessage } from '../lib/joinErrorMessage';
+import { readInviteCodeFromSearch } from '../lib/inviteLink';
 
 export function RoomJoinForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const enterRoom = useRoomStore((state) => state.enterRoom);
   const { mutate: joinRoom, isPending } = useJoinRoomMutation();
-  const [inviteCode, setInviteCode] = useState('');
+  const codeFromUrl = readInviteCodeFromSearch(searchParams.toString());
+  const [manualInviteCode, setManualInviteCode] = useState<string | null>(null);
+  const inviteCode = manualInviteCode ?? codeFromUrl;
 
   // 새 값을 DOM에 먼저 반영해 커서를 유지하고, React 상태를 뒤따라 맞춘다.
   const applyValue = (input: HTMLInputElement, next: string, cursor: number) => {
@@ -34,7 +38,7 @@ export function RoomJoinForm() {
       const position = Math.min(cursor, next.length);
       input.setSelectionRange(position, position);
     }
-    setInviteCode(next);
+    setManualInviteCode(next);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -92,33 +96,28 @@ export function RoomJoinForm() {
     }
 
     joinRoom(inviteCode, {
-      onSuccess: (response) => {
+      onSuccess: ({ session, snapshot }) => {
+        // 스냅샷을 못 받은 경우 GENERAL로 폴백 — 방 화면 부트스트랩이 다시 동기화한다.
+        const mode: RoomMode = snapshot?.mode ?? 'GENERAL';
         enterRoom({
-          roomId: response.roomId,
-          participantId: response.participantId,
-          inviteCode: response.inviteCode,
-          // 방 상세 조회 API가 없어 입장 응답만으로는 방 이름을 알 수 없다.
-          name: '',
-          mode: response.mode ?? 'GENERAL',
+          roomId: session.roomId,
+          participantId: session.participantId,
+          inviteCode: session.inviteCode,
+          name: snapshot?.name ?? '',
+          mode,
           isHost: false,
-          openViduSessionId: response.openViduSessionId,
-          openViduToken: response.openViduToken,
+          openViduSessionId: session.openViduSessionId,
+          openViduToken: session.openViduToken,
           me: {
             userId: user?.id ?? 0,
             nickname: user?.nickname ?? '나',
             profileImageUrl: user?.profileImageUrl ?? null,
           },
         });
-        router.push(
-          response.mode === 'LOW_LATENCY'
-            ? `/rooms/low-latency?roomId=${response.roomId}`
-            : `/rooms/general?roomId=${response.roomId}`,
-        );
+        router.push(buildRoomPath(mode, session.roomId));
       },
       onError: (error) => {
-        const message =
-          error instanceof ApiError ? error.message : '방 입장에 실패했습니다.';
-        showToast(message, 'error');
+        showToast(resolveJoinErrorMessage(error), 'error');
       },
     });
   };

@@ -1,11 +1,12 @@
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
 import { LikedSongsSection } from '@/widgets/liked-songs';
+import { LiveFeedFooter } from '@/widgets/live-feed-footer';
 
 export default function LikePage() {
   return (
-    <div className="min-h-dvh bg-[#0b0b0d] text-zinc-100">
+    <div className="flex min-h-dvh flex-col bg-[#0b0b0d] text-zinc-100">
       <AuthenticatedHeader />
-      <main className="mx-auto max-w-[1500px] px-6 py-12 sm:px-10">
+      <main className="mx-auto w-full max-w-[1500px] flex-1 px-6 py-12 sm:px-10">
         <p className="font-mono text-sm tracking-[0.4em] text-zinc-400">
           PERSONAL_ARCHIVE / SAVED_TRACKS
         </p>
@@ -16,6 +17,8 @@ export default function LikePage() {
           <LikedSongsSection />
         </div>
       </main>
+
+      <LiveFeedFooter />
     </div>
   );
 }

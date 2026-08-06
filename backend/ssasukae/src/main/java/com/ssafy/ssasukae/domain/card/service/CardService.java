@@ -37,8 +37,6 @@ import com.ssafy.ssasukae.domain.card.websocket.payload.CardAssignedPayload;
 import com.ssafy.ssasukae.domain.card.websocket.payload.CardEffectEndedPayload;
 import com.ssafy.ssasukae.domain.card.websocket.payload.CardEffectStartedPayload;
 import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectEndReason;
-import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
-import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSettings;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceSnapShot;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceStatus;
@@ -61,8 +59,6 @@ public class CardService {
   private static final ZoneId SEOUL_ZONE_ID = ZoneId.of("Asia/Seoul");
   private static final int ACTIVATION_COUNTDOWN_SECONDS = 3;
   private static final long MINIMUM_REMAINING_PLAYBACK_MS = 3_000L;
-  private static final int TEMPO_PERCENT_PER_STEP = 5;
-
   private final RoomRepository roomRepository;
   private final RoomParticipantRepository participantRepository;
   private final CardRepository cardRepository;
@@ -283,32 +279,26 @@ public class CardService {
   public PerformanceSnapShot suspendForPerformance(
       PerformanceSnapShot performance, CardEffectEndReason reason) {
     Optional<RoomCardSnapshot> roomCardOptional = cardStateStore.findRoomCard(performance.roomId());
-    PerformanceSnapShot restored = performance;
     if (roomCardOptional.isEmpty()
         || !performance.performanceId().equals(roomCardOptional.get().performanceId())) {
-      return restored;
+      return performance;
     }
 
     RoomCardSnapshot roomCard = roomCardOptional.get();
     if (roomCard.status() == RoomCardStatus.PENDING) {
       cardStateStore.deleteRoomCard(roomCard.roomId());
       publishCancelled(roomCard, reason);
-      return restored;
+      return performance;
     }
 
-    restored = restorePerformanceSettings(restored, roomCard);
-    if (restored != performance) {
-      replacePerformance(performance, restored);
-    }
     cardStateStore.deleteRoomCard(roomCard.roomId());
     publishEnded(roomCard, reason, now());
-    return restored;
+    return performance;
   }
 
   private PerformanceSnapShot doCloseForPerformance(
       PerformanceSnapShot performance, CardEffectEndReason reason) {
     Optional<RoomCardSnapshot> roomCardOptional = cardStateStore.findRoomCard(performance.roomId());
-    PerformanceSnapShot restored = performance;
     if (roomCardOptional.isPresent()
         && performance.performanceId().equals(roomCardOptional.get().performanceId())) {
       RoomCardSnapshot roomCard = roomCardOptional.get();
@@ -316,16 +306,12 @@ public class CardService {
         cardStateStore.deleteRoomCard(roomCard.roomId());
         publishCancelled(roomCard, reason);
       } else if (roomCard.status() == RoomCardStatus.ACTIVE) {
-        restored = restorePerformanceSettings(restored, roomCard);
-        if (restored != performance) {
-          replacePerformance(performance, restored);
-        }
         cardStateStore.deleteRoomCard(roomCard.roomId());
         publishEnded(roomCard, reason, now());
       }
     }
     cardStateStore.deleteCardState(performance.roomId(), performance.performanceId());
-    return restored;
+    return performance;
   }
 
   public void closeRoom(Long roomId) {
@@ -380,22 +366,10 @@ public class CardService {
 
     OffsetDateTime startedAt = now();
     OffsetDateTime endsAt = startedAt.plusSeconds(pending.durationSeconds());
-    Integer previousValue = previousValue(performance.settings(), pending.effectType());
-    RoomCardSnapshot active = pending.active(startedAt, endsAt, previousValue);
+    RoomCardSnapshot active = pending.active(startedAt, endsAt, null);
     CardAssignmentSnapshot used = assignment.used(startedAt);
     cardStateStore.saveAssignment(used);
     cardStateStore.saveRoomCard(active);
-
-    PerformanceSnapShot changed =
-        performance.changeSettings(applyEffect(performance.settings(), active));
-    try {
-      replacePerformance(performance, changed);
-    } catch (RuntimeException exception) {
-      cardStateStore.saveAssignment(assignment);
-      cardStateStore.deleteRoomCard(roomId);
-      publishEnded(active, CardEffectEndReason.SYSTEM_CANCELLED, now());
-      return;
-    }
 
     // 카드 사용 시작 처리
     afterCommit(
@@ -434,17 +408,6 @@ public class CardService {
         || !roomCard.sourceParticipantId().equals(sourceParticipantId)) {
       return;
     }
-    performanceStore
-        .findActiveByRoomId(roomId)
-        .filter(performance -> performance.performanceId().equals(performanceId))
-        .filter(performance -> performance.status() == PerformanceStatus.PLAYING)
-        .ifPresent(
-            performance -> {
-              PerformanceSnapShot restored = restorePerformanceSettings(performance, roomCard);
-              if (restored != performance) {
-                replacePerformance(performance, restored);
-              }
-            });
     cardStateStore.deleteRoomCard(roomId);
     publishEnded(roomCard, CardEffectEndReason.DURATION_EXPIRED, now());
   }
@@ -590,13 +553,6 @@ public class CardService {
         ignored -> roomRepository.findByIdForUpdate(roomId).ifPresent(room -> action.run()));
   }
 
-  private void replacePerformance(
-      PerformanceSnapShot expected, PerformanceSnapShot changed) {
-    if (!performanceStore.replace(expected, changed)) {
-      throw new IllegalStateException("공연 상태가 다른 요청에 의해 먼저 변경되었습니다.");
-    }
-  }
-
   private void afterCommit(Runnable action) {
     if (!TransactionSynchronizationManager.isSynchronizationActive()) {
       action.run();
@@ -609,60 +565,6 @@ public class CardService {
             action.run();
           }
         });
-  }
-
-  private PerformanceSettings applyEffect(PerformanceSettings settings, RoomCardSnapshot roomCard) {
-    return switch (roomCard.effectType()) {
-      case MR_KEY_CHANGE ->
-          new PerformanceSettings(
-              clamp(settings.keyOffset() + roomCard.effectValue(), -6, 6),
-              settings.tempoPercent(),
-              settings.mrVolumePercent(),
-              settings.echoLevel());
-      case MR_TEMPO_CHANGE ->
-          new PerformanceSettings(
-              settings.keyOffset(),
-              clamp(
-                  settings.tempoPercent() + roomCard.effectValue() * TEMPO_PERCENT_PER_STEP,
-                  50,
-                  150),
-              settings.mrVolumePercent(),
-              settings.echoLevel());
-      case MIC_OPEN, LYRICS_HIDE -> settings;
-    };
-  }
-
-  private PerformanceSnapShot restorePerformanceSettings(
-      PerformanceSnapShot performance, RoomCardSnapshot roomCard) {
-    if (roomCard.previousValue() == null) {
-      return performance;
-    }
-    PerformanceSettings settings = performance.settings();
-    PerformanceSettings restored =
-        switch (roomCard.effectType()) {
-          case MR_KEY_CHANGE ->
-              new PerformanceSettings(
-                  roomCard.previousValue(),
-                  settings.tempoPercent(),
-                  settings.mrVolumePercent(),
-                  settings.echoLevel());
-          case MR_TEMPO_CHANGE ->
-              new PerformanceSettings(
-                  settings.keyOffset(),
-                  roomCard.previousValue(),
-                  settings.mrVolumePercent(),
-                  settings.echoLevel());
-          case MIC_OPEN, LYRICS_HIDE -> settings;
-        };
-    return performance.changeSettings(restored);
-  }
-
-  private Integer previousValue(PerformanceSettings settings, CardEffectType type) {
-    return switch (type) {
-      case MR_KEY_CHANGE -> settings.keyOffset();
-      case MR_TEMPO_CHANGE -> settings.tempoPercent();
-      case MIC_OPEN, LYRICS_HIDE -> null;
-    };
   }
 
   private void validateAssignment(CardAssignmentSnapshot assignment) {
@@ -684,10 +586,6 @@ public class CardService {
               }
               throw business(WebSocketErrorCode.CARD_EFFECT_ALREADY_ACTIVE);
             });
-  }
-
-  private int clamp(int value, int minimum, int maximum) {
-    return Math.max(minimum, Math.min(maximum, value));
   }
 
   private OffsetDateTime now() {

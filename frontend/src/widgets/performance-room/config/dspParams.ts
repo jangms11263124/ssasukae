@@ -70,5 +70,24 @@ export const DSP_ROWS: readonly DspRowDefinition[] = [
   },
 ];
 
+/**
+ * 수성전에서 가창자가 조절할 수 없는 항목. 공격 카드가 흔드는 값이라 손으로 되돌릴 수 없어야 한다.
+ * 서버(PerformanceService)도 같은 두 필드는 요청값을 무시하고 저장된 base를 유지하므로,
+ * 여기서 빠뜨려도 값이 바뀌지는 않는다. 다만 조절되지 않는 항목을 띄워 두게 되니 맞춰 둔다.
+ */
+const BATTLE_LOCKED_KEYS: readonly DspRowDefinition['key'][] = ['pitch', 'tempo'];
+
+const BATTLE_DSP_ROWS: readonly DspRowDefinition[] = DSP_ROWS.filter(
+  (row) => !BATTLE_LOCKED_KEYS.includes(row.key),
+);
+
+/**
+ * 제스처와 패널이 같은 배열을 써야 한다 — 행 인덱스로 서로를 가리키므로, 한쪽만 필터하면
+ * 강조되는 항목과 실제 조절 대상이 어긋난다. 반환값은 모듈 상수라 렌더마다 바뀌지 않는다.
+ */
+export function resolveDspRows(isBattleMode: boolean): readonly DspRowDefinition[] {
+  return isBattleMode ? BATTLE_DSP_ROWS : DSP_ROWS;
+}
+
 /** 0점 자석 스냅이 걸리는 범위 */
 export const ZERO_SNAP_RANGE = 0.6;

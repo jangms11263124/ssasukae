@@ -18,6 +18,8 @@ export interface PerformanceSettings {
   micVolumePercent: number;
   echoLevel: number;
   reverbLevel: number;
+  /** 가창자 모니터에서 들리는 자기 목소리 크기. 로컬 전용 — 서버 계약(4필드)에 없음 */
+  monitorVoicePercent: number;
 }
 
 export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceSettings = {
@@ -25,8 +27,11 @@ export const DEFAULT_PERFORMANCE_SETTINGS: PerformanceSettings = {
   tempoPercent: 100,
   mrVolumePercent: 100,
   micVolumePercent: 100,
-  echoLevel: 0,
+  // 조절 없이 시작해도 목소리에 기본 울림이 걸리도록 한다. 백엔드 defaults()와 값을 맞춰야
+  // 재개 시 서버 기본값이 내려와도 어긋나지 않는다.
+  echoLevel: 30,
   reverbLevel: 0,
+  monitorVoicePercent: 30,
 };
 
 // ── 이벤트 payload ──────────────────────────────────────────

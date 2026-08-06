@@ -23,6 +23,8 @@ export interface VocalAudioEngineState {
   isEngineReady: boolean;
   isMrLoaded: boolean;
   error: string | null;
+  /** 같은 MR을 처음부터 다시 내려받는다. 로딩 실패 후 재시도 버튼이 쓴다 */
+  retryLoadMr: () => void;
   /** 송출 믹스. OpenVidu publisher 연동 시 이 스트림의 오디오 트랙을 넘긴다 */
   getBroadcastStream: () => MediaStream | null;
   /**
@@ -48,7 +50,7 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
     dsp,
     onMrEnded,
   } = options;
-  const { keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent } = dsp;
+  const { keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent, monitorVoicePercent } = dsp;
 
   const [engine, setEngine] = useState<VocalAudioEngine | null>(null);
   const [isMrLoaded, setIsMrLoaded] = useState(false);
@@ -100,26 +102,42 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
     };
   }, [engine]);
 
-  // MR 로딩 (READY 단계 선로딩 — 공연 시작 시 바로 재생되도록)
+  const runMrLoad = useCallback(
+    (target: VocalAudioEngine, url: string, isCancelled: () => boolean) => {
+      target
+        .loadMr(url)
+        .then(() => {
+          if (!isCancelled()) setIsMrLoaded(true);
+        })
+        .catch(() => {
+          if (!isCancelled()) setError('MR을 불러오지 못했습니다.');
+        });
+    },
+    [],
+  );
+
+  // MR 로딩 (시작 요청 시점에 내려받는다)
   useEffect(() => {
     if (engine === null || mrUrl === null) return;
 
     let cancelled = false;
 
-    engine
-      .loadMr(mrUrl)
-      .then(() => {
-        if (!cancelled) setIsMrLoaded(true);
-      })
-      .catch(() => {
-        if (!cancelled) setError('MR을 불러오지 못했습니다.');
-      });
+    runMrLoad(engine, mrUrl, () => cancelled);
 
     return () => {
       cancelled = true;
       setIsMrLoaded(false);
     };
-  }, [engine, mrUrl]);
+  }, [engine, mrUrl, runMrLoad]);
+
+  // 실패 후 재시도. 노래를 바꾸지 않아도 같은 MR을 다시 내려받을 수 있어야 한다.
+  const retryLoadMr = useCallback(() => {
+    if (engine === null || mrUrl === null) return;
+
+    setError(null);
+    setIsMrLoaded(false);
+    runMrLoad(engine, mrUrl, () => false);
+  }, [engine, mrUrl, runMrLoad]);
 
   // MR 재생/정지. startOffsetMs는 일시 중지→재개 전이에서만 바뀌므로
   // deps에 넣어도 재생 중 재시작이 일어나지 않는다.
@@ -127,8 +145,6 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
     if (engine === null || !isMrLoaded || !playing) return;
 
     engine.startMr(startOffsetMs > 0 ? startOffsetMs / 1000 : undefined);
-    // 완료 조건의 모니터링 지연 측정 기록용. 실기 검증 후 제거해도 된다.
-    console.info(`[vocal-audio-engine] 모니터링 지연 ≈ ${engine.getLatencyMs() ?? '측정 불가'}ms`);
 
     return () => {
       engine.stopMr();
@@ -150,8 +166,8 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
 
   // 설정값 반영 — 값 변화마다 램프로 부드럽게 따라간다
   useEffect(() => {
-    engine?.applyDsp({ keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent });
-  }, [engine, keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent]);
+    engine?.applyDsp({ keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent, monitorVoicePercent });
+  }, [engine, keyOffset, tempoPercent, echoLevel, mrVolumePercent, micVolumePercent, monitorVoicePercent]);
 
   // 모니터 출력 장치 — 미지원 브라우저·장치 소실은 무시하고 기본 출력을 쓴다
   useEffect(() => {
@@ -163,5 +179,12 @@ export function useVocalAudioEngine(options: UseVocalAudioEngineOptions): VocalA
     [engine],
   );
 
-  return { isEngineReady: engine !== null, isMrLoaded, error, getBroadcastStream, engine };
+  return {
+    isEngineReady: engine !== null,
+    isMrLoaded,
+    error,
+    retryLoadMr,
+    getBroadcastStream,
+    engine,
+  };
 }

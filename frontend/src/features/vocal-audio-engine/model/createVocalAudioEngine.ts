@@ -1,11 +1,23 @@
 import * as Tone from 'tone';
 
+import type { RnnoiseWorkletNode } from '@sapphi-red/web-noise-suppressor';
+
 import {
   AUDIO_CONTEXT_SAMPLE_RATE,
+  BROADCAST_LIMITER_THRESHOLD_DB,
+  BROADCAST_MR_SYNC_MAX_DELAY_SECONDS,
+  BROADCAST_MR_TRIM_DB,
+  BROADCAST_VOICE_COMPRESSOR,
+  BROADCAST_VOICE_MAKEUP_DB,
   ECHO_DELAY_TIME,
   ECHO_FEEDBACK_PER_PERCENT,
   ECHO_WET_PER_PERCENT,
+  MIC_INPUT_LATENCY_ESTIMATE_SECONDS,
   PARAM_RAMP_SECONDS,
+  RNNOISE_LATENCY_SECONDS,
+  RNNOISE_WASM_SIMD_URL,
+  RNNOISE_WASM_URL,
+  RNNOISE_WORKLET_URL,
   PITCH_BYPASS_EPSILON,
   PITCH_SHIFT_WINDOW_SIZE,
   SILENCE_DB,
@@ -17,18 +29,24 @@ import type { VocalAudioEngine, VocalDspValues } from './types';
 /*
  * 오디오 그래프 (모니터/송출 믹스 분리):
  *
- *   mic ─┬────────→ FeedbackDelay(에코) → micGain ─┬→ monitorBus → 이어폰(ctx.destination)
- *        │                                        │
- *   MR(Player) ──→ PitchShift(음정)    → mrGain  ─┴→ broadcastBus → MediaStreamDestination
- *        │                                                           (→ OpenVidu publisher)
- *        └────────→ vocalAnalyser (음정 수집)
- *        └────────→ vocalTap → MediaStreamDestination (STT 녹음)
+ *   [송출]  mic(NS) → FeedbackDelay(에코) → Compressor → micGain ─┐
+ *           mrGain → broadcastMrDelay(싱크) → mrBroadcastTrim ─────┴→ broadcastBus
+ *                  → Limiter → MediaStreamDestination (→ OpenVidu publisher)
+ *
+ *   [모니터] mic(원음) → monitorVoiceEcho → monitorVoiceGain ─┐
+ *           MR(Player) → PitchShift(음정) → mrGain ──────────┴→ monitorBus → 이어폰
+ *
+ *   [채점]  mic(NS) ─┬→ vocalAnalyser (음정 수집)
+ *                    └→ vocalTap → MediaStreamDestination (STT 녹음)
  *
  * 채점 탭 두 갈래는 에코·음량 이전의 드라이 목소리를 딴다 — 사용자가 만진 이펙트가 점수에 섞이면 안 된다.
  *
  * 모니터링은 WebRTC 루프백이 아니라 로컬 그래프에서 직접 딴다 — 지터 버퍼 지연이 없다.
  * 음정/템포는 MR 전용(PitchShift 지연 100ms가 목소리에 붙으면 노래를 못 부른다),
  * 에코는 목소리 전용이다.
+ *
+ * 송출 전용 보정(컴프레서·메이크업 게인·MR 트림·리미터)은 모니터 경로에 걸지 않는다 —
+ * 가창자가 듣는 소리는 그대로 두고, 청자가 듣는 목소리 크기만 마이크 트랙 시절과 맞춘다.
  */
 
 const DEFAULT_DSP: VocalDspValues = {
@@ -37,6 +55,7 @@ const DEFAULT_DSP: VocalDspValues = {
   echoLevel: 0,
   mrVolumePercent: 100,
   micVolumePercent: 100,
+  monitorVoicePercent: 30,
 };
 
 /** AudioContext.setSinkId는 표준화 진행 중이라 lib.dom에 없을 수 있어 선택 멤버로 좁힌다 */
@@ -48,6 +67,13 @@ function volumePercentToDb(percent: number): number {
   if (percent <= 0) return SILENCE_DB;
 
   return Math.max(SILENCE_DB, 20 * Math.log10(percent / 100));
+}
+
+/** 송출 목소리 게인 = 사용자 설정 + 고정 메이크업. 0%(무음)에는 보정을 얹지 않는다 */
+function broadcastVoiceDb(percent: number): number {
+  if (percent <= 0) return SILENCE_DB;
+
+  return volumePercentToDb(percent) + BROADCAST_VOICE_MAKEUP_DB;
 }
 
 function asFiniteNumber(value: number, fallback: number): number {
@@ -63,6 +89,7 @@ function sanitizeDspValues(values: VocalDspValues, fallback: VocalDspValues): Vo
     echoLevel: asFiniteNumber(values.echoLevel, fallback.echoLevel),
     mrVolumePercent: asFiniteNumber(values.mrVolumePercent, fallback.mrVolumePercent),
     micVolumePercent: asFiniteNumber(values.micVolumePercent, fallback.micVolumePercent),
+    monitorVoicePercent: asFiniteNumber(values.monitorVoicePercent, fallback.monitorVoicePercent),
   };
 }
 
@@ -77,13 +104,27 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   private readonly pitchShift: Tone.PitchShift;
   private readonly mrGain: Tone.Volume;
   private readonly echoDelay: Tone.FeedbackDelay;
+  /** 송출 전용 목소리 컴프레서. AGC 없이 캡처한 목소리의 큰 편차만 눌러 준다 */
+  private readonly voiceCompressor: Tone.Compressor;
   private readonly micGain: Tone.Volume;
+  /** 송출 믹스에서만 MR을 덜어내는 트림. 모니터로 가는 mrGain은 건드리지 않는다 */
+  private readonly mrBroadcastTrim: Tone.Volume;
+  /** 송출 믹스 마지막 단. 목소리 메이크업으로 커진 합산 피크를 잡는다 */
+  private readonly broadcastLimiter: Tone.Limiter;
+  /** 모니터 전용 목소리 경로 (원음 → 에코 → 게인). NS가 도입돼도 이 경로는 거치지 않는다 */
+  private readonly monitorVoiceEcho: Tone.FeedbackDelay;
+  private readonly monitorVoiceGain: Tone.Volume;
+  /** 송출 MR 싱크 보정 — 가창자가 들은 MR에 맞춰 부른 목소리가 믹스에서 정렬되도록 MR을 늦춘다 */
+  private readonly broadcastMrDelay: DelayNode;
   /** 채점용 드라이 탭. 마이크 노드와 달리 엔진 수명 내내 살아 있다 */
   private readonly vocalTap: MediaStreamAudioDestinationNode;
   private readonly vocalAnalyser: AnalyserNode;
 
   private player: Tone.Player | null = null;
   private mrUrl: string | null = null;
+  /** 송출·채점 목소리의 노이즈 제거. 로드 실패 시 null — NS 없이 동작한다 */
+  private readonly rnnoise: RnnoiseWorkletNode | null;
+
   private micStream: MediaStream | null = null;
   private micSource: MediaStreamAudioSourceNode | null = null;
   /** openMic 경합 방지 — 가장 마지막 요청만 살아남는다 */
@@ -105,23 +146,31 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     void this.context.resume();
   };
 
-  constructor(context: SinkSelectableContext) {
+  constructor(context: SinkSelectableContext, rnnoise: RnnoiseWorkletNode | null) {
     this.context = context;
     this.toneContext = Tone.getContext();
+    this.rnnoise = rnnoise;
 
     this.monitorBus = new Tone.Volume(0).toDestination();
     this.broadcastBus = new Tone.Volume(0);
     this.broadcastDestination = context.createMediaStreamDestination();
-    this.broadcastBus.connect(this.broadcastDestination);
+    this.broadcastLimiter = new Tone.Limiter(BROADCAST_LIMITER_THRESHOLD_DB);
+    this.broadcastBus.connect(this.broadcastLimiter);
+    this.broadcastLimiter.connect(this.broadcastDestination);
     // 음성용 적응 처리(VAD·잡음 억제 성향)를 피하고 반주 포함 믹스를 음악으로 인코딩하게 한다
     const [broadcastTrack] = this.broadcastDestination.stream.getAudioTracks();
     if (broadcastTrack !== undefined) {
       broadcastTrack.contentHint = 'music';
     }
 
-    // MR 경로
+    // MR 경로 — 모니터는 즉시, 송출은 보정 딜레이를 거친다 (목소리의 왕복 지연만큼 MR을 늦춤)
     this.mrGain = new Tone.Volume(volumePercentToDb(DEFAULT_DSP.mrVolumePercent));
-    this.mrGain.fan(this.monitorBus, this.broadcastBus);
+    this.mrGain.connect(this.monitorBus);
+    this.broadcastMrDelay = context.createDelay(BROADCAST_MR_SYNC_MAX_DELAY_SECONDS);
+    this.mrBroadcastTrim = new Tone.Volume(BROADCAST_MR_TRIM_DB);
+    Tone.connect(this.mrGain, this.broadcastMrDelay);
+    Tone.connect(this.broadcastMrDelay, this.mrBroadcastTrim);
+    this.mrBroadcastTrim.connect(this.broadcastBus);
     this.pitchShift = new Tone.PitchShift({
       pitch: 0,
       windowSize: PITCH_SHIFT_WINDOW_SIZE,
@@ -132,11 +181,24 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     // 순 피치 0에서는 그래뉼러 아티팩트를 피하려고 드라이 통과시킨다
     this.pitchShift.wet.value = 0;
 
-    // 목소리 경로
-    this.micGain = new Tone.Volume(volumePercentToDb(DEFAULT_DSP.micVolumePercent));
-    this.micGain.fan(this.monitorBus, this.broadcastBus);
+    // 목소리 송출 경로 — 모니터로는 가지 않는다 (모니터는 아래 전용 경로)
+    this.micGain = new Tone.Volume(broadcastVoiceDb(DEFAULT_DSP.micVolumePercent));
+    this.micGain.connect(this.broadcastBus);
+    this.voiceCompressor = new Tone.Compressor(BROADCAST_VOICE_COMPRESSOR);
+    this.voiceCompressor.connect(this.micGain);
     this.echoDelay = new Tone.FeedbackDelay({ delayTime: ECHO_DELAY_TIME, feedback: 0, wet: 0 });
-    this.echoDelay.connect(this.micGain);
+    this.echoDelay.connect(this.voiceCompressor);
+
+    // 목소리 모니터 경로 — 원음에서 바로 따서 NS(추후) 지연이 가창 경험에 붙지 않는다.
+    // 에코는 송출과 같은 echoLevel로 연동되는 별도 노드 (dry 통과라 지연 추가 없음).
+    this.monitorVoiceEcho = new Tone.FeedbackDelay({
+      delayTime: ECHO_DELAY_TIME,
+      feedback: 0,
+      wet: 0,
+    });
+    this.monitorVoiceGain = new Tone.Volume(volumePercentToDb(DEFAULT_DSP.monitorVoicePercent));
+    this.monitorVoiceEcho.connect(this.monitorVoiceGain);
+    this.monitorVoiceGain.connect(this.monitorBus);
 
     // 채점 탭. 여기에는 아무것도 연결하지 않아 소리로 나가지 않는다 (분석·녹음 전용).
     this.vocalTap = context.createMediaStreamDestination();
@@ -195,10 +257,16 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     this.mrAnchorSeconds = offset ?? 0;
     this.mrAnchorContextTime = this.context.currentTime;
     this.mrPlaying = true;
-    // 지연 분해 진단용 — base는 브라우저 버퍼, output은 OS 오디오 스택. 실기 검증 후 제거 예정.
-    console.info(
-      `[vocal-audio-engine] baseLatency=${Math.round(this.context.baseLatency * 1000)}ms outputLatency=${Math.round((this.context.outputLatency || 0) * 1000)}ms`,
+    // 송출 MR 보정량 = 가창자가 MR을 듣기까지(출력) + 목소리가 그래프로 돌아오기까지(입력 추정).
+    // outputLatency는 렌더링이 시작된 뒤에야 값이 잡히므로 재생 시작 시점에 확정한다.
+    const syncDelaySeconds = Math.min(
+      BROADCAST_MR_SYNC_MAX_DELAY_SECONDS,
+      this.context.baseLatency +
+        (this.context.outputLatency || 0) +
+        MIC_INPUT_LATENCY_ESTIMATE_SECONDS +
+        (this.rnnoise !== null ? RNNOISE_LATENCY_SECONDS : 0),
     );
+    this.broadcastMrDelay.delayTime.setValueAtTime(syncDelaySeconds, this.context.currentTime);
   }
 
   stopMr(): void {
@@ -247,10 +315,17 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
 
     this.micStream = stream;
     this.micSource = this.context.createMediaStreamSource(stream);
-    Tone.connect(this.micSource, this.echoDelay);
+    // 송출·채점은 노이즈 제거를 거치고(소음 감소 + 분석 입력 정화), 모니터는 원음 직결이라
+    // 워클릿 지연(10ms)이 가창 경험에 붙지 않는다. NS 로드 실패 시엔 원음으로 우회한다.
+    const broadcastVoiceSource: AudioNode = this.rnnoise ?? this.micSource;
+    if (this.rnnoise !== null) {
+      this.micSource.connect(this.rnnoise);
+    }
+    Tone.connect(broadcastVoiceSource, this.echoDelay);
+    Tone.connect(this.micSource, this.monitorVoiceEcho);
     // 채점 탭은 에코 앞에서 갈라진다 — 사용자가 건 이펙트가 STT·음정 분석에 섞이지 않는다.
-    this.micSource.connect(this.vocalAnalyser);
-    this.micSource.connect(this.vocalTap);
+    broadcastVoiceSource.connect(this.vocalAnalyser);
+    broadcastVoiceSource.connect(this.vocalTap);
   }
 
   closeMic(): void {
@@ -287,11 +362,20 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
       this.pitchShift.wet.rampTo(1, PARAM_RAMP_SECONDS);
     }
 
-    this.echoDelay.feedback.rampTo(safe.echoLevel * ECHO_FEEDBACK_PER_PERCENT, PARAM_RAMP_SECONDS);
-    this.echoDelay.wet.rampTo(safe.echoLevel * ECHO_WET_PER_PERCENT, PARAM_RAMP_SECONDS);
+    const echoFeedback = safe.echoLevel * ECHO_FEEDBACK_PER_PERCENT;
+    const echoWet = safe.echoLevel * ECHO_WET_PER_PERCENT;
+    this.echoDelay.feedback.rampTo(echoFeedback, PARAM_RAMP_SECONDS);
+    this.echoDelay.wet.rampTo(echoWet, PARAM_RAMP_SECONDS);
+    // 가창자 본인도 같은 울림을 듣도록 모니터 에코를 함께 움직인다
+    this.monitorVoiceEcho.feedback.rampTo(echoFeedback, PARAM_RAMP_SECONDS);
+    this.monitorVoiceEcho.wet.rampTo(echoWet, PARAM_RAMP_SECONDS);
 
     this.mrGain.volume.rampTo(volumePercentToDb(safe.mrVolumePercent), PARAM_RAMP_SECONDS);
-    this.micGain.volume.rampTo(volumePercentToDb(safe.micVolumePercent), PARAM_RAMP_SECONDS);
+    this.micGain.volume.rampTo(broadcastVoiceDb(safe.micVolumePercent), PARAM_RAMP_SECONDS);
+    this.monitorVoiceGain.volume.rampTo(
+      volumePercentToDb(safe.monitorVoicePercent),
+      PARAM_RAMP_SECONDS,
+    );
   }
 
   async setOutputDevice(deviceId: string): Promise<void> {
@@ -325,12 +409,20 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
 
     document.removeEventListener('pointerdown', this.resumeOnPointerDown);
     this.closeMic();
+    this.rnnoise?.disconnect();
+    this.rnnoise?.destroy();
     this.player?.dispose();
     this.player = null;
     this.pitchShift.dispose();
     this.mrGain.dispose();
+    this.broadcastMrDelay.disconnect();
+    this.mrBroadcastTrim.dispose();
     this.echoDelay.dispose();
+    this.voiceCompressor.dispose();
     this.micGain.dispose();
+    this.broadcastLimiter.dispose();
+    this.monitorVoiceEcho.dispose();
+    this.monitorVoiceGain.dispose();
     this.monitorBus.dispose();
     this.broadcastBus.dispose();
     this.broadcastDestination.disconnect();
@@ -340,15 +432,33 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
   }
 }
 
+async function loadRnnoiseNode(context: AudioContext): Promise<RnnoiseWorkletNode | null> {
+  try {
+    const { loadRnnoise, RnnoiseWorkletNode: WorkletNode } = await import(
+      '@sapphi-red/web-noise-suppressor'
+    );
+    const [wasmBinary] = await Promise.all([
+      loadRnnoise({ url: RNNOISE_WASM_URL, simdUrl: RNNOISE_WASM_SIMD_URL }),
+      context.audioWorklet.addModule(RNNOISE_WORKLET_URL),
+    ]);
+
+    return new WorkletNode(context, { wasmBinary, maxChannels: 1 });
+  } catch {
+    // 에셋 미생성(404) 등 — 노이즈 제거 없이 공연은 계속돼야 한다
+    return null;
+  }
+}
+
 export async function createVocalAudioEngine(): Promise<VocalAudioEngine> {
   const context = new AudioContext({
     sampleRate: AUDIO_CONTEXT_SAMPLE_RATE,
     latencyHint: 'interactive',
   });
+  const rnnoise = await loadRnnoiseNode(context);
   // setContext와 노드 생성 사이에 await를 두지 않는다 — 엔진이 겹쳐 만들어져도
   // (React StrictMode 이중 마운트) 노드가 다른 컨텍스트에 섞이지 않는다.
   Tone.setContext(context);
-  const engine = new ToneVocalAudioEngine(context);
+  const engine = new ToneVocalAudioEngine(context, rnnoise);
 
   // 방 진입까지의 클릭으로 사용자 활성화가 있으면 즉시 살아난다
   await context.resume().catch(() => undefined);

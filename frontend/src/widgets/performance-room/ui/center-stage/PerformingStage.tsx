@@ -8,6 +8,7 @@ import {
   GestureStatusBadge,
   MediaPipeLoader,
 } from '@/features/gesture-control';
+import { useRoomStore } from '@/entities/room';
 import { showToast } from '@/shared/model/toastStore';
 
 import { SOUND_PANEL_LABEL } from '../../config/dspParams';
@@ -15,23 +16,18 @@ import { useCardStore } from '../../model/cardStore';
 import { useGestureDspControl } from '../../model/useGestureDspControl';
 import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
+import { useStageLyricsContext } from '../../model/StageLyricsContext';
 import { useStageStore } from '../../model/stageStore';
 import { SoundIcon } from '../media-controls/MediaIcons';
 import { MediaToggleButton } from '../media-controls/MediaToggleButton';
 import { LyricsBlackout } from './overlays/LyricsBlackout';
+import { LyricsNotice } from './overlays/LyricsNotice';
 import { LyricsOverlay } from './overlays/LyricsOverlay';
 import { MediaControlsOverlay } from './overlays/MediaControlsOverlay';
 import { VocalDspPanel } from './overlays/VocalDspPanel';
 import { StageBackdrop } from './StageBackdrop';
 import { StageCameraFeed } from './StageCameraFeed';
-
-// 가사 싱크 엔진 연동 전까지 쓰는 목업.
-// 실제 가사는 stageStore.lyricsDownloadUrl로 받을 수 있으나,
-// AI 분석 파이프라인의 가사 파일 포맷이 확정되지 않아 싱크 구현을 보류 중이다.
-const MOCK_LYRICS = {
-  currentLine: 'LOOKING BACK AT THE STARS IN YOUR EYES',
-  nextLine: "I'M STANDING ON THE EDGE OF TOMORROW",
-} as const;
+import { StageIdentityBadge } from './StageIdentityBadge';
 
 // camOn은 무대에 오른 사람의 카메라 상태다(본인이면 내 토글, 아니면 가창자의 원격 상태).
 function resolvePlaceholder(
@@ -67,11 +63,21 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
   const cursorRef = useRef<HTMLDivElement>(null);
 
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
+  const myParticipantId = useRoomStore((state) => state.session?.myParticipantId);
+  const hostParticipantId = useRoomStore((state) => state.hostParticipantId);
+  const participants = useRoomStore((state) => state.participants);
+  const performer = participants.find((participant) => participant.id === performerParticipantId);
+  const me = participants.find((participant) => participant.id === myParticipantId);
+  const performerProfileImageUrl = performer?.profileImageUrl ?? null;
   const { localStream, remoteStreams } = useOpenViduSessionContext();
 
   // 수성전 가사 가리기: 가창자의 시선에서만 가려지고 다른 참가자에게는 그대로 보인다.
   const activeEffect = useCardStore((state) => state.activeEffect);
   const lyricsHidden = isPerformer && activeEffect?.effectType === 'LYRICS_HIDE';
+
+  // MR 재생 위치에 맞춰 소절이 넘어간다. 타임스탬프는 LRCLIB에서 받는다.
+  // 조회는 READY부터 화면 레벨(StageLyricsProvider)에서 돌고 있어 여기서는 결과만 읽는다.
+  const lyrics = useStageLyricsContext();
 
   // 가창자 본인은 publisher 스트림을, 참가자는 가창자의 remote 스트림을 무대 배경으로 깐다.
   const performerMedia =
@@ -98,7 +104,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
   // 제스처 오작동을 사용자가 알아챌 수 있어야 해서 취소 사유를 알린다.
   const handleGestureCancel = () => {
     handleCancel();
-    showToast('제스처로 공연을 취소했습니다.');
+    showToast('제스처로 공연을 취소했어요.');
   };
 
   const canUseGesture = isPerformer && gestureOn && camOn;
@@ -118,6 +124,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
     <StageBackdrop
       ref={stageRef}
       placeholder={resolvePlaceholder(isPerformer, stageCamOn, cameraSource !== null)}
+      profileImageUrl={cameraSource === null ? performerProfileImageUrl : null}
     >
       {/* CDN에서 수 MB를 받아오므로 제스처를 쓸 때만 로드한다 */}
       {canUseGesture ? <MediaPipeLoader onReady={() => setIsMediaPipeReady(true)} /> : null}
@@ -125,6 +132,19 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
       {cameraSource !== null ? (
         <StageCameraFeed source={cameraSource} mirrored={isPerformer} videoRef={videoRef} />
       ) : null}
+
+      <div className="pointer-events-none absolute bottom-4 left-4 z-10 max-w-[min(calc(100%-2rem),16rem)]">
+        <StageIdentityBadge
+          identity={{
+            nickname: isPerformer ? (me?.nickname ?? '나') : (performer?.nickname ?? '가창자'),
+            isMe: isPerformer,
+            isHost:
+              (isPerformer ? myParticipantId : performerParticipantId) !== undefined &&
+              (isPerformer ? myParticipantId : performerParticipantId) === hostParticipantId,
+            isPerformer: true,
+          }}
+        />
+      </div>
 
       <MediaControlsOverlay showGestureToggle={isPerformer} />
 
@@ -153,9 +173,11 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
 
       {lyricsHidden ? (
         <LyricsBlackout />
-      ) : (
-        <LyricsOverlay currentLine={MOCK_LYRICS.currentLine} nextLine={MOCK_LYRICS.nextLine} />
-      )}
+      ) : lyrics.status === 'READY' ? (
+        <LyricsOverlay currentLine={lyrics.currentLine} nextLine={lyrics.nextLine} />
+      ) : lyrics.message !== null ? (
+        <LyricsNotice message={lyrics.message} />
+      ) : null}
 
       {isPerformer ? (
         <>
@@ -164,7 +186,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
             isReady={isMediaPipeReady}
             isHandDetected={gesture.isHandDetected}
             error={gesture.error}
-            className="absolute left-4 top-14"
+            className="absolute left-4 top-4"
           />
           <GestureCursor cursorRef={cursorRef} />
           {gesture.cancelProgress !== null ? (

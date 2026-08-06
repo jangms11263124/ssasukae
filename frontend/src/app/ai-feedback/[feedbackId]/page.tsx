@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { TickerFooter } from '@/shared/ui/ticker/TickerFooter';
 import { AiFeedbackDetailSection } from '@/widgets/ai-feedback-detail';
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
+import { LiveFeedFooter } from '@/widgets/live-feed-footer';
 
 export const metadata: Metadata = {
   title: 'AI 피드백 상세',
@@ -52,10 +52,7 @@ export default async function AiFeedbackDetailPage({ params }: AiFeedbackDetailP
         </div>
       </main>
 
-      <TickerFooter
-        label="[AI_ARCHIVE]"
-        message="ANALYSIS_ENGINE_ONLINE :: PERFORMANCE_DATA_SYNCED :: ARCHIVE_INDEX_READY :: SYSTEM STATUS: NOMINAL"
-      />
+      <LiveFeedFooter />
     </div>
   );
 }

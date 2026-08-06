@@ -1,7 +1,10 @@
+import { Suspense } from 'react';
+
 import { RoomCreateForm } from '@/features/room-create';
-import { RoomJoinForm } from '@/features/room-join';
+import { RoomJoinForm, RoomJoinFormSkeleton } from '@/features/room-join';
 import { cn } from '@/shared/lib/cn';
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
+import { LiveFeedFooter } from '@/widgets/live-feed-footer';
 
 interface MainHomeProps {
   className?: string;
@@ -69,7 +72,9 @@ export function MainHome({ className }: MainHomeProps) {
               </h2>
             </div>
             <div className="mt-7">
-              <RoomJoinForm />
+              <Suspense fallback={<RoomJoinFormSkeleton />}>
+                <RoomJoinForm />
+              </Suspense>
             </div>
             <div className="mt-14 border-t border-white/8 pt-6">
               <p className="font-mono text-[9px] tracking-[0.2em] text-zinc-600">
@@ -89,23 +94,7 @@ export function MainHome({ className }: MainHomeProps) {
         </div>
       </main>
 
-      <footer className="relative z-10 border-t border-white/10 bg-[#131315]">
-        <div className="mx-auto flex min-h-12 max-w-[1500px] flex-wrap items-center justify-between gap-3 px-6 py-2 font-mono text-[9px] text-zinc-600 sm:px-10">
-          <span>[ROOM_SYSTEM] CREATE_CHANNEL_READY :: INVITE_CHANNEL_READY</span>
-          <div className="flex items-center gap-4">
-            <span className="hidden lg:inline">
-              CORE_STATUS: OPTIMAL &nbsp; LATENCY: 12MS &nbsp; ENCRYPTION: AES_256
-            </span>
-            <a
-              href="/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi?v=0.1.7"
-              download
-              className="border border-cyan-300/40 px-3 py-1.5 text-cyan-200 transition-colors hover:border-cyan-200 hover:bg-cyan-300/10 hover:text-white"
-            >
-              저지연 오디오 앱 다운로드 · WINDOWS
-            </a>
-          </div>
-        </div>
-      </footer>
+      <LiveFeedFooter />
     </div>
   );
 }

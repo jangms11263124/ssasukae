@@ -21,5 +21,28 @@
     ],
     "stop_at_references": false,
     "rag_allowed": true
+  },
+  {
+    "document_id": "mills_1913_voice_production",
+    "file_name": "voice_production_in_singing_and_speaking.txt",
+    "title": "Voice Production in Singing and Speaking: Based on Scientific Principles",
+    "authors": "Wesley Mills",
+    "year": 1913,
+    "source_url": "https://www.gutenberg.org/ebooks/19880",
+    "license": "Public Domain (USA)",
+    "license_url": "https://www.gutenberg.org/policy/permission.html",
+    "license_note": "Project Gutenberg identifies this ebook as public domain in the USA. The Gutenberg distribution header and footer are excluded from indexing.",
+    "topics": [
+      "pitch_accuracy",
+      "pitch_stability",
+      "intonation",
+      "breath_control",
+      "tone_production",
+      "resonance",
+      "vocal_stability",
+      "practice_methods"
+    ],
+    "strip_gutenberg_boilerplate": true,
+    "rag_allowed": true
   }
 ]

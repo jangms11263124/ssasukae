@@ -50,7 +50,7 @@ export function RoomHelpFloatingButton() {
         type="button"
         aria-label="도움말 열기"
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-16 right-6 z-40 grid size-12 place-items-center rounded-full border border-cyan-400/40 bg-[linear-gradient(145deg,#1c1c20,#101012)] text-lg font-semibold text-cyan-200 shadow-[0_8px_30px_rgba(0,0,0,0.5)] transition-colors hover:bg-cyan-400/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300"
+        className="fixed bottom-12 left-4 z-40 grid size-11 place-items-center rounded-full border border-cyan-400/40 bg-[linear-gradient(145deg,#1c1c20,#101012)] text-lg font-semibold text-cyan-200 shadow-[0_8px_30px_rgba(0,0,0,0.5)] transition-colors hover:bg-cyan-400/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300"
       >
         ?
       </button>
