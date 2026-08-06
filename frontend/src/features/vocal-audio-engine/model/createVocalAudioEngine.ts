@@ -17,7 +17,7 @@ import {
   RNNOISE_WORKLET_URL,
   ECHO_DECAY_SECONDS,
   ECHO_PRE_DELAY_SECONDS,
-  ECHO_WET_PER_PERCENT,
+  ECHO_WET_MAX,
   PITCH_BYPASS_EPSILON,
   PITCH_SHIFT_WINDOW_SIZE,
   SILENCE_DB,
@@ -377,7 +377,9 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     }
 
     // decay는 임펄스 응답에 구워져 런타임에 못 바꾸므로 wet만 움직인다.
-    const echoWet = safe.echoLevel * ECHO_WET_PER_PERCENT;
+    // 음수 레벨이 들어오면 sqrt가 NaN이 되어 rampTo가 터지므로 0~1로 먼저 가둔다.
+    const echoRatio = Math.min(1, Math.max(0, safe.echoLevel / 100));
+    const echoWet = ECHO_WET_MAX * Math.sqrt(echoRatio);
     this.voiceEcho.wet.rampTo(echoWet, PARAM_RAMP_SECONDS);
     // 가창자 본인도 같은 울림을 듣도록 모니터 리버브를 함께 움직인다
     this.monitorVoiceEcho.wet.rampTo(echoWet, PARAM_RAMP_SECONDS);
