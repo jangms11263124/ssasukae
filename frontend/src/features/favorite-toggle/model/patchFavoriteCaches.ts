@@ -1,15 +1,24 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 
 import { favoriteQueryKeys, type FavoriteSongPage } from '@/entities/favorite';
-import type { SongSearchResult } from '@/entities/song';
+import type { SongSearchItem, SongSearchResult } from '@/entities/song';
 
 function isSongSearchResult(value: unknown): value is SongSearchResult {
   return (
     typeof value === 'object' &&
     value !== null &&
     'items' in value &&
-    Array.isArray((value as SongSearchResult).items)
+    Array.isArray((value as SongSearchResult).items) &&
+    !('pages' in value)
   );
+}
+
+function isSongSearchInfiniteData(
+  value: unknown,
+): value is InfiniteData<SongSearchResult, number | undefined> {
+  if (typeof value !== 'object' || value === null || !('pages' in value)) return false;
+  const pages = (value as InfiniteData<SongSearchResult>).pages;
+  return Array.isArray(pages) && pages.every((page) => isSongSearchResult(page));
 }
 
 function isFavoriteInfiniteData(
@@ -23,6 +32,16 @@ function isFavoriteInfiniteData(
   );
 }
 
+function mapSongItems(items: SongSearchItem[], songId: number, favorite: boolean) {
+  let changed = false;
+  const next = items.map((item) => {
+    if (item.songId !== songId || item.favorite === favorite) return item;
+    changed = true;
+    return { ...item, favorite };
+  });
+  return changed ? next : null;
+}
+
 /** 검색·찜 목록 캐시에 찜 여부를 즉시 반영한다. */
 export function patchFavoriteCaches(
   queryClient: QueryClient,
@@ -30,16 +49,25 @@ export function patchFavoriteCaches(
   favorite: boolean,
 ): void {
   queryClient.setQueriesData({ queryKey: ['songs', 'search'] }, (old) => {
-    if (!isSongSearchResult(old)) return old;
+    // SongSearchModal 등 infinite query: { pages: SongSearchResult[] }
+    if (isSongSearchInfiniteData(old)) {
+      let changed = false;
+      const pages = old.pages.map((page) => {
+        const items = mapSongItems(page.items, songId, favorite);
+        if (!items) return page;
+        changed = true;
+        return { ...page, items };
+      });
+      return changed ? { ...old, pages } : old;
+    }
 
-    let changed = false;
-    const items = old.items.map((item) => {
-      if (item.songId !== songId || item.favorite === favorite) return item;
-      changed = true;
-      return { ...item, favorite };
-    });
+    // NowPlaying 등 단일 검색 결과
+    if (isSongSearchResult(old)) {
+      const items = mapSongItems(old.items, songId, favorite);
+      return items ? { ...old, items } : old;
+    }
 
-    return changed ? { ...old, items } : old;
+    return old;
   });
 
   queryClient.setQueriesData({ queryKey: favoriteQueryKeys.all }, (old) => {

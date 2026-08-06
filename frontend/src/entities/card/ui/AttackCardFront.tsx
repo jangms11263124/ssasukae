@@ -21,6 +21,8 @@ interface AttackCardFrontProps {
   effectValue?: number | null;
   /** 호버 틸트. 기본 true */
   interactive?: boolean;
+  /** false면 외곽 box-shadow 제거 (딜 연출 3D 회전용) */
+  showFrameGlow?: boolean;
   targetType: CardEffectTargetType;
   tier: CardTier;
 }
@@ -34,6 +36,7 @@ export function AttackCardFront({
   effectType,
   effectValue,
   interactive = true,
+  showFrameGlow = true,
   targetType,
   tier,
 }: AttackCardFrontProps) {
@@ -49,7 +52,7 @@ export function AttackCardFront({
           aspectRatio: CARD_ASPECT,
           borderRadius: CARD_RADIUS,
           background: tierVisual.frameGradient,
-          boxShadow: tierVisual.glow,
+          boxShadow: showFrameGlow ? tierVisual.glow : undefined,
         }}
       >
         <div
