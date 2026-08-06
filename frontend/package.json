@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "copy:rnnoise-assets": "node scripts/copy-rnnoise-assets.mjs",
-    "predev": "node scripts/copy-rnnoise-assets.mjs",
-    "prebuild": "node scripts/copy-rnnoise-assets.mjs",
+    "copy:soundtouch-processor": "node scripts/copy-soundtouch-processor.mjs",
+    "predev": "node scripts/copy-rnnoise-assets.mjs && node scripts/copy-soundtouch-processor.mjs",
+    "prebuild": "node scripts/copy-rnnoise-assets.mjs && node scripts/copy-soundtouch-processor.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -13,6 +14,7 @@
   },
   "dependencies": {
     "@sapphi-red/web-noise-suppressor": "^0.3.5",
+    "@soundtouchjs/audio-worklet": "^2.1.1",
     "@stomp/stompjs": "^7.3.0",
     "@tanstack/react-query": "^5.101.2",
     "clsx": "^2.1.1",

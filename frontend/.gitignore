@@ -42,3 +42,9 @@ next-env.d.ts
 
 # rnnoise 워클릿/WASM (copy:rnnoise-assets 스크립트가 자동 생성)
 /public/noise-suppressor/
+
+# SoundTouch AudioWorklet processor (copy:soundtouch-processor 스크립트가 자동 생성)
+/public/soundtouch/
+
+# 로컬 MR 테스트 샘플 (커밋하지 않음)
+/public/dev/

@@ -2,7 +2,7 @@
 export interface VocalDspValues {
   /** 음정 (-6 ~ +6 반음) — MR에만 적용 */
   keyOffset: number;
-  /** 템포 (% 단위, 100 = 원속) — MR 재생 속도. 키는 보정 수식으로 유지된다 */
+  /** 템포 (% 단위, 100 = 원속) — 100%가 아니면 SoundTouch WSOLA, 키는 PitchShift */
   tempoPercent: number;
   /** 에코 (0~100) — 목소리에만 적용 */
   echoLevel: number;
