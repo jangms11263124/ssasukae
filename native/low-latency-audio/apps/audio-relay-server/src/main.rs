@@ -14,7 +14,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-const PEER_TIMEOUT: Duration = Duration::from_secs(30);
+// 클라이언트가 5초마다 Ping을 보낸다. 두 번 유실까지 견디도록 잡았다.
+// 이 값을 늘리면 이탈한 피어가 다른 참가자 목록에 남는 시간도 그만큼 길어진다.
+const PEER_TIMEOUT: Duration = Duration::from_secs(12);
 const MAX_CLIENTS: u64 = 4;
 const STATUS_INTERVAL: Duration = Duration::from_secs(30);
 const RATE_ENTRY_TIMEOUT: Duration = Duration::from_secs(120);
@@ -114,11 +116,19 @@ impl Registry {
         }
     }
 
-    fn expire(&mut self, now: Instant) -> usize {
-        let before = self.peers.len();
-        self.peers
-            .retain(|_, peer| now.duration_since(peer.last_seen) <= PEER_TIMEOUT);
-        before.saturating_sub(self.peers.len())
+    /// 만료된 피어를 제거하고 (session_id, client_id) 목록을 돌려준다.
+    /// 호출자가 같은 세션의 남은 피어에게 이탈을 알리는 데 쓴다.
+    fn expire(&mut self, now: Instant) -> Vec<(u64, u64)> {
+        let expired: Vec<(u64, u64)> = self
+            .peers
+            .iter()
+            .filter(|(_, peer)| now.duration_since(peer.last_seen) > PEER_TIMEOUT)
+            .map(|(&key, _)| key)
+            .collect();
+        for key in &expired {
+            self.peers.remove(key);
+        }
+        expired
     }
 
     fn session_peers(&self, session_id: u64) -> Vec<(u64, SocketAddr, Vec<u8>)> {
@@ -208,6 +218,8 @@ struct ServerStats {
     peer_infos: u64,
     left: u64,
     expired: u64,
+    /// 남은 피어에게 보낸 이탈 통보 수
+    peer_gone: u64,
     rejected: u64,
     rate_limited: u64,
     media_rejected: u64,
@@ -244,7 +256,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match socket.recv_from(&mut buffer) {
             Ok((size, source)) => {
                 let now = Instant::now();
-                stats.expired += registry.expire(now) as u64;
+                for (session_id, client_id) in registry.expire(now) {
+                    stats.expired += 1;
+                    stats.peer_gone += announce_peer_gone(
+                        &socket,
+                        session_id,
+                        client_id,
+                        &registry.session_peers(session_id),
+                    );
+                }
                 if !packet_limiter.allow(source.ip(), now) {
                     stats.rate_limited += 1;
                     continue;
@@ -331,6 +351,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             );
                         } else if registry.remove(request.session_id, request.client_id, source) {
                             stats.left += 1;
+                            stats.peer_gone += announce_peer_gone(
+                                &socket,
+                                request.session_id,
+                                request.client_id,
+                                &registry.session_peers(request.session_id),
+                            );
                             println!(
                                 "{{\"event\":\"peer_left\",\"sessionId\":{},\"clientId\":{},\"source\":\"{source}\"}}",
                                 request.session_id, request.client_id
@@ -352,7 +378,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ) =>
             {
                 let now = Instant::now();
-                stats.expired += registry.expire(now) as u64;
+                for (session_id, client_id) in registry.expire(now) {
+                    stats.expired += 1;
+                    stats.peer_gone += announce_peer_gone(
+                        &socket,
+                        session_id,
+                        client_id,
+                        &registry.session_peers(session_id),
+                    );
+                }
                 packet_limiter.expire(now);
                 register_limiter.expire(now);
             }
@@ -583,7 +617,7 @@ fn raw_scope(packet: &[u8]) -> Option<(u64, u64)> {
 
 fn print_status(registry: &Registry, stats: &ServerStats) {
     println!(
-        "{{\"event\":\"rendezvous_status\",\"activeSessions\":{},\"activePeers\":{},\"echoed\":{},\"registrations\":{},\"assigned\":{},\"peerInfos\":{},\"left\":{},\"expired\":{},\"rejected\":{},\"rateLimited\":{},\"mediaRejected\":{},\"malformed\":{}}}",
+        "{{\"event\":\"rendezvous_status\",\"activeSessions\":{},\"activePeers\":{},\"echoed\":{},\"registrations\":{},\"assigned\":{},\"peerInfos\":{},\"left\":{},\"expired\":{},\"peerGone\":{},\"rejected\":{},\"rateLimited\":{},\"mediaRejected\":{},\"malformed\":{}}}",
         registry.session_count(),
         registry.peers.len(),
         stats.echoed,
@@ -592,11 +626,45 @@ fn print_status(registry: &Registry, stats: &ServerStats) {
         stats.peer_infos,
         stats.left,
         stats.expired,
+        stats.peer_gone,
         stats.rejected,
         stats.rate_limited,
         stats.media_rejected,
         stats.malformed,
     );
+}
+
+/// 같은 세션의 남은 피어들에게 한 피어가 사라졌음을 알린다.
+///
+/// 이게 없으면 남은 참가자는 상대가 만료됐는지 알 방법이 없어 목록에 계속 남는다.
+/// UDP라 유실될 수 있지만, 만료는 반복 감지되지 않으므로 놓치면 다음 이벤트까지
+/// 남는다는 한계를 감수한다.
+fn announce_peer_gone(
+    socket: &UdpSocket,
+    session_id: u64,
+    gone_client_id: u64,
+    peers: &[(u64, SocketAddr, Vec<u8>)],
+) -> u64 {
+    let mut sent = 0;
+    let header = PacketHeader {
+        kind: PacketKind::PeerGone,
+        sequence: VERSION as u64,
+        client_sent_ns: 0,
+        server_received_ns: 0,
+        server_sent_ns: 0,
+        session_id,
+        client_id: gone_client_id,
+    };
+    for (recipient_id, recipient_address, _) in peers {
+        if *recipient_id == gone_client_id {
+            continue;
+        }
+        if encode(header, HEADER_LEN).is_ok_and(|packet| socket.send_to(&packet, recipient_address).is_ok())
+        {
+            sent += 1;
+        }
+    }
+    sent
 }
 
 fn announce_session_peers(
@@ -657,9 +725,10 @@ mod tests {
         registry
             .register(1, 1, address, identity(1), b"ice", now)
             .unwrap();
+        // 이탈 통보를 보낼 수 있도록 만료된 (session_id, client_id)를 돌려준다.
         assert_eq!(
             registry.expire(now + PEER_TIMEOUT + Duration::from_millis(1)),
-            1
+            vec![(1, 1)]
         );
         assert!(registry.peers.is_empty());
     }
