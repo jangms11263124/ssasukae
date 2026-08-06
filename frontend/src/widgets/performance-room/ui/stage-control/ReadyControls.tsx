@@ -9,7 +9,7 @@ interface ReadyControlsProps {
   isPerformer: boolean;
   performerNickname: string;
   songTitle: string;
-  /** 준비 이벤트 수신(performanceId 확정) 여부. 수신 전에는 시작을 요청할 수 없다 */
+  /** 선곡 완료 여부. prepare에 보낼 곡이 없으면 시작을 요청할 수 없다 */
   canRequestStart: boolean;
   /** 시작 요청 후 MR 다운로드 완료 여부 */
   isMrLoaded: boolean;
@@ -30,13 +30,15 @@ export function ReadyControls({
 }: ReadyControlsProps) {
   const changeSong = useStageStore((state) => state.changeSong);
   const performanceId = useStageStore((state) => state.performanceId);
+  const selectedSong = useStageStore((state) => state.selectedSong);
   const mrLoadRequested = useStageStore((state) => state.mrLoadRequested);
   const requestMrLoad = useStageStore((state) => state.requestMrLoad);
   const socket = useRoomSocketContext();
 
   const title = `‘${performerNickname}’ 님이 ‘${songTitle}’을 선곡하셨습니다.`;
 
-  // 서버 공연이 준비된 상태면 취소를 보내고 다시 선곡 단계로 돌아간다.
+  // 시작 전에는 서버에 공연이 없어(선곡은 로컬 전이뿐) 취소 없이 선곡으로 돌아간다.
+  // 시작하기로 prepare를 이미 보냈다면 서버 공연을 취소해야 한다.
   const handleChangeSong = () => {
     if (performanceId !== null) {
       socket.sendCancel();
@@ -44,23 +46,35 @@ export function ReadyControls({
     changeSong();
   };
 
-  // 노래 바꾸기로 선곡이 반복될 수 있어 MR은 선곡이 아니라 시작 요청 시점에 내려받는다.
+  // 시작하기에서 서버 공연 준비(prepare)를 요청한다 — 선곡 시점에 보내면 노래 바꾸기마다
+  // 취소가 필요해진다. MR 다운로드도 준비 이벤트(URL 수신) 후 이 플래그로 시작된다.
   const handleStart = () => {
     if (!canRequestStart || mrLoadRequested) return;
+    // 재접속 복원 등으로 서버 공연이 이미 있으면 prepare를 다시 보내지 않는다.
+    if (performanceId === null && selectedSong !== null) {
+      socket.sendPrepare(selectedSong.id);
+    }
     requestMrLoad();
   };
 
   // 다운로드가 끝나면 재생 시작을 서버에 알린다. 가창자와 참가자가 같은 PLAYBACK_STARTED
   // 이벤트로 함께 전이되어야 한다 — 로컬에서 먼저 전이하면 전송 실패 시 가창자만 넘어간다.
+  // performanceId 확정(PERFORMANCE_PREPARATION_STARTED 수신) 전에 보내면 조용히 버려진다.
   // 소켓 객체는 지연 측정값 갱신으로 주기적으로 바뀌므로 ref로 중복 전송을 막는다.
   const startSentRef = useRef(false);
   useEffect(() => {
-    if (!isPerformer || !mrLoadRequested || !isMrLoaded || startSentRef.current) {
+    if (
+      !isPerformer ||
+      !mrLoadRequested ||
+      !isMrLoaded ||
+      performanceId === null ||
+      startSentRef.current
+    ) {
       return;
     }
     startSentRef.current = true;
     socket.sendPlaybackStart();
-  }, [isPerformer, mrLoadRequested, isMrLoaded, socket]);
+  }, [isPerformer, mrLoadRequested, isMrLoaded, performanceId, socket]);
 
   if (!isPerformer) {
     return <ControlMessage title={title} subtitle="곧 공연이 시작됩니다. 조금만 기다려 주세요" />;
