@@ -46,7 +46,7 @@ function handleSessionEnd(message: string, code?: string) {
   }
 }
 
-export async function refreshStoredAccessToken(): Promise<string> {
+async function reissueAccessToken(): Promise<string> {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       const response = await fetch('/api/auth/refresh', {
@@ -107,7 +107,7 @@ export async function apiClient<T>(path: string, options: RequestOptions = {}): 
     path !== '/api/auth/refresh'
   ) {
     try {
-      await refreshStoredAccessToken();
+      await reissueAccessToken();
       return apiClient<T>(path, { ...options, _retried: true });
     } catch (error) {
       if (error instanceof ApiError) {
