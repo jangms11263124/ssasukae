@@ -7,7 +7,7 @@ import { cn } from '@/shared/lib/cn';
 
 const NAV_ITEMS = [
   { href: '/lobby', label: 'HOME' },
-  { href: '/like', label: 'LIKE' },
+  { href: '/favorite', label: 'LIKE' },
   { href: '/ai-feedback', label: 'AI_FEEDBACK' },
   { href: '/settings', label: 'SETTINGS' },
 ] as const;
