@@ -116,9 +116,9 @@ const FRONTEND_ERROR_MESSAGES: Partial<Record<string, string>> = {
     '일시적인 오류가 생겼어요. 잠시 후 다시 시도해 주세요.',
 };
 
-/** 사용자에게 보여줄 수 없는 내부 용어 (토큰·스택·프레임워크 메시지 등) */
+/** 사용자에게 보여줄 수 없는 내부 용어 (토큰·스택·프레임워크 메시지·디버그 정보 등) */
 const INTERNAL_TERM_PATTERN =
-  /token|jwt|bearer|session id|exception|stack|null|undefined|\bat\s|<[a-z/!]|[{}]|websocket|stomp|http[s]?:\/\/|토큰|쿠키|헤더|파싱|세션/i;
+  /token|jwt|bearer|session id|exception|stack|null|undefined|\bat\s|<[a-z/!]|[{}]|websocket|stomp|http[s]?:\/\/|\S+=\S|토큰|쿠키|헤더|파싱|세션/i;
 
 const HANGUL_PATTERN = /[가-힣]/;
 const MAX_USER_FACING_LENGTH = 120;
@@ -184,4 +184,71 @@ export function toUserFacingMessage(
   fallback: string,
 ): string {
   return message && isUserFacingMessage(message) ? message : fallback;
+}
+
+/**
+ * WebSocket 에러 코드(WebSocketErrorCode)별 사용자 문구.
+ * 서버 원문은 격식체이고 디버그 정보가 붙어 올 수 있어 그대로 쓰지 않는다.
+ */
+const WS_ERROR_MESSAGES: Partial<Record<string, string>> = {
+  // 인증
+  UNAUTHORIZED: RELOGIN_MESSAGE,
+  TOKEN_EXPIRED: RELOGIN_MESSAGE,
+
+  // 공통
+  INVALID_REQUEST: '요청을 처리하지 못했어요. 다시 시도해 주세요.',
+  RESOURCE_NOT_FOUND: '요청한 정보를 찾을 수 없어요.',
+  DUPLICATE_REQUEST: '이미 처리된 요청이에요.',
+  ACTION_NOT_ALLOWED: '권한이 없어서 할 수 없어요.',
+
+  // 방
+  INVALID_ROOM_STATE: '지금은 할 수 없는 동작이에요.',
+  ROOM_ACCESS_DENIED: '이 방의 참가자만 할 수 있어요.',
+
+  // 공연
+  INVALID_PERFORMANCE_STATE: '지금 공연 상태에서는 할 수 없는 동작이에요.',
+  INVALID_PERFORMANCE_SETTING: '설정값이 허용 범위를 벗어났어요.',
+  PERFORMANCE_ROOM_MISMATCH: '공연 정보가 맞지 않아요. 새로고침해 주세요.',
+  PERFORMANCE_ALREADY_IN_PROGRESS: '이미 진행 중인 공연이 있어요.',
+  PERFORMANCE_RESOURCE_NOT_READY: '아직 공연 준비가 안 끝났어요. 잠시 후 다시 시도해 주세요.',
+  DOWNLOAD_URL_GENERATION_FAILED: '곡을 불러오지 못했어요. 다시 시도해 주세요.',
+  PERFORMER_PERMISSION_REQUIRED: '가창자만 할 수 있어요.',
+
+  // 카드 (수성전)
+  INVALID_ROOM_MODE: '수성전에서만 카드를 쓸 수 있어요.',
+  NO_ACTIVE_PERFORMANCE: '진행 중인 공연이 없어요.',
+  PERFORMANCE_MISMATCH: '공연 정보가 맞지 않아요. 새로고침해 주세요.',
+  NO_ACTIVE_PERFORMER: '카드를 쓸 대상이 없어요.',
+  PLAYBACK_NOT_RUNNING: '노래가 나오는 동안에만 카드를 쓸 수 있어요.',
+  INSUFFICIENT_PLAYBACK_TIME: '노래가 곧 끝나서 카드를 쓸 수 없어요.',
+  PARTICIPANT_NOT_ACTIVE: '지금은 카드를 쓸 수 없는 상태예요.',
+  PARTICIPANT_OFFLINE: '연결이 불안정해서 카드를 쓸 수 없어요.',
+  PERFORMER_CANNOT_USE_CARD: '가창자는 카드를 쓸 수 없어요.',
+  CARD_NOT_FOUND: '가지고 있지 않은 카드예요.',
+  CARD_ASSIGNMENT_NOT_FOUND: '가지고 있지 않은 카드예요.',
+  CARD_NOT_ASSIGNED: '가지고 있지 않은 카드예요.',
+  CARD_ALREADY_USED: '이미 사용한 카드예요.',
+  CARD_ALREADY_PENDING: '이미 발동을 기다리고 있는 카드예요.',
+  INVALID_CARD_STATE: '지금은 쓸 수 없는 카드예요.',
+  CARD_CONFIGURATION_INVALID: '카드를 사용하지 못했어요. 다시 시도해 주세요.',
+  CARD_ACTIVATION_PENDING: '다른 카드가 발동을 기다리고 있어요. 잠시 후 다시 써 주세요.',
+  CARD_EFFECT_ALREADY_ACTIVE: '다른 카드 효과가 적용되는 중이에요.',
+  CARD_STATE_CONFLICT: '카드 상태가 바뀌었어요. 다시 시도해 주세요.',
+  INVALID_CARD_TARGET: '카드를 쓸 대상을 찾지 못했어요.',
+
+  // 서버 내부 오류
+  INTERNAL_SERVER_ERROR: '일시적인 오류가 생겼어요. 잠시 후 다시 시도해 주세요.',
+};
+
+/** WebSocket 에러 이벤트(/user/queue/errors)를 토스트 문구로 바꾼다. */
+export function resolveWsErrorMessage(
+  errorCode: string | null | undefined,
+  message: string | null | undefined,
+  fallback: string,
+): string {
+  if (errorCode && WS_ERROR_MESSAGES[errorCode]) {
+    return WS_ERROR_MESSAGES[errorCode]!;
+  }
+
+  return toUserFacingMessage(message, fallback);
 }

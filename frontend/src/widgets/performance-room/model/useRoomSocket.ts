@@ -35,7 +35,7 @@ import {
   type RoomWebSocketEvent,
   type WebSocketErrorEvent,
 } from '@/entities/room';
-import { toUserFacingMessage } from '@/shared/api/errorResponse';
+import { resolveWsErrorMessage, toUserFacingMessage } from '@/shared/api/errorResponse';
 import { createStompClient, subscribeJson } from '@/shared/api/stomp';
 import { showToast } from '@/shared/model/toastStore';
 
@@ -308,7 +308,11 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         subscribeJson<RoomWebSocketEvent>(client, '/user/queue/cards', handleEvent);
         subscribeJson<WebSocketErrorEvent>(client, '/user/queue/errors', (event) => {
           showToast(
-            toUserFacingMessage(event.payload.message, '요청을 처리하지 못했어요.'),
+            resolveWsErrorMessage(
+              event.payload.errorCode,
+              event.payload.message,
+              '요청을 처리하지 못했어요.',
+            ),
             'error',
           );
         });
