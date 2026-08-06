@@ -310,6 +310,10 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     return this.mrPositionSeconds() * 1000;
   }
 
+  getAppliedKeyOffset(): number {
+    return this.lastDsp.keyOffset;
+  }
+
   async openMic(deviceId: string): Promise<void> {
     if (this.disposed) return;
     this.closeMic();
