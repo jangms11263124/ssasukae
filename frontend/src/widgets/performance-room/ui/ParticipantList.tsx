@@ -12,6 +12,7 @@ import {
   type ParticipantActionType,
 } from './ParticipantActionConfirmDialog';
 import { ParticipantActionMenu } from './ParticipantActionMenu';
+import { ParticipantAvatar } from './ParticipantAvatar';
 import { RoomPanel } from './RoomPanel';
 
 interface ParticipantListProps {
@@ -140,20 +141,11 @@ export function ParticipantList({
                   )}
                 />
               )}
-              <span className="relative size-7 shrink-0 overflow-hidden rounded-full bg-zinc-800 ring-1 ring-white/10">
-                {participant.profileImageUrl &&
-                /^https?:\/\//.test(participant.profileImageUrl) ? (
-                  <img
-                    src={participant.profileImageUrl}
-                    alt=""
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <span className="grid size-full place-items-center font-mono text-[10px] text-zinc-400">
-                    {participant.nickname.trim().charAt(0) || '?'}
-                  </span>
-                )}
-              </span>
+              <ParticipantAvatar
+                className="size-7"
+                nickname={participant.nickname}
+                profileImageUrl={participant.profileImageUrl}
+              />
               <span className="min-w-0 flex-1 truncate">
                 {participant.nickname}
                 {isCurrentUser && ' (나)'}
