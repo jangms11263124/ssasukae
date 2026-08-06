@@ -2,5 +2,6 @@ package com.ssafy.ssasukae.domain.room.type;
 
 public enum RoomMode {
     GENERAL,
-    BATTLE
+    BATTLE,
+    LOW_LATENCY
 }

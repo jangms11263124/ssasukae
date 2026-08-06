@@ -10,6 +10,7 @@ import { RoomHeaderPopover } from './layout/RoomHeaderPopover';
 const ROOM_MODE_LABEL = {
   BATTLE: '수성전 모드',
   GENERAL: '일반 모드',
+  LOW_LATENCY: '고급 모드',
 } as const;
 
 const COPIED_MS = 2200;
