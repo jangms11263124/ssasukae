@@ -16,13 +16,19 @@ type MetricKey = keyof Pick<
   'pitch' | 'rhythm' | 'stability' | 'lyricsAccuracy' | 'difficulty'
 >;
 
-const METRICS: readonly { key: MetricKey; label: string }[] = [
-  { key: 'pitch', label: 'PITCH' },
-  { key: 'rhythm', label: 'RHYTHM' },
-  { key: 'stability', label: 'STABILITY' },
-  { key: 'lyricsAccuracy', label: 'LYRICS' },
-  { key: 'difficulty', label: 'DIFF' },
+/* difficulty만 곡 LV(0~10) 스케일이라 지표별 만점으로 비율을 계산한다 */
+const METRICS: readonly { key: MetricKey; label: string; max: number }[] = [
+  { key: 'pitch', label: 'PITCH', max: 100 },
+  { key: 'rhythm', label: 'RHYTHM', max: 100 },
+  { key: 'stability', label: 'STABILITY', max: 100 },
+  { key: 'lyricsAccuracy', label: 'LYRICS', max: 100 },
+  { key: 'difficulty', label: 'DIFF', max: 10 },
 ];
+
+function formatMetricValue(key: MetricKey, value: number | null): string {
+  if (value == null) return '--';
+  return key === 'difficulty' ? `LV.${value}` : String(value);
+}
 
 function vertexAt(index: number, ratio: number): { x: number; y: number } {
   const angle = ((-90 + index * 72) * Math.PI) / 180;
@@ -102,7 +108,7 @@ export function MetricRadarChart({ scores }: MetricRadarChartProps) {
         ))}
 
         <polygon
-          points={polygonPoints(values.map((value) => (value ?? 0) / 100))}
+          points={polygonPoints(values.map((value, index) => (value ?? 0) / METRICS[index].max))}
           fill="rgb(34 211 238 / 0.10)"
           stroke={ACCENT}
           strokeWidth="2"
@@ -111,10 +117,10 @@ export function MetricRadarChart({ scores }: MetricRadarChartProps) {
         />
 
         {values.map((value, index) => {
-          const { x, y } = vertexAt(index, (value ?? 0) / 100);
+          const { x, y } = vertexAt(index, (value ?? 0) / METRICS[index].max);
           return (
             <circle key={METRICS[index].key} cx={x} cy={y} r="4" fill={ACCENT} stroke={SURFACE} strokeWidth="2">
-              <title>{`${METRICS[index].label} ${value ?? '--'}`}</title>
+              <title>{`${METRICS[index].label} ${formatMetricValue(METRICS[index].key, value)}`}</title>
             </circle>
           );
         })}
@@ -145,11 +151,11 @@ export function MetricRadarChart({ scores }: MetricRadarChartProps) {
               <span className="h-[3px] flex-1 bg-cyan-400/10">
                 <span
                   className="block h-full bg-cyan-400"
-                  style={{ width: `${value ?? 0}%` }}
+                  style={{ width: `${((value ?? 0) / metric.max) * 100}%` }}
                 />
               </span>
-              <span className="w-9 shrink-0 text-right font-mono text-[0.7rem] font-bold tabular-nums text-zinc-100">
-                {value ?? '--'}
+              <span className="w-10 shrink-0 text-right font-mono text-[0.7rem] font-bold tabular-nums text-zinc-100">
+                {formatMetricValue(metric.key, value)}
               </span>
             </li>
           );
