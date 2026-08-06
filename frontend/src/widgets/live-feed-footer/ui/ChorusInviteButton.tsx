@@ -5,13 +5,12 @@ import { useState } from 'react';
 import { cn } from '@/shared/lib/cn';
 
 import { LIVE_FEED_COPY } from '../config/liveFeedCopy';
-import { ChorusComingSoonDialog } from './ChorusComingSoonDialog';
+import { ChorusLaunchDialog } from './ChorusLaunchDialog';
 
 interface ChorusInviteButtonProps {
   className?: string;
 }
 
-// TODO: 합창 모드 진입 동작 연동 (현재는 준비중 안내만 띄운다)
 export function ChorusInviteButton({ className }: ChorusInviteButtonProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -28,7 +27,7 @@ export function ChorusInviteButton({ className }: ChorusInviteButtonProps) {
         {LIVE_FEED_COPY.chorusCta}
       </button>
 
-      {isDialogOpen && <ChorusComingSoonDialog onClose={() => setIsDialogOpen(false)} />}
+      {isDialogOpen && <ChorusLaunchDialog onClose={() => setIsDialogOpen(false)} />}
     </>
   );
 }

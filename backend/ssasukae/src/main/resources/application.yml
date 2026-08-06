@@ -84,6 +84,9 @@ performance:
     scan-delay: 1s
     batch-size: 100
 
+low-latency:
+  rendezvous-server: ${LOW_LATENCY_RENDEZVOUS_SERVER:15.165.205.31:50000}
+
 jwt:
   secret: ${JWT_SECRET}
   access-token-expiration: 600000      # 10분
