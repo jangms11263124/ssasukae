@@ -18,6 +18,7 @@ import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
 import { RoomSocketProvider } from '../model/RoomSocketContext';
 import { StageAudioProvider } from '../model/StageAudioContext';
 import { useCardEffectSideEffects } from '../model/useCardEffectSideEffects';
+import { useLeaveRoomOnBack } from '../model/useLeaveRoomOnBack';
 import { useOpenViduSession } from '../model/useOpenViduSession';
 import { useRoomBootstrap } from '../model/useRoomBootstrap';
 import { useRoomSocket } from '../model/useRoomSocket';
@@ -89,6 +90,8 @@ function PerformanceRoomContent() {
   }
 
   useCardEffectSideEffects(session?.myParticipantId ?? null);
+  // 뒤로가기도 나가기 버튼과 같은 확인을 거친다 — 서버에 유령 참가자를 남기지 않는다.
+  useLeaveRoomOnBack(() => setLeaveConfirmOpen(true));
 
   if (session === null) {
     return null;
@@ -137,7 +140,9 @@ function PerformanceRoomContent() {
     } finally {
       endStage();
       leaveRoomStore();
-      router.push('/lobby');
+      // 뒤로가기 가드로 쌓아 둔 항목이 남아 있어, push로 나가면 다시 뒤로가기했을 때
+      // 세션 없는 방 화면으로 돌아간다. 떠난 방은 히스토리에 남기지 않는다.
+      router.replace('/lobby');
     }
   };
 
