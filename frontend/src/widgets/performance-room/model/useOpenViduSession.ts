@@ -203,6 +203,21 @@ export function useOpenViduSession(): OpenViduSessionApi {
   const publisherRef = useRef<Publisher | null>(null);
   const isBroadcastingMixRef = useRef(false);
   const originalAudioTrackRef = useRef<MediaStreamTrack | null>(null);
+  // 재입장 시 오디오 엔진이 publisher보다 먼저 준비되면 믹스 트랙을 여기 보관했다가 publish 직후 적용한다
+  const pendingMixTrackRef = useRef<MediaStreamTrack | null>(null);
+
+  const applyMixTrack = useCallback(async (publisher: Publisher, track: MediaStreamTrack) => {
+    if (originalAudioTrackRef.current === null) {
+      // replaceTrack은 교체되는 기존 트랙을 stop시킨다(SDK 내부 동작) — 원본은 clone으로 보관해야 살아남는다
+      const current = publisher.stream.getMediaStream()?.getAudioTracks()[0] ?? null;
+      originalAudioTrackRef.current =
+        current !== null && current.readyState === 'live' ? current.clone() : null;
+    }
+    await publisher.replaceTrack(track);
+    isBroadcastingMixRef.current = true;
+    publisher.publishAudio(true);
+    tuneAudioSender(publisher, track);
+  }, []);
 
   useEffect(() => {
     if (roomId === null) {
@@ -393,6 +408,14 @@ export function useOpenViduSession(): OpenViduSessionApi {
         activePublisher = publisher;
         publisherRef.current = publisher;
         setLocalStream(publisher.stream.getMediaStream());
+
+        // publisher 준비 전에 도착해 보관해 둔 믹스 트랙을 이제 적용한다 (가창자 새로고침 재입장).
+        // teardown이 먼저 지나갔으면 ref가 이미 비워져 있어 stale 적용이 일어나지 않는다.
+        const pendingTrack = pendingMixTrackRef.current;
+        pendingMixTrackRef.current = null;
+        if (pendingTrack !== null && pendingTrack.readyState === 'live') {
+          await applyMixTrack(publisher, pendingTrack).catch(() => undefined);
+        }
       } catch {
         if (!isStale()) {
           showToast('카메라와 마이크를 쓸 수 없어 시청만 할 수 있어요.', 'info');
@@ -415,6 +438,8 @@ export function useOpenViduSession(): OpenViduSessionApi {
       }
       publisherRef.current = null;
       isBroadcastingMixRef.current = false;
+      // 적용 못 한 보관 트랙은 엔진 소유라 stop하지 않는다 — 참조만 비워 stale 적용을 막는다
+      pendingMixTrackRef.current = null;
       // 원복용 clone은 publisher 스트림 밖에 있어 stopPublisher가 못 멈춘다 — 여기서 끊지 않으면 마이크 점유가 남는다
       originalAudioTrackRef.current?.stop();
       originalAudioTrackRef.current = null;
@@ -433,7 +458,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
       setLocalStream(null);
       setRemoteStreams(new Map());
     };
-  }, [roomId]);
+  }, [roomId, applyMixTrack]);
 
   useEffect(() => {
     if (isBroadcastingMixRef.current) return;
@@ -446,21 +471,20 @@ export function useOpenViduSession(): OpenViduSessionApi {
 
   const replaceAudioTrack = useCallback(async (track: MediaStreamTrack | null) => {
     const publisher = publisherRef.current;
-    if (publisher === null) return;
 
     if (track !== null) {
-      if (originalAudioTrackRef.current === null) {
-        // replaceTrack은 교체되는 기존 트랙을 stop시킨다(SDK 내부 동작) — 원본은 clone으로 보관해야 살아남는다
-        const current = publisher.stream.getMediaStream()?.getAudioTracks()[0] ?? null;
-        originalAudioTrackRef.current =
-          current !== null && current.readyState === 'live' ? current.clone() : null;
+      if (publisher === null) {
+        // 새로고침 재입장이면 엔진이 publisher보다 먼저 준비된다 — publish 완료 시점에 적용한다
+        pendingMixTrackRef.current = track;
+        return;
       }
-      await publisher.replaceTrack(track);
-      isBroadcastingMixRef.current = true;
-      publisher.publishAudio(true);
-      tuneAudioSender(publisher, track);
+      await applyMixTrack(publisher, track);
       return;
     }
+
+    // 믹스 해제. publisher 준비 전이면 보관분만 비우면 된다 — 원본 마이크가 그대로 송출될 예정이다
+    pendingMixTrackRef.current = null;
+    if (publisher === null) return;
 
     isBroadcastingMixRef.current = false;
     let original = originalAudioTrackRef.current;
@@ -485,7 +509,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
       showToast('마이크를 다시 연결하지 못했어요. 새로고침해 주세요.', 'error');
     }
     publisher.publishAudio(useStageStore.getState().micOn && !readMicBlocked());
-  }, []);
+  }, [applyMixTrack]);
 
   return { isConnected, localStream, remoteStreams, replaceAudioTrack };
 }
