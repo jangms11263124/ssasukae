@@ -44,13 +44,6 @@ export function LiveFeedFooter({ className }: LiveFeedFooterProps) {
 
       <div className="flex shrink-0 items-center gap-4 px-3 sm:px-5">
         <ChorusInviteButton />
-        <a
-          href="/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi?v=0.1.7"
-          download
-          className="hidden whitespace-nowrap text-neon-cyan transition-colors hover:text-white sm:inline"
-        >
-          저지연 앱 다운로드
-        </a>
         <span className="hidden text-neon-cyan lg:inline">
           TERMINAL ID: {LIVE_FEED_COPY.terminalId}
         </span>

@@ -22,11 +22,6 @@ const ROOM_MODES = [
     label: '수성전 모드',
     value: 'BATTLE',
   },
-  {
-    description: '전용 Rust 오디오 앱으로 초저지연 음성 합주를 진행합니다.',
-    label: '고급 모드',
-    value: 'LOW_LATENCY',
-  },
 ] satisfies Array<{
   description: string;
   label: string;
@@ -100,7 +95,7 @@ export function RoomCreateForm() {
 
       <fieldset>
         <legend className="text-sm font-semibold text-zinc-200">모드 선택</legend>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {ROOM_MODES.map((roomMode) => {
             const isSelected = mode === roomMode.value;
 

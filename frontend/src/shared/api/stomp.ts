@@ -3,23 +3,6 @@ import { Client, type IMessage, type StompSubscription } from '@stomp/stompjs';
 import { WS_URL } from '@/shared/config/env';
 import { getAccessToken } from '@/shared/model/authStore';
 
-import { refreshStoredAccessToken } from './client';
-
-const ACCESS_TOKEN_REFRESH_MARGIN_MS = 60_000;
-
-function tokenNeedsRefresh(token: string): boolean {
-  try {
-    const payload = token.split('.')[1];
-    if (!payload) return true;
-
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const claims = JSON.parse(atob(normalized)) as { exp?: number };
-    return !claims.exp || claims.exp * 1_000 <= Date.now() + ACCESS_TOKEN_REFRESH_MARGIN_MS;
-  } catch {
-    return true;
-  }
-}
-
 export interface StompConnectionCallbacks {
   onConnect?: () => void;
   onDisconnect?: () => void;
@@ -42,17 +25,8 @@ export function createStompClient(callbacks: StompConnectionCallbacks = {}): Cli
     heartbeatIncoming: 10_000,
     heartbeatOutgoing: 10_000,
     reconnectDelay: 3_000,
-    beforeConnect: async () => {
-      let accessToken = getAccessToken();
-      if (accessToken && tokenNeedsRefresh(accessToken)) {
-        try {
-          accessToken = await refreshStoredAccessToken();
-        } catch {
-          // refresh 실패는 공통 인증 처리에서 메모리 토큰을 제거한다. 여기서 오류를
-          // 다시 전파하면 STOMP 내부 Promise가 unhandledRejection으로 노출된다.
-          accessToken = null;
-        }
-      }
+    beforeConnect: () => {
+      const accessToken = getAccessToken();
       client.connectHeaders = accessToken
         ? { Authorization: `Bearer ${accessToken}` }
         : {};

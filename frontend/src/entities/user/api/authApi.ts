@@ -8,13 +8,8 @@ import type {
   User,
 } from '../types';
 
-export function getCurrentUser(signal?: AbortSignal) {
-  const timeoutSignal = AbortSignal.timeout(5_000);
-  const requestSignal = signal
-    ? AbortSignal.any([signal, timeoutSignal])
-    : timeoutSignal;
-
-  return apiClient<User>('/api/users/me', { auth: true, signal: requestSignal });
+export function getCurrentUser() {
+  return apiClient<User>('/api/users/me', { auth: true });
 }
 
 export function signup(request: OAuthSignupRequest) {
@@ -24,10 +19,9 @@ export function signup(request: OAuthSignupRequest) {
   });
 }
 
-export function refreshAccessToken(signal?: AbortSignal) {
+export function refreshAccessToken() {
   return apiClient<TokenReissueResponse>('/api/auth/refresh', {
     method: 'POST',
-    signal,
   });
 }
 
