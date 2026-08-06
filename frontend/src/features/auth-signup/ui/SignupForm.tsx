@@ -8,7 +8,6 @@ import { cn } from '@/shared/lib/cn';
 import { SIGNUP_COPY } from '../config/signup';
 import { useSignupForm } from '../model/useSignupForm';
 import { SignupNicknameField } from './SignupNicknameField';
-import { SignupTermsAgreement } from './SignupTermsAgreement';
 
 interface SignupFormProps {
   signupToken: string;
@@ -48,15 +47,6 @@ export function SignupForm({
           isChecking={form.isNicknameChecking}
           onNicknameChange={form.handleNicknameChange}
           onCheck={form.handleNicknameCheck}
-        />
-      </div>
-
-      <div className="mt-6">
-        <SignupTermsAgreement
-          hasAcceptedTerms={form.hasAcceptedTerms}
-          hasAcceptedPrivacy={form.hasAcceptedPrivacy}
-          onTermsChange={form.setHasAcceptedTerms}
-          onPrivacyChange={form.setHasAcceptedPrivacy}
         />
       </div>
 
