@@ -19,7 +19,6 @@ export function StageControlPanel() {
   const phase = useStageStore((state) => state.phase);
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
   const selectedSong = useStageStore((state) => state.selectedSong);
-  const performanceId = useStageStore((state) => state.performanceId);
   const isSuspended = useStageStore((state) => state.isSuspended);
 
   const session = useRoomStore((state) => state.session);
@@ -44,9 +43,9 @@ export function StageControlPanel() {
         isPerformer={isPerformer}
         performerNickname={performer?.nickname ?? ''}
         songTitle={selectedSong?.title ?? ''}
-        // PERFORMANCE_PREPARATION_STARTED 수신(performanceId 확정) 전에는 시작을 요청할 수
-        // 없다 — 이벤트 전에 시작하면 서버 전송 없이 화면만 전이된다.
-        canRequestStart={performanceId !== null}
+        // 시작하기가 prepare를 보내므로 선곡된 곡만 있으면 된다. 재접속 복원처럼
+        // 서버 공연이 이미 있는 경우(performanceId 확정)도 스냅샷이 곡을 채워 준다.
+        canRequestStart={selectedSong !== null}
         isMrLoaded={audioEngine.isMrLoaded}
         prepareError={audioEngine.error}
         onRetryPrepare={audioEngine.retryLoadMr}
