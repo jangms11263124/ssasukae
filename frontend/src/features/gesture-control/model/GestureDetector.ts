@@ -40,7 +40,7 @@ export class GestureDetector {
     private readonly video: HTMLVideoElement,
     private readonly getViewport: () => Viewport,
     private readonly callbacks: GestureCallbacks,
-    /** 양손 X자(취소) 판정 여부. 취소가 없는 모드에서는 꺼서 오조작·카운트다운을 원천 차단한다 */
+    /** 양손 X자(취소) 반응 여부. false여도 포즈는 감지해 무입력 처리한다 — 잡기(핀치)로 오인되는 것을 막는다 */
     private readonly cancelEnabled = true,
   ) {
     const { width, height } = getViewport();
@@ -120,8 +120,18 @@ export class GestureDetector {
     }
 
     // 취소가 일반 제어보다 우선이다.
-    if (this.cancelEnabled && hands.length >= 2 && isTwoHandXGesture(hands[0], hands[1])) {
-      this.handleCancelGesture();
+    if (hands.length >= 2 && isTwoHandXGesture(hands[0], hands[1])) {
+      if (this.cancelEnabled) {
+        this.handleCancelGesture();
+
+        return;
+      }
+
+      // 취소가 없는 모드에서도 X자 포즈가 일반 제어로 새면 안 된다.
+      // 양손 검지 포즈는 핀치(잡기)로 읽혀 커서가 잡기 색으로 변하고 값까지 끌린다.
+      this.resetHoldTimers();
+      this.callbacks.onCursorMove(this.cursorX, this.cursorY, false, true);
+      this.callbacks.onCancelProgress(null);
 
       return;
     }
