@@ -114,6 +114,20 @@ class RedisRoomLeaderboardStoreTest {
     assertThat(found).contains(entry);
   }
 
+  @Test
+  @DisplayName("저장된 방 리더보드 전체를 점수 내림차순으로 조회한다")
+  void findAllRankedReturnsStoredEntriesInRankOrder() throws Exception {
+    RoomLeaderboardEntry lower = entry(31L, "participant1", 85);
+    RoomLeaderboardEntry higher = entry(32L, "participant2", 94);
+
+    when(hashOperations.entries(REDIS_KEY))
+        .thenReturn(Map.of(
+            lower.performanceId().toString(), objectMapper.writeValueAsString(lower),
+            higher.performanceId().toString(), objectMapper.writeValueAsString(higher)));
+
+    assertThat(store.findAllRanked(ROOM_ID)).containsExactly(higher, lower);
+  }
+
   private RoomLeaderboardEntry entry(Long performanceId, String nickname, Integer finalScore) {
     return new RoomLeaderboardEntry(
         performanceId,

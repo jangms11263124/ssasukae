@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import com.ssafy.ssasukae.domain.card.service.CardService;
 import com.ssafy.ssasukae.domain.performance.redis.performance.PerformanceStore;
+import com.ssafy.ssasukae.domain.performance.redis.leaderboard.RoomLeaderboardStore;
 import com.ssafy.ssasukae.domain.performance.service.PerformanceRecoveryService;
 import com.ssafy.ssasukae.domain.performance.type.PerformanceCancelReason;
 import com.ssafy.ssasukae.domain.room.dto.RoomCreateRequest;
@@ -58,6 +59,7 @@ class RoomServiceMediaSessionTest {
   @Mock private WebSocketEventPublisher webSocketEventPublisher;
   @Mock private CardService cardService;
   @Mock private PerformanceStore performanceStore;
+  @Mock private RoomLeaderboardStore roomLeaderboardStore;
   @Mock private SongRepository songRepository;
   @Mock private S3StorageService s3StorageService;
 
@@ -77,6 +79,7 @@ class RoomServiceMediaSessionTest {
             webSocketEventPublisher,
             cardService,
             performanceStore,
+            roomLeaderboardStore,
             clock,
             songRepository,
             s3StorageService);
