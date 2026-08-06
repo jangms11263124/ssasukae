@@ -99,7 +99,19 @@ export const BROADCAST_VOICE_COMPRESSOR = {
 /** 송출 버스 리미터 임계(dB). 목소리+MR 합산이 풀스케일을 넘어 찌그러지는 것을 막는다 */
 export const BROADCAST_LIMITER_THRESHOLD_DB = -1;
 
-/** 순 피치 변화가 이 미만이면 0으로 보고 PitchShift를 바이패스한다 */
+/** SoundTouch WSOLA overlap */
+export const SOUNDTOUCH_OVERLAP_MS = 8;
+
+/** copy:soundtouch-processor 스크립트가 public에 생성하는 정적 경로 */
+export const SOUNDTOUCH_PROCESSOR_URL = '/soundtouch/soundtouch-processor.js';
+
+/**
+ * SoundTouch MR 처리 지연 추정치(초). WSOLA 버퍼링으로 MR이 목소리보다 늦게 들린다.
+ * 모니터 목소리에 같은 만큼 딜레이를 주고, 송출 MR 보정량에서는 뺀다 — 녹음으로 캘리브레이션.
+ */
+export const SOUNDTOUCH_MR_LATENCY_SECONDS = 0.055;
+
+/** dev 랩 Tone 엔진용 — 순 피치 변화가 이 미만이면 PitchShift 바이패스 */
 export const PITCH_BYPASS_EPSILON = 0.01;
 
 /**
