@@ -1,6 +1,6 @@
 import { apiClient } from '@/shared/api/client';
 
-import type { FavoriteSongPage } from '../types';
+import type { FavoriteSong, FavoriteSongPage } from '../types';
 
 export interface GetFavoriteSongsParams {
   query?: string;
@@ -23,6 +23,26 @@ export function getFavoriteSongs(params: GetFavoriteSongsParams = {}): Promise<F
     `/api/users/me/favorites${queryString ? `?${queryString}` : ''}`,
     { auth: true },
   );
+}
+
+// 단건 조회 전용 API가 없어 목록을 순회하며 찾는다. 백엔드 최대 size로 요청 횟수를 줄인다.
+const FIND_SCAN_SIZE = 50;
+// 폭주 방지 상한 (50 x 20 = 1,000곡)
+const FIND_SCAN_MAX_PAGES = 20;
+
+/** 찜한 곡 단건 조회. 목록에 없으면(찜하지 않은 곡) null을 반환한다. */
+export async function findFavoriteSong(songId: number): Promise<FavoriteSong | null> {
+  let cursor: number | undefined;
+
+  for (let page = 0; page < FIND_SCAN_MAX_PAGES; page += 1) {
+    const result = await getFavoriteSongs({ cursor, size: FIND_SCAN_SIZE });
+    const found = result.songs.find((song) => song.songId === songId);
+    if (found) return found;
+    if (result.nextCursor === null) return null;
+    cursor = result.nextCursor;
+  }
+
+  return null;
 }
 
 /** 곡 찜 (PUT /api/users/me/favorites/{songId}) */
