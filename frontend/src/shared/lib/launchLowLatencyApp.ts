@@ -6,8 +6,17 @@ export const LOW_LATENCY_APP_DOWNLOAD_URL =
 
 export const LOW_LATENCY_APP_FILE_NAME = 'SSAFYStar-LowLatencyAudio-Setup-x64.msi';
 
-// 앱이 app-session·token refresh를 호출할 주소. env.ts와 같은 로컬 기본값을 쓴다.
-const DEFAULT_BACKEND_URL = 'http://localhost:8080';
+/**
+ * 앱이 app-session·token refresh·방 이벤트 구독에 쓸 백엔드 origin.
+ *
+ * 브라우저 API는 Next 라우트 핸들러 프록시를 타지만 네이티브 앱은 프록시를 쓸 수 없고,
+ * 앱이 이 주소에서 파생시키는 /ws 업그레이드는 프록시로 통과시킬 수 없어 백엔드에 직접
+ * 붙어야 한다. 그래서 프론트 도메인이 아니라 API 도메인을 넘긴다.
+ *
+ * NEXT_PUBLIC_ 변수는 빌드 시점에 인라인되므로 배포 파이프라인에 값이 없으면 폴백이
+ * 그대로 나간다. 배포를 기본값으로 두고 로컬은 .env.local에서 덮어쓴다.
+ */
+const DEFAULT_BACKEND_URL = 'https://api.ssafystar-k.site';
 const APP_LAUNCH_TIMEOUT_MS = 2_500;
 
 export interface LaunchLowLatencyAppOptions {
