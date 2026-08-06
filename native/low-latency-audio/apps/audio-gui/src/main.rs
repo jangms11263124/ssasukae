@@ -888,6 +888,13 @@ impl App {
                         serde_json::json!({ "clientId": client_id }),
                     );
                 }
+                WorkerEvent::Client(EmbeddedEvent::PeerGone { client_id }) => {
+                    // 서버가 만료·퇴장으로 판정한 피어다. 목록에 남겨두면 들어오지도
+                    // 않은 사람이 계속 보인다.
+                    self.participants.remove(&client_id);
+                    self.peer_mix_controls.remove(&client_id);
+                    self.diagnostic("peer_gone", serde_json::json!({ "clientId": client_id }));
+                }
                 WorkerEvent::Client(EmbeddedEvent::PeerName {
                     client_id,
                     nickname,
@@ -2266,9 +2273,9 @@ impl App {
                         );
                         ui.label(
                             RichText::new(if connected {
-                                "실시간 음성 연결됨"
+                                "실시간 음성 연결됐어요"
                             } else {
-                                "입장을 기다리고 있습니다"
+                                "아직 연결되지 않았어요"
                             })
                             .size(10.0)
                             .color(MUTED),

@@ -36,7 +36,7 @@ try {
 
     New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
     $objectFile = Join-Path $outputPath "SSAFYStarAudio.wixobj"
-    $msi = Join-Path $outputPath "SSAFYStar-LowLatencyAudio-0.1.7-x64.msi"
+    $msi = Join-Path $outputPath "SSAFYStar-LowLatencyAudio-0.1.8-x64.msi"
     & $candle -nologo -arch x64 -out $objectFile $wixSource
     if ($LASTEXITCODE -ne 0) {
         throw "WiX source compilation failed."
