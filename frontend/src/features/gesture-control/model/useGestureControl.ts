@@ -14,7 +14,7 @@ export interface UseGestureControlOptions {
   enabled: boolean;
   isPanelOpen: boolean;
   rowCount: number;
-  /** 양손 X자(취소) 제스처 사용 여부. false면 판정도 카운트다운도 하지 않는다 */
+  /** 양손 X자(취소) 제스처 사용 여부. false면 카운트다운 없이 포즈를 무입력 처리한다 */
   cancelEnabled: boolean;
   onOpenPanel: () => void;
   onClosePanel: () => void;
