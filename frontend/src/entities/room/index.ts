@@ -19,7 +19,7 @@ export {
   type RoomStatus,
   type RoomTokenResponse,
 } from './api/roomApi';
-export { buildRoomPath } from './lib/roomRoutes';
+export { buildRoomPath, parseRoomIdParam } from './lib/roomRoutes';
 export { useRoomStore, type RoomSession } from './model/roomStore';
 export type {
   RoomWebSocketEvent,

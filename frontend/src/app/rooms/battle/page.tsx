@@ -1,30 +1,14 @@
-'use client';
-
-import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-
+import { parseRoomIdParam } from '@/entities/room';
 import { PerformanceRoomScreen } from '@/widgets/performance-room';
 
-function parseRoomId(raw: string | null): number | null {
-  if (raw === null) {
-    return null;
-  }
-
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+interface BattleRoomPageProps {
+  searchParams: Promise<{ roomId?: string | string[] }>;
 }
 
-function BattleRoomPageContent() {
-  const searchParams = useSearchParams();
-  const roomIdFromUrl = parseRoomId(searchParams.get('roomId'));
+// 페이지는 서버 컴포넌트로 두고 쿼리는 prop으로 받는다 — useSearchParams를 쓰면
+// 페이지 전체가 클라이언트로 내려가고 Suspense 경계까지 필요해진다.
+export default async function BattleRoomPage({ searchParams }: BattleRoomPageProps) {
+  const { roomId } = await searchParams;
 
-  return <PerformanceRoomScreen roomIdFromUrl={roomIdFromUrl} />;
-}
-
-export default function BattleRoomPage() {
-  return (
-    <Suspense fallback={null}>
-      <BattleRoomPageContent />
-    </Suspense>
-  );
+  return <PerformanceRoomScreen roomIdFromUrl={parseRoomIdParam(roomId)} />;
 }
