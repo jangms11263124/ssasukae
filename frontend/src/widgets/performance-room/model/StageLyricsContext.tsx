@@ -10,6 +10,7 @@ const FALLBACK_LYRICS: SyncedLyricsState = {
   currentLine: '',
   nextLine: '',
   message: null,
+  countdown: null,
 };
 
 const StageLyricsContext = createContext<SyncedLyricsState>(FALLBACK_LYRICS);

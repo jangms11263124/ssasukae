@@ -21,6 +21,7 @@ import { useStageStore } from '../../model/stageStore';
 import { SoundIcon } from '../media-controls/MediaIcons';
 import { MediaToggleButton } from '../media-controls/MediaToggleButton';
 import { LyricsBlackout } from './overlays/LyricsBlackout';
+import { LyricsCountdown } from './overlays/LyricsCountdown';
 import { LyricsNotice } from './overlays/LyricsNotice';
 import { LyricsOverlay } from './overlays/LyricsOverlay';
 import { MediaControlsOverlay } from './overlays/MediaControlsOverlay';
@@ -175,7 +176,11 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
       {lyricsHidden ? (
         <LyricsBlackout />
       ) : lyrics.status === 'READY' ? (
-        <LyricsOverlay currentLine={lyrics.currentLine} nextLine={lyrics.nextLine} />
+        <>
+          <LyricsOverlay currentLine={lyrics.currentLine} nextLine={lyrics.nextLine} />
+          {/* 가사 가리기 카드에 걸렸을 때는 들어갈 타이밍도 같이 가려져야 공격이 성립한다 */}
+          {lyrics.countdown !== null ? <LyricsCountdown seconds={lyrics.countdown} /> : null}
+        </>
       ) : lyrics.message !== null ? (
         <LyricsNotice message={lyrics.message} />
       ) : null}
