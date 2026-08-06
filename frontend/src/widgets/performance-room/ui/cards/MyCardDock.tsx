@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   AttackCardFront,
@@ -14,11 +15,20 @@ import { useCardStore } from '../../model/cardStore';
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { useStageStore } from '../../model/stageStore';
 
+interface MyCardDockProps {
+  /**
+   * tile — 내 캠 타일 우상단 도킹
+   * stage — 스트립에 내가 없을 때 스테이지 우하단 폴백
+   */
+  placement?: 'tile' | 'stage';
+}
+
 /**
- * 내 공격 카드 독. 캠 하단의 카드를 누르면 앞면과 사용 버튼이 열린다.
+ * 내 공격 카드 독. 캠(또는 스테이지) 모서리 미니 카드를 누르면 앞면과 사용 버튼이 열린다.
+ * 미리보기는 body 포털로 띄워 캠 타일 overflow에 잘리지 않게 한다.
  * 방 전체에 카드가 하나라도 대기/발동 중이면 사용할 수 없다.
  */
-export function MyCardDock() {
+export function MyCardDock({ placement = 'tile' }: MyCardDockProps) {
   const myCard = useCardStore((state) => state.myCard);
   const myCardStatus = useCardStore((state) => state.myCardStatus);
   const pendingActivation = useCardStore((state) => state.pendingActivation);
@@ -33,16 +43,56 @@ export function MyCardDock() {
 
   const setIsOpen = (open: boolean) => setOpenCardKey(open ? cardKey : null);
 
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelPos, setPanelPos] = useState<{ bottom: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !triggerRef.current) {
+      setPanelPos(null);
+      return;
+    }
+
+    function updatePosition() {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      // 트리거 바로 위에 고정 — 타일/스테이지 overflow와 무관하게 전체가 보인다.
+      setPanelPos({
+        bottom: window.innerHeight - rect.top + 10,
+        left: rect.left + rect.width / 2,
+      });
+    }
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') setOpenCardKey(null);
-    };
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpenCardKey(null);
+    }
 
     window.addEventListener('keydown', handleKeyDown);
-
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('pointerdown', handlePointerDown);
+    };
   }, [isOpen]);
 
   if (myCard === null) {
@@ -80,63 +130,69 @@ export function MyCardDock() {
     setIsOpen(false);
   };
 
-  return (
-    <div className="relative flex items-center gap-4 border border-white/10 bg-[#151517] px-5 py-3">
-      {isOpen ? (
-        <div className="absolute bottom-full left-0 z-30 mb-3 flex flex-col items-center gap-3 border border-white/10 bg-[#151517] p-3">
-          <AttackCardFront
-            className="w-48"
-            cardCode={myCard.cardCode}
-            description={myCard.description ?? undefined}
-            durationSeconds={myCard.durationSeconds}
-            effectType={myCard.effectType}
-            effectValue={myCard.effectValue}
-            targetType={myCard.targetType}
-            tier={tier}
-          />
-
-          <button
-            type="button"
-            disabled={!canUse}
-            onClick={handleActivate}
-            className={cn(
-              'min-h-9 w-full px-4 font-mono text-[11px] tracking-[0.12em] transition-colors',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300',
-              canUse
-                ? 'border border-cyan-300/70 bg-cyan-950/40 text-cyan-200 hover:border-cyan-200 hover:bg-cyan-900/40'
-                : 'cursor-not-allowed border border-white/10 bg-white/5 text-zinc-600',
-            )}
+  const preview =
+    isOpen && panelPos && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label={`${cardTitle} 카드 미리보기`}
+            className="fixed z-[70] flex w-64 flex-col items-center gap-3 border border-white/10 bg-[#151517] p-4 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
+            style={{
+              bottom: panelPos.bottom,
+              left: panelPos.left,
+              transform: 'translateX(-50%)',
+            }}
           >
-            {actionLabel}
-          </button>
-        </div>
-      ) : null}
+            <AttackCardFront
+              className="w-full"
+              cardCode={myCard.cardCode}
+              description={myCard.description ?? undefined}
+              durationSeconds={myCard.durationSeconds}
+              effectType={myCard.effectType}
+              effectValue={myCard.effectValue}
+              targetType={myCard.targetType}
+              tier={tier}
+            />
+
+            <button
+              type="button"
+              disabled={!canUse}
+              onClick={handleActivate}
+              className={cn(
+                'min-h-9 w-full px-4 font-mono text-[11px] tracking-[0.12em] transition-colors',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300',
+                canUse
+                  ? 'border border-cyan-300/70 bg-cyan-950/40 text-cyan-200 hover:border-cyan-200 hover:bg-cyan-900/40'
+                  : 'cursor-not-allowed border border-white/10 bg-white/5 text-zinc-600',
+              )}
+            >
+              {actionLabel}
+            </button>
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <div
+      className={cn(
+        'absolute z-30',
+        placement === 'tile' ? 'top-1.5 right-1.5' : 'right-3 bottom-3',
+      )}
+    >
+      {preview}
 
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={isOpen}
-        aria-label={`내 공격 카드 ${cardTitle} 상세 열기`}
+        aria-label={`내 공격 카드 ${cardTitle} (${statusLabel}) 상세 열기`}
+        title={`${cardTitle} · ${statusLabel}`}
         onClick={() => setIsOpen(!isOpen)}
-        className="flex shrink-0 items-center gap-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+        className="group rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
       >
-        <HoloMiniCard used={isUsed} />
-
-        <span className="block min-w-0">
-          <span className="block font-mono text-[9px] tracking-[0.2em] text-zinc-500">
-            MY CARD :: {statusLabel}
-          </span>
-          <span
-            className={cn(
-              'mt-1 block truncate text-sm font-black uppercase italic',
-              isUsed ? 'text-zinc-500' : 'text-white',
-            )}
-          >
-            {cardTitle}
-          </span>
-          <span className="mt-0.5 block font-mono text-[9px] tracking-[0.14em] text-zinc-600">
-            {isOpen ? '카드를 눌러 닫기' : '카드를 눌러 사용'}
-          </span>
-        </span>
+        <HoloMiniCard used={isUsed} interactive />
       </button>
     </div>
   );

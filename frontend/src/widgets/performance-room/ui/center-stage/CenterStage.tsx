@@ -1,10 +1,11 @@
 'use client';
 
+import { useCardStore } from '../../model/cardStore';
 import { StageLyricsProvider } from '../../model/StageLyricsContext';
 import { useStageStore, type StagePhase } from '../../model/stageStore';
 import { ActiveEffectBanner } from '../cards/ActiveEffectBanner';
 import { CardCountdownOverlay } from '../cards/CardCountdownOverlay';
-import { CardDealOverlay } from '../cards/CardDealOverlay';
+import { MyCardDock } from '../cards/MyCardDock';
 import { PerformingStage } from './PerformingStage';
 import { ScoreStage } from './ScoreStage';
 import { SelfCameraStage } from './SelfCameraStage';
@@ -24,8 +25,11 @@ export function CenterStage({ currentParticipantId }: CenterStageProps) {
   const phase = useStageStore((state) => state.phase);
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
   const isSuspended = useStageStore((state) => state.isSuspended);
+  const myCard = useCardStore((state) => state.myCard);
 
   const isPerformer = performerParticipantId === currentParticipantId;
+  // 공연 중 관객은 스트립 내 캠에 도킹 — 스트립에 내가 없을 때만 스테이지 폴백.
+  const showStageCardDock = myCard !== null && (phase !== 'PERFORMING' || isPerformer);
 
   const STAGE_VIEWS: Record<StagePhase, React.ReactNode> = {
     PERFORMING: <PerformingStage isPerformer={isPerformer} />,
@@ -41,9 +45,9 @@ export function CenterStage({ currentParticipantId }: CenterStageProps) {
       <div className="relative h-full min-h-0 w-full overflow-hidden border border-white/10 bg-[#2c2c2f]">
         {STAGE_VIEWS[phase]}
         {isSuspended ? <SuspendedOverlay isPerformer={isPerformer} /> : null}
-        <CardDealOverlay />
         <CardCountdownOverlay />
         <ActiveEffectBanner />
+        {showStageCardDock ? <MyCardDock placement="stage" /> : null}
       </div>
     </StageLyricsProvider>
   );

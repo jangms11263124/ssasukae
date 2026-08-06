@@ -1,0 +1,117 @@
+/* 실물 카드처럼 보이는 4면 엣지 + 코어 (둥근 모서리 맞춤) */
+
+.attack-card-depth {
+  --card-thickness: 3px;
+  --card-radius: 4.55% / 3.5%;
+  --edge-inset-x: 4.55%;
+  --edge-inset-y: 3.5%;
+  --card-depth-edge: linear-gradient(
+    180deg,
+    #a8a29e 0%,
+    #78716c 28%,
+    #57534e 52%,
+    #78716c 78%,
+    #a8a29e 100%
+  );
+  position: relative;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 0.718;
+  border-radius: var(--card-radius);
+  transform-style: preserve-3d;
+}
+
+.attack-card-depth__core {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--card-radius);
+  background: #1c1917;
+  transform: translateZ(0);
+  box-shadow: inset 0 0 8px rgb(0 0 0 / 70%);
+  pointer-events: none;
+}
+
+.attack-card-depth__face {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  transform: translateZ(calc(var(--card-thickness) / 2));
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.attack-card-depth__backplate {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--card-radius);
+  background: linear-gradient(160deg, #292524, #0c0a09);
+  transform: translateZ(calc(var(--card-thickness) / -2));
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  pointer-events: none;
+  box-shadow: inset 0 0 12px rgb(0 0 0 / 80%);
+}
+
+.attack-card-depth__edge {
+  position: absolute;
+  background: var(--card-depth-edge);
+  pointer-events: none;
+  border-radius: 1px;
+  box-shadow: inset 0 0 3px rgb(0 0 0 / 50%);
+}
+
+.attack-card-depth__edge--left {
+  top: var(--edge-inset-y);
+  bottom: var(--edge-inset-y);
+  left: 0;
+  width: var(--card-thickness);
+  transform-origin: left center;
+  transform: rotateY(90deg);
+}
+
+.attack-card-depth__edge--right {
+  top: var(--edge-inset-y);
+  bottom: var(--edge-inset-y);
+  right: 0;
+  width: var(--card-thickness);
+  transform-origin: right center;
+  transform: rotateY(-90deg);
+}
+
+.attack-card-depth__edge--top {
+  top: 0;
+  left: var(--edge-inset-x);
+  right: var(--edge-inset-x);
+  height: var(--card-thickness);
+  transform-origin: center top;
+  transform: rotateX(-90deg);
+  background: linear-gradient(
+    90deg,
+    #78716c 0%,
+    #a8a29e 25%,
+    #57534e 50%,
+    #a8a29e 75%,
+    #78716c 100%
+  );
+}
+
+.attack-card-depth__edge--bottom {
+  bottom: 0;
+  left: var(--edge-inset-x);
+  right: var(--edge-inset-x);
+  height: var(--card-thickness);
+  transform-origin: center bottom;
+  transform: rotateX(90deg);
+  background: linear-gradient(
+    90deg,
+    #44403c 0%,
+    #57534e 30%,
+    #78716c 50%,
+    #57534e 70%,
+    #44403c 100%
+  );
+}

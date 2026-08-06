@@ -1,15 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import {
   AttackCardBack,
+  AttackCardDealFlip,
   AttackCardFront,
   cardTierFromDuration,
   type AssignedCard,
 } from '@/entities/card';
+import { cn } from '@/shared/lib/cn';
 
 import { useCardStore } from '../../model/cardStore';
+
+/** 확정 퇴장 연출 길이 — CSS --attack-card-confirm-duration 과 맞출 것 */
+const CONFIRM_EXIT_MS = 1000;
 
 interface CardDealContentProps {
   card: AssignedCard;
@@ -18,66 +24,95 @@ interface CardDealContentProps {
 
 function CardDealContent({ card, onConfirm }: CardDealContentProps) {
   const [revealed, setRevealed] = useState(false);
+  const [landed, setLanded] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const tier = card.tier ?? cardTierFromDuration(card.durationSeconds) ?? 'S';
 
-  return (
+  useEffect(() => {
+    if (!confirming) return;
+
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reduced) {
+      onConfirm();
+      return;
+    }
+
+    const timer = window.setTimeout(() => onConfirm(), CONFIRM_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [confirming, onConfirm]);
+
+  return createPortal(
     <div
-      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-5 bg-black/75 backdrop-blur-sm"
+      className={cn(
+        'fixed inset-0 z-[70] flex flex-col items-center justify-center gap-5 bg-black/80',
+        'attack-card-deal-overlay',
+        confirming && 'is-confirming',
+      )}
       role="dialog"
       aria-label="공격 카드 배정"
     >
-      <p className="font-mono text-[11px] tracking-[0.3em] text-cyan-300">ATTACK CARD ASSIGNED</p>
+      <p
+        className={cn(
+          'font-mono text-[11px] tracking-[0.3em] text-cyan-300 transition-opacity duration-300',
+          confirming && 'opacity-0',
+        )}
+      >
+        ATTACK CARD ASSIGNED
+      </p>
 
-      {revealed ? (
-        <AttackCardFront
-          className="w-52"
-          cardCode={card.cardCode}
-          description={card.description ?? undefined}
-          durationSeconds={card.durationSeconds}
-          effectType={card.effectType}
-          effectValue={card.effectValue}
-          targetType={card.targetType}
-          tier={tier}
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setRevealed(true)}
-          aria-label="카드 공개하기"
-          className="transition-transform hover:scale-[1.03] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
-        >
-          <AttackCardBack className="w-52" tier={tier} />
-        </button>
-      )}
+      <AttackCardDealFlip
+        className="w-[min(82vw,20rem)]"
+        revealed={revealed}
+        confirming={confirming}
+        onReady={() => setLanded(true)}
+        onReveal={() => setRevealed(true)}
+        onConfirm={() => setConfirming(true)}
+        back={<AttackCardBack className="w-full" interactive={false} tier={tier} />}
+        front={
+          <AttackCardFront
+            className="w-full"
+            interactive={false}
+            cardCode={card.cardCode}
+            description={card.description ?? undefined}
+            durationSeconds={card.durationSeconds}
+            effectType={card.effectType}
+            effectValue={card.effectValue}
+            targetType={card.targetType}
+            tier={tier}
+          />
+        }
+      />
 
-      {revealed ? (
-        <button
-          type="button"
-          onClick={onConfirm}
-          className="min-h-9 border border-white bg-white px-6 font-mono text-[11px] tracking-[0.12em] text-black transition-colors hover:bg-zinc-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
-        >
-          CONFIRM CARD
-        </button>
-      ) : (
-        <p className="font-mono text-[10px] tracking-[0.16em] text-zinc-400">
-          카드를 클릭해 확인하세요
-        </p>
-      )}
-    </div>
+      <p
+        className={cn(
+          'max-w-[20rem] text-center text-[13px] leading-relaxed tracking-tight text-zinc-300 transition-opacity duration-300',
+          confirming && 'opacity-0',
+        )}
+      >
+        {!landed
+          ? '카드를 준비하고 있습니다.'
+          : revealed
+            ? '확정하려면 다시 눌러 주세요.'
+            : '카드를 눌러 확인해 주세요.'}
+      </p>
+    </div>,
+    document.body,
   );
 }
 
 /**
- * 카드 배분 연출 오버레이. 노래 시작 시 CARD_ASSIGNED를 받으면 중앙 무대 위에
- * 뒷면 카드가 등장하고, 클릭으로 앞면을 공개한 뒤 확인하면 닫힌다.
- * TODO(플립 담당): 뒷면 → 앞면 전환을 3D 회전 애니메이션으로 교체
+ * 카드 배분 연출 오버레이.
+ * CARD_ASSIGNED 수신 시 뷰포트 밖에서 날아와 착지 → 클릭으로 앞면 → 다시 클릭으로 확정.
  */
 export function CardDealOverlay() {
   const myCard = useCardStore((state) => state.myCard);
   const dealOverlayOpen = useCardStore((state) => state.dealOverlayOpen);
   const dismissDealOverlay = useCardStore((state) => state.dismissDealOverlay);
 
-  if (!dealOverlayOpen || myCard === null) {
+  if (!dealOverlayOpen || myCard === null || typeof document === 'undefined') {
     return null;
   }
 

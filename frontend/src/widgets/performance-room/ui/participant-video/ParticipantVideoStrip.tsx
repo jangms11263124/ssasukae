@@ -6,6 +6,7 @@ import { useRoomStore } from '@/entities/room';
 import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
 import { useStageStore } from '../../model/stageStore';
 import type { RemoteMedia } from '../../model/useOpenViduSession';
+import { MyCardDock } from '../cards/MyCardDock';
 import { StageIdentityBadge } from '../center-stage/StageIdentityBadge';
 
 function toProfileSrc(url: string | null | undefined): string | null {
@@ -117,8 +118,14 @@ function ParticipantVideoTile({
   const showPlaceholder = !showLocalVideo && !showRemoteVideo;
 
   return (
-    <div className="flex w-[calc((100%-2rem)/3)] min-w-0 flex-col border border-white/10 bg-[#1c1c1f] p-2">
-      <div className="relative grid aspect-video place-items-center border border-white/5 bg-[#242428]">
+    <div
+      className={
+        isSelf
+          ? 'relative z-20 flex w-[calc((100%-2rem)/3)] min-w-0 flex-col border border-white/10 bg-[#1c1c1f] p-2'
+          : 'flex w-[calc((100%-2rem)/3)] min-w-0 flex-col border border-white/10 bg-[#1c1c1f] p-2'
+      }
+    >
+      <div className="relative grid aspect-video place-items-center overflow-visible border border-white/5 bg-[#242428]">
         {showLocalVideo ? <LocalVideo stream={localStream} nickname={participant.nickname} /> : null}
         {showRemoteVideo ? <RemoteVideo media={media} nickname={participant.nickname} /> : null}
         {showPlaceholder ? (
@@ -127,7 +134,8 @@ function ParticipantVideoTile({
             profileImageUrl={participant.profileImageUrl}
           />
         ) : null}
-        <div className="absolute bottom-1.5 left-1.5 max-w-[calc(100%-0.75rem)]">
+        {isSelf ? <MyCardDock placement="tile" /> : null}
+        <div className="absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)]">
           <StageIdentityBadge
             size="sm"
             identity={{
@@ -173,7 +181,7 @@ export function ParticipantVideoStrip({ currentUserId, participants }: Participa
   }
 
   return (
-    <div className="flex justify-center gap-3 py-1" aria-label="참가자 캠 화면">
+    <div className="flex justify-center gap-3 overflow-visible py-1" aria-label="참가자 캠 화면">
       {visibleParticipants.map((participant) => {
         const isSelf = participant.userId === currentUserId;
 
