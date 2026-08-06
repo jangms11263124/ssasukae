@@ -23,7 +23,7 @@ import { useOpenViduSession } from '../model/useOpenViduSession';
 import { useRoomBootstrap } from '../model/useRoomBootstrap';
 import { useRoomSocket } from '../model/useRoomSocket';
 import { useStageStore } from '../model/stageStore';
-import { MyCardDock } from './cards/MyCardDock';
+import { CardDealOverlay } from './cards/CardDealOverlay';
 import { CenterStage } from './center-stage/CenterStage';
 import { RoomHelpFloatingButton } from './help/RoomHelpFloatingButton';
 import { LeaderboardPanel } from './LeaderboardPanel';
@@ -209,10 +209,6 @@ function PerformanceRoomContent() {
                     participants={stagedParticipants}
                   />
                 </div>
-
-                <div className="shrink-0">
-                  <MyCardDock />
-                </div>
               </section>
 
               <RoomRightSidebar />
@@ -237,9 +233,15 @@ function PerformanceRoomContent() {
               open={leaveConfirmOpen}
               title="방에서 나가시겠어요?"
               description={
-                session.isHost
-                  ? '방장이 나가면 방이 종료되고, 모든 참가자가 함께 퇴장돼요.'
-                  : '퇴장하면 로비로 이동해요.'
+                session.isHost ? (
+                  <>
+                    방장이 나가면 방이 종료되고,
+                    <br />
+                    모든 참가자가 함께 나가요.
+                  </>
+                ) : (
+                  '나가면 로비로 이동해요.'
+                )
               }
               confirmLabel="나가기"
               danger
@@ -247,6 +249,9 @@ function PerformanceRoomContent() {
               onConfirm={handleLeaveRoom}
               onCancel={() => setLeaveConfirmOpen(false)}
             />
+
+            {/* 스테이지가 아니라 브라우저 전체 기준 배분 연출 */}
+            <CardDealOverlay />
           </div>
         </StageAudioProvider>
       </OpenViduSessionProvider>

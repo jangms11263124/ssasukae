@@ -25,6 +25,8 @@
   --animate-toast-in: toast-in 0.35s ease-out both;
   --animate-toast-out: toast-out 0.32s ease-in both;
   --animate-holo-shift: holo-shift 4s linear infinite;
+  --animate-mini-card-pulse: mini-card-pulse 2.4s ease-in-out infinite;
+  --animate-mini-card-sheen: mini-card-sheen 3.2s ease-in-out infinite;
 }
 
 @keyframes holo-shift {
@@ -36,6 +38,38 @@
   }
   100% {
     background-position: 0% 50%;
+  }
+}
+
+@keyframes mini-card-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgb(34 211 238 / 18%),
+      0 0 8px rgb(34 211 238 / 12%);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgb(34 211 238 / 35%),
+      0 0 14px rgb(34 211 238 / 28%);
+  }
+}
+
+@keyframes mini-card-sheen {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.55;
+  }
+  45% {
+    transform: translateX(140%) skewX(-18deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(140%) skewX(-18deg);
+    opacity: 0;
   }
 }
 

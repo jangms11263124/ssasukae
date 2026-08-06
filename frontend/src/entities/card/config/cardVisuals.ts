@@ -1,8 +1,11 @@
 import type { CardEffectTargetType, CardEffectType, CardTier } from '../types';
 
-/** 카드 공통 코너 컷 프레임 (양 모서리 잘린 팔각 실루엣) */
-export const CARD_CLIP_PATH =
-  'polygon(10px 0, calc(100% - 10px) 0, 100% 10px, 100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px), 0 10px)';
+/**
+ * 포켓몬 TCG 실물 카드 규격 (pokemon-cards-css).
+ * 이미지 기준 660×921, --card-aspect: 0.718, --card-radius: 4.55% / 3.5%
+ */
+export const CARD_ASPECT = 0.718;
+export const CARD_RADIUS = '4.55% / 3.5%';
 
 interface CardEffectVisual {
   /** 상단 우측 카테고리 라벨 */
@@ -51,20 +54,23 @@ interface CardTierVisual {
 export const CARD_TIER_VISUALS: Record<CardTier, CardTierVisual> = {
   S: {
     frameGradient: 'linear-gradient(160deg, #f4f4f5 0%, #71717a 45%, #d4d4d8 70%, #52525b 100%)',
-    glow: '0 0 18px rgb(212 212 216 / 25%)',
+    glow:
+      '0 1px 0 rgb(255 255 255 / 40%) inset, 0 -2px 4px rgb(0 0 0 / 35%) inset, 0 14px 28px rgb(0 0 0 / 45%), 0 0 18px rgb(212 212 216 / 20%)',
     iconColor: '#e4e4e7',
     label: 'SILVER',
   },
   G: {
     frameGradient: 'linear-gradient(160deg, #fef08a 0%, #eab308 45%, #fde047 70%, #a16207 100%)',
-    glow: '0 0 18px rgb(234 179 8 / 30%)',
+    glow:
+      '0 1px 0 rgb(255 255 255 / 35%) inset, 0 -2px 4px rgb(0 0 0 / 30%) inset, 0 14px 28px rgb(0 0 0 / 45%), 0 0 18px rgb(234 179 8 / 28%)',
     iconColor: '#fde047',
     label: 'GOLD',
   },
   P: {
     frameGradient:
       'linear-gradient(160deg, #67e8f9 0%, #a78bfa 30%, #f9a8d4 55%, #fde68a 78%, #6ee7b7 100%)',
-    glow: '0 0 22px rgb(167 139 250 / 35%)',
+    glow:
+      '0 1px 0 rgb(255 255 255 / 40%) inset, 0 -2px 4px rgb(0 0 0 / 30%) inset, 0 14px 28px rgb(0 0 0 / 45%), 0 0 22px rgb(167 139 250 / 32%)',
     iconColor: '#a5f3fc',
     iconGradientStops: ['#67e8f9', '#a78bfa', '#f9a8d4', '#fde68a', '#6ee7b7'],
     label: 'PLATINUM',
