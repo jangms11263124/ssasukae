@@ -20,7 +20,17 @@ interface SkeletonProps {
   tone?: SkeletonTone;
 }
 
-/** 로딩 중 실제 콘텐츠 자리를 지키는 회색 블록. */
+/** 로딩 중 실제 콘텐츠 자리를 지키는 회색 블록. 빛이 훑고 지나가는 shimmer로 일렁인다. */
 export function Skeleton({ className, tone = 'base' }: SkeletonProps) {
-  return <div aria-hidden="true" className={cn('animate-pulse', TONE_CLASS[tone], className)} />;
+  return (
+    <div
+      aria-hidden="true"
+      className={cn('relative overflow-hidden', TONE_CLASS[tone], className)}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 w-1/2 animate-skeleton-shimmer bg-gradient-to-r from-transparent via-white/14 to-transparent"
+      />
+    </div>
+  );
 }
