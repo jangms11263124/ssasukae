@@ -1,20 +1,22 @@
+import { formatTrackLabel } from '@/entities/feedback';
 import { SongThumbnail } from '@/entities/song';
 
 interface TrackHeaderProps {
-  performanceId: number;
+  /** 목록과 같은 TRACK_ 순번. 주소로 직접 들어와 순번을 모르면 자리 표시(--)로 나온다 */
+  trackNo?: number;
   title: string;
   artist: string;
   thumbnail: string | null;
 }
 
-export function TrackHeader({ performanceId, title, artist, thumbnail }: TrackHeaderProps) {
+export function TrackHeader({ trackNo, title, artist, thumbnail }: TrackHeaderProps) {
   return (
     <header className="flex items-center gap-6">
       <SongThumbnail src={thumbnail} className="size-24" />
 
       <div className="min-w-0">
         <p className="font-mono text-[0.62rem] font-bold tracking-[0.24em] text-fuchsia-400">
-          TRACK_{String(performanceId).padStart(2, '0')}
+          {formatTrackLabel(trackNo)}
         </p>
         {/* 페이지 h1은 셸의 "Analysis Report."가 담당한다 */}
         <h2 className="mt-2 truncate font-sans text-3xl font-black tracking-tight text-white">

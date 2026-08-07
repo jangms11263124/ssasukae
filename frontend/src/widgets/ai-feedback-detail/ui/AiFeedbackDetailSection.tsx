@@ -74,9 +74,11 @@ function NotFoundState() {
 
 interface AiFeedbackDetailSectionProps {
   performanceId: number;
+  /** 목록에서 넘어온 TRACK_ 순번. 없으면 TrackHeader가 자리 표시로 대체한다 */
+  trackNo?: number;
 }
 
-export function AiFeedbackDetailSection({ performanceId }: AiFeedbackDetailSectionProps) {
+export function AiFeedbackDetailSection({ performanceId, trackNo }: AiFeedbackDetailSectionProps) {
   const { data, isPending, isError, error } = useQuery({
     queryKey: feedbackQueryKeys.detail(performanceId),
     queryFn: () => getFeedbackDetail(performanceId),
@@ -107,7 +109,7 @@ export function AiFeedbackDetailSection({ performanceId }: AiFeedbackDetailSecti
   return (
     <div>
       <TrackHeader
-        performanceId={data.performanceId}
+        trackNo={trackNo}
         title={data.title}
         artist={data.artist}
         thumbnail={data.thumbnail ?? null}

@@ -121,7 +121,7 @@ function CardDealContent({ card, onConfirm }: CardDealContentProps) {
 
       <p
         className={cn(
-          'relative z-[1] max-w-[20rem] text-center text-[13px] leading-relaxed tracking-tight text-zinc-300 transition-opacity duration-300',
+          'relative z-[1] max-w-[24rem] text-center text-base font-semibold leading-relaxed tracking-tight text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)] transition-opacity duration-300',
           confirming && 'opacity-0',
         )}
       >
