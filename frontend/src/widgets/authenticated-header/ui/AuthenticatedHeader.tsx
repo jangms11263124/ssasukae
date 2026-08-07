@@ -14,7 +14,7 @@ export function AuthenticatedHeader({ className }: AuthenticatedHeaderProps) {
   return (
     <header
       className={cn(
-        'relative z-20 border-b border-cyan-400/20 bg-[linear-gradient(180deg,#1b1b1e,#101012)]',
+        'sticky top-0 z-20 border-b border-cyan-400/20 bg-[linear-gradient(180deg,#1b1b1e,#101012)]',
         className,
       )}
     >

@@ -104,7 +104,7 @@ export function ProfileCard({ profile, isLoggingOut, onLogout }: ProfileCardProp
 
           <div className="mt-7 grid gap-7 sm:grid-cols-2">
             <InfoBlock label="AUTHENTICATION PROTOCOL">
-              <p>{profile.provider}_AUTH ::</p>
+              <p>{profile.provider}_AUTH :</p>
               <p className="truncate">{maskEmail(profile.email)}</p>
             </InfoBlock>
 

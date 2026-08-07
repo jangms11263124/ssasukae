@@ -34,13 +34,13 @@ export function MainHome({ className }: MainHomeProps) {
 
       <AuthenticatedHeader />
 
-      <main className="relative z-10 mx-auto w-full max-w-[1500px] flex-1 px-6 py-12 sm:px-10 sm:py-16">
+      <main className="relative z-10 mx-auto w-full max-w-[1500px] flex-1 px-6 py-4 sm:px-10 sm:py-5">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <p className="font-mono text-[10px] tracking-[0.3em] text-cyan-300">
               ROOM_GATEWAY / LIVE_CONNECTION
             </p>
-            <h1 className="mt-4 text-4xl font-black leading-[0.95] tracking-tight italic sm:text-6xl">
+            <h1 className="mt-2 text-3xl font-black leading-[0.95] tracking-tight italic sm:text-4xl">
               CREATE OR
               <br />
               JOIN A STAGE.
@@ -52,31 +52,31 @@ export function MainHome({ className }: MainHomeProps) {
           </div>
         </div>
 
-        <div className="mt-10 grid gap-5 lg:grid-cols-[1.3fr_0.9fr]">
-          <section className="border border-white/10 bg-[linear-gradient(145deg,#1c1c20,#101012)] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:p-8">
-            <div className="flex items-center justify-between border-b border-white/10 pb-5">
+        <div className="mt-4 grid gap-5 lg:grid-cols-[1.3fr_0.9fr]">
+          <section className="border border-white/10 bg-[linear-gradient(145deg,#1c1c20,#101012)] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:p-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <h2 className="font-mono text-xl text-zinc-100">
                 <span className="mr-3 text-cyan-300">01</span>/ CREATE_ROOM
               </h2>
               <span className="font-mono text-[9px] text-zinc-700">REF_ID: CR_002_77</span>
             </div>
-            <div className="mt-7">
+            <div className="mt-4">
               <RoomCreateForm />
             </div>
           </section>
 
-          <section className="border border-white/10 bg-[linear-gradient(145deg,#1c1c20,#101012)] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:p-8">
-            <div className="border-b border-white/10 pb-5">
+          <section className="border border-white/10 bg-[linear-gradient(145deg,#1c1c20,#101012)] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:p-5">
+            <div className="border-b border-white/10 pb-4">
               <h2 className="font-mono text-xl text-zinc-100">
                 <span className="mr-3 text-fuchsia-400">02</span>/ JOIN_ROOM
               </h2>
             </div>
-            <div className="mt-7">
+            <div className="mt-4">
               <Suspense fallback={<RoomJoinFormSkeleton />}>
                 <RoomJoinForm />
               </Suspense>
             </div>
-            <div className="mt-14 border-t border-white/8 pt-6">
+            <div className="mt-8 border-t border-white/8 pt-6">
               <p className="font-mono text-[9px] tracking-[0.2em] text-zinc-600">
                 LATENCY MONITOR
               </p>

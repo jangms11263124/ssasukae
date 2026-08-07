@@ -219,10 +219,10 @@ function PerformanceRoomContent() {
 
             <footer className="flex h-9 shrink-0 items-center justify-between border-t border-white/10 bg-[#151517] px-5 font-mono text-[9px] tracking-wide text-zinc-500">
               <span>
-                [ROOM_SYSTEM] ROOM_{session.roomId} ::{' '}
+                [ROOM_SYSTEM] ROOM_{session.roomId} :{' '}
                 {socket.isConnected ? 'WS_CONNECTED' : 'WS_CONNECTING...'}
                 {socket.isConnected && socket.latencyMs !== null
-                  ? ` :: PING ${socket.latencyMs}MS`
+                  ? ` : PING ${socket.latencyMs}MS`
                   : ''}
               </span>
               <span>INVITE_CODE: {session.inviteCode}</span>
