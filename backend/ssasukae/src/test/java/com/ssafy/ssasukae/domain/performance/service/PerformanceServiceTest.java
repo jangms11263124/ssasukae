@@ -603,6 +603,42 @@ class PerformanceServiceTest {
    */
 
   @Test
+  @DisplayName("시작 전(노래 바꾸기) 취소는 가창자 역할을 유지한다")
+  void cancelWhilePreparingKeepsPerformerRole() {
+    Room room = playingRoom();
+    RoomParticipant performer = performer(room);
+
+    stubPlayingContext(room, performer);
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID))
+        .thenReturn(Optional.of(preparingSnapshot()));
+
+    beginTransaction();
+    performanceService.cancel(USER_ID, ROOM_ID, PERFORMANCE_ID);
+    commitTransaction();
+
+    assertThat(performer.isPerformer()).isTrue();
+    verify(roomParticipantRepository, never()).findById(PARTICIPANT_ID);
+  }
+
+  @Test
+  @DisplayName("공연 중 취소는 가창자 역할을 내린다")
+  void cancelWhilePlayingDemotesPerformer() {
+    Room room = playingRoom();
+    RoomParticipant performer = performer(room);
+
+    stubPlayingContext(room, performer);
+    when(roomParticipantRepository.findById(PARTICIPANT_ID)).thenReturn(Optional.of(performer));
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID))
+        .thenReturn(Optional.of(preparingSnapshot().startPlayback(STARTED_AT)));
+
+    beginTransaction();
+    performanceService.cancel(USER_ID, ROOM_ID, PERFORMANCE_ID);
+    commitTransaction();
+
+    assertThat(performer.isPerformer()).isFalse();
+  }
+
+  @Test
   @DisplayName("공연 취소는 상태 저장 후 커밋 뒤 Redis 세션 삭제와 취소 이벤트 발행을 수행한다")
   void cancelDeletesSessionAndPublishesEventAfterCommit() {
     Room room = playingRoom();
