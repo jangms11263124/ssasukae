@@ -1,6 +1,6 @@
 'use client';
 
-import { useCardStore } from '../../model/cardStore';
+import { useCardStore, type PendingCardActivation } from '../../model/cardStore';
 import { useNicknameOf } from '../../model/useNicknameOf';
 import { useRemainingSeconds } from '../../model/useRemainingSeconds';
 
@@ -20,10 +20,20 @@ const COUNTDOWN_STEPS = [3, 2, 1];
  */
 export function CardCountdownOverlay() {
   const pendingActivation = useCardStore((state) => state.pendingActivation);
-  const nicknameOf = useNicknameOf();
-  const remainingSeconds = useRemainingSeconds(pendingActivation?.activateAt ?? null);
 
-  if (pendingActivation === null || remainingSeconds <= 0) {
+  // 카운트다운이 시작될 때 밴드를 새로 마운트해야 useRemainingSeconds가 그 시점의 시계로 센다.
+  if (pendingActivation === null) {
+    return null;
+  }
+
+  return <CountdownBand pendingActivation={pendingActivation} />;
+}
+
+function CountdownBand({ pendingActivation }: { pendingActivation: PendingCardActivation }) {
+  const nicknameOf = useNicknameOf();
+  const remainingSeconds = useRemainingSeconds(pendingActivation.activateAt);
+
+  if (remainingSeconds <= 0) {
     return null;
   }
 
