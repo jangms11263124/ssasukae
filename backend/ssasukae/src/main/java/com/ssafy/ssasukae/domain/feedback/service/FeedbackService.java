@@ -103,11 +103,11 @@ public class FeedbackService {
         return switch(grade) {
             case "All" -> new ScoreCriteria(0, 100);
             case "S" -> new ScoreCriteria(95, 100);
-            case "A" -> new ScoreCriteria(90, 94);
-            case "B" -> new ScoreCriteria(80, 89);
-            case "C" -> new ScoreCriteria(70, 79);
-            case "D" -> new ScoreCriteria(41, 69);
-            case "F" -> new ScoreCriteria(0, 40);
+            case "A" -> new ScoreCriteria(80, 94);
+            case "B" -> new ScoreCriteria(65, 79);
+            case "C" -> new ScoreCriteria(50, 64);
+            case "D" -> new ScoreCriteria(35, 49);
+            case "F" -> new ScoreCriteria(0, 34);
             default -> throw new CustomException(INVALID_REQUEST);
         };
     }
