@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 
 import { SYLLABLE_TICK_INTERVAL_MS, type SyllableTiming } from '@/features/lyrics-sync';
 import { cn } from '@/shared/lib/cn';
@@ -12,20 +12,33 @@ interface LyricsOverlayProps {
   getTimeMs?: () => number;
 }
 
-const SHADOW = 'drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)]';
+/**
+ * 배경 박스 없이 캠 영상 위에 글자만 얹으므로, 밝은 화면에서도 읽히도록
+ * 가까운 진한 그림자부터 넓게 퍼지는 그림자까지 3겹을 쌓는다. 한 겹으로는
+ * 밝은 배경에서 흰 글자가 씻겨 나간다.
+ */
+const SHADOW =
+  'drop-shadow-[0_1px_2px_rgba(0,0,0,0.95),0_2px_6px_rgba(0,0,0,0.85),0_4px_16px_rgba(0,0,0,0.7)]';
+
+interface SungProgress {
+  /** startMs가 지난 음절 수 */
+  count: number;
+  /** count가 이 값이 된 시점의 재생 시각. 진행 중 음절의 애니메이션 위치 보정에 쓴다 */
+  timeMs: number;
+}
 
 /**
- * 부른 만큼 색이 바뀐 음절 수. 컨텍스트가 아니라 이 말단에서 직접 틱을 돌린다 —
- * 음절 진행을 컨텍스트에 실으면 음절마다 무대 전체가 리렌더된다.
+ * 발성이 시작된 음절 수와 그 시점의 재생 시각. 컨텍스트가 아니라 이 말단에서 직접
+ * 틱을 돌린다 — 음절 진행을 컨텍스트에 실으면 음절마다 무대 전체가 리렌더된다.
  *
  * 소절이 바뀌면 결과를 버려야 하므로 어느 소절의 값인지 함께 들고, 렌더 때 지금
  * 소절과 맞춰 본다 (효과 안에서 setState로 리셋하지 않는 코드베이스 공통 패턴).
  */
-function useSungSyllableCount(
+function useSungProgress(
   syllables: SyllableTiming[] | null | undefined,
   getTimeMs: (() => number) | undefined,
-): number {
-  const [sung, setSung] = useState<{ syllables: SyllableTiming[]; count: number } | null>(null);
+): SungProgress | null {
+  const [sung, setSung] = useState<(SungProgress & { syllables: SyllableTiming[] }) | null>(null);
 
   useEffect(() => {
     if (syllables == null || syllables.length === 0 || getTimeMs === undefined) return;
@@ -36,9 +49,11 @@ function useSungSyllableCount(
       let count = 0;
       while (count < syllables.length && syllables[count].startMs <= timeMs) count += 1;
 
-      // 같은 값이면 이전 객체를 돌려줘 리렌더를 건너뛴다.
+      // count가 그대로면 이전 객체를 돌려줘 리렌더를 건너뛴다 (timeMs는 count가 바뀔 때만 갱신).
       setSung((prev) =>
-        prev?.syllables === syllables && prev.count === count ? prev : { syllables, count },
+        prev?.syllables === syllables && prev.count === count
+          ? prev
+          : { syllables, count, timeMs },
       );
     };
 
@@ -47,20 +62,43 @@ function useSungSyllableCount(
     return () => clearInterval(intervalId);
   }, [syllables, getTimeMs]);
 
-  return sung !== null && sung.syllables === syllables ? sung.count : 0;
+  return sung !== null && sung.syllables === syllables ? sung : null;
 }
 
 /**
- * 소절 단위 가사 표시. 지금 부를 소절을 박스로 강조하고 다음 소절을 아래에 흐리게 둔다.
+ * 발성 구간 동안 글자를 왼쪽부터 서서히 채우는 인라인 스타일.
  *
- * midi.json이 음절 타이밍(syllable_highlights)을 주는 곡은 부른 음절부터 차례로
- * 색을 입힌다. 없는 곡(LRCLIB 폴백)은 소절 단위로만 넘긴다 — LRC 타임스탬프로는
+ * 틱(50ms)으로 진행률을 그리면 계단이 지므로, 시작만 틱으로 감지하고 채움 자체는
+ * CSS 애니메이션에 맡긴다. 감지가 틱만큼 늦어도 음수 delay로 실제 시작 시각에 맞춰
+ * 위치를 보정하므로, 리렌더로 애니메이션이 재시작돼도 이어 보인다 (linear라 가능).
+ */
+function fillStyle(syllable: SyllableTiming, sungTimeMs: number): CSSProperties {
+  const durationMs = Math.max(syllable.endMs - syllable.startMs, 1);
+  const elapsedMs = Math.max(sungTimeMs - syllable.startMs, 0);
+
+  return {
+    backgroundImage: 'linear-gradient(to right, var(--color-cyan-300, #67e8f9) 50%, #fff 50%)',
+    backgroundSize: '200% 100%',
+    backgroundPositionX: '100%',
+    WebkitBackgroundClip: 'text',
+    backgroundClip: 'text',
+    color: 'transparent',
+    animation: `syllable-fill ${durationMs}ms linear ${-elapsedMs}ms forwards`,
+  };
+}
+
+/**
+ * 소절 단위 가사 표시. 지금 부를 소절을 크게 띄우고 다음 소절을 아래에 흐리게 둔다.
+ * 배경 박스는 두지 않는다 — 무대의 캠 영상을 가리지 않도록 그림자만으로 가독성을 확보한다.
+ *
+ * midi.json이 음절 타이밍(syllable_highlights)을 주는 곡은 각 음절의 발성 구간
+ * 동안 색이 차오른다. 없는 곡(LRCLIB 폴백)은 소절 단위로만 넘긴다 — LRC 타임스탬프로는
  * 음절 위치를 추측밖에 할 수 없고 어긋나면 오히려 부르기 어려워진다.
  *
  * 한글 가사라 대문자·이탤릭은 쓰지 않는다 (한글에서는 읽기만 나빠진다).
  */
 export function LyricsOverlay({ currentLine, syllables, nextLine, getTimeMs }: LyricsOverlayProps) {
-  const sungCount = useSungSyllableCount(syllables, getTimeMs);
+  const sung = useSungProgress(syllables, getTimeMs);
 
   return (
     <div className="absolute inset-x-0 bottom-10 flex flex-col items-center gap-2 px-6 text-center">
@@ -70,19 +108,18 @@ export function LyricsOverlay({ currentLine, syllables, nextLine, getTimeMs }: L
       */}
       <p
         className={cn(
-          'px-4 py-1.5 text-3xl font-bold leading-tight text-white',
+          'text-3xl font-bold leading-tight text-white',
           SHADOW,
-          currentLine ? 'bg-slate-800/80' : 'invisible',
+          !currentLine && 'invisible',
         )}
       >
         {syllables != null && syllables.length > 0
           ? syllables.map((syllable, index) => (
+              // 발성이 끝난 음절도 같은 애니메이션의 마지막 프레임(forwards)으로 채워 둔다 —
+              // 지속음이 겹칠 때도 각자 자기 속도로 차오르다 끝난 모습이 된다.
               <span
                 key={index}
-                className={cn(
-                  'transition-colors duration-150',
-                  index < sungCount && 'text-cyan-300',
-                )}
+                style={sung !== null && index < sung.count ? fillStyle(syllable, sung.timeMs) : undefined}
               >
                 {syllable.text}
               </span>
