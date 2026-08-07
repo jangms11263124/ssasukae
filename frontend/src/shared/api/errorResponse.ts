@@ -63,7 +63,7 @@ export interface ParsedApiErrorBody {
 
 export const DEFAULT_ERROR_MESSAGE = '잠시 후 다시 시도해 주세요.';
 
-const RELOGIN_MESSAGE = '로그인이 만료됐어요. 다시 로그인해 주세요.';
+const RELOGIN_MESSAGE = '로그인이 만료됐어요.';
 
 /**
  * 사용자에게 보여줄 문구는 프론트가 갖는다.
@@ -71,13 +71,12 @@ const RELOGIN_MESSAGE = '로그인이 만료됐어요. 다시 로그인해 주�
  */
 const FRONTEND_ERROR_MESSAGES: Partial<Record<string, string>> = {
   // Auth
-  [API_ERROR_CODE.ALREADY_REGISTERED]: '이미 가입된 계정이에요. 로그인해 주세요.',
+  [API_ERROR_CODE.ALREADY_REGISTERED]: '이미 가입된 계정이에요.',
   [API_ERROR_CODE.INVALID_TOKEN]: RELOGIN_MESSAGE,
   [API_ERROR_CODE.INVALID_REFRESH_TOKEN]: RELOGIN_MESSAGE,
   [API_ERROR_CODE.REFRESH_TOKEN_ALREADY_USED]: RELOGIN_MESSAGE,
   [API_ERROR_CODE.REFRESH_TOKEN_REQUIRED]: '로그인이 필요해요.',
-  [API_ERROR_CODE.SESSION_EXPIRED]:
-    '다른 기기에서 로그인했어요. 다시 로그인해 주세요.',
+  [API_ERROR_CODE.SESSION_EXPIRED]: '다른 기기에서 로그인했어요.',
   [API_ERROR_CODE.INVALID_SIGNUP_TOKEN]: '회원가입을 다시 시작해 주세요.',
 
   // User
@@ -97,11 +96,11 @@ const FRONTEND_ERROR_MESSAGES: Partial<Record<string, string>> = {
   [API_ERROR_CODE.ROOM_NOT_FOUND]: '존재하지 않는 방이에요.',
   [API_ERROR_CODE.PARTICIPANT_NOT_FOUND]: '참가자를 찾을 수 없어요.',
   [API_ERROR_CODE.ALREADY_JOINED]: '이미 참가 중인 방이에요.',
-  [API_ERROR_CODE.ALREADY_IN_ANOTHER_ROOM]: '다른 방에 참여 중이에요. 먼저 나와 주세요.',
+  [API_ERROR_CODE.ALREADY_IN_ANOTHER_ROOM]: '다른 방에 참여 중이에요.',
   [API_ERROR_CODE.HOST_ONLY]: '방장만 할 수 있어요.',
   [API_ERROR_CODE.INVITE_CODE_GENERATION_FAILED]: '잠시 후 다시 시도해 주세요.',
   [API_ERROR_CODE.MEDIA_SESSION_OPERATION_FAILED]:
-    '화상 연결에 문제가 생겼어요. 다시 시도해 주세요.',
+    '화상 연결에 문제가 생겼어요.',
 
   // Song
   [API_ERROR_CODE.SONG_NOT_FOUND]: '존재하지 않는 곡이에요.',
@@ -112,8 +111,7 @@ const FRONTEND_ERROR_MESSAGES: Partial<Record<string, string>> = {
 
   // Common
   [API_ERROR_CODE.INVALID_REQUEST]: '입력한 내용을 다시 확인해 주세요.',
-  [API_ERROR_CODE.INTERNAL_SERVER_ERROR]:
-    '일시적인 오류가 생겼어요. 잠시 후 다시 시도해 주세요.',
+  [API_ERROR_CODE.INTERNAL_SERVER_ERROR]: '일시적인 오류가 생겼어요.',
 };
 
 /** 사용자에게 보여줄 수 없는 내부 용어 (토큰·스택·프레임워크 메시지·디버그 정보 등) */
@@ -196,7 +194,7 @@ const WS_ERROR_MESSAGES: Partial<Record<string, string>> = {
   TOKEN_EXPIRED: RELOGIN_MESSAGE,
 
   // 공통
-  INVALID_REQUEST: '요청을 처리하지 못했어요. 다시 시도해 주세요.',
+  INVALID_REQUEST: '요청을 처리하지 못했어요.',
   RESOURCE_NOT_FOUND: '요청한 정보를 찾을 수 없어요.',
   DUPLICATE_REQUEST: '이미 처리된 요청이에요.',
   ACTION_NOT_ALLOWED: '권한이 없어서 할 수 없어요.',
@@ -208,16 +206,16 @@ const WS_ERROR_MESSAGES: Partial<Record<string, string>> = {
   // 공연
   INVALID_PERFORMANCE_STATE: '지금 공연 상태에서는 할 수 없는 동작이에요.',
   INVALID_PERFORMANCE_SETTING: '설정값이 허용 범위를 벗어났어요.',
-  PERFORMANCE_ROOM_MISMATCH: '공연 정보가 맞지 않아요. 새로고침해 주세요.',
+  PERFORMANCE_ROOM_MISMATCH: '공연 정보가 맞지 않아 새로고침이 필요해요.',
   PERFORMANCE_ALREADY_IN_PROGRESS: '이미 진행 중인 공연이 있어요.',
-  PERFORMANCE_RESOURCE_NOT_READY: '아직 공연 준비가 안 끝났어요. 잠시 후 다시 시도해 주세요.',
-  DOWNLOAD_URL_GENERATION_FAILED: '곡을 불러오지 못했어요. 다시 시도해 주세요.',
+  PERFORMANCE_RESOURCE_NOT_READY: '아직 공연 준비가 안 끝났어요.',
+  DOWNLOAD_URL_GENERATION_FAILED: '곡을 불러오지 못했어요.',
   PERFORMER_PERMISSION_REQUIRED: '가창자만 할 수 있어요.',
 
   // 카드 (수성전)
   INVALID_ROOM_MODE: '수성전에서만 카드를 쓸 수 있어요.',
   NO_ACTIVE_PERFORMANCE: '진행 중인 공연이 없어요.',
-  PERFORMANCE_MISMATCH: '공연 정보가 맞지 않아요. 새로고침해 주세요.',
+  PERFORMANCE_MISMATCH: '공연 정보가 맞지 않아 새로고침이 필요해요.',
   NO_ACTIVE_PERFORMER: '카드를 쓸 대상이 없어요.',
   PLAYBACK_NOT_RUNNING: '노래가 나오는 동안에만 카드를 쓸 수 있어요.',
   INSUFFICIENT_PLAYBACK_TIME: '노래가 곧 끝나서 카드를 쓸 수 없어요.',
@@ -230,14 +228,14 @@ const WS_ERROR_MESSAGES: Partial<Record<string, string>> = {
   CARD_ALREADY_USED: '이미 사용한 카드예요.',
   CARD_ALREADY_PENDING: '이미 발동을 기다리고 있는 카드예요.',
   INVALID_CARD_STATE: '지금은 쓸 수 없는 카드예요.',
-  CARD_CONFIGURATION_INVALID: '카드를 사용하지 못했어요. 다시 시도해 주세요.',
-  CARD_ACTIVATION_PENDING: '다른 카드가 발동을 기다리고 있어요. 잠시 후 다시 써 주세요.',
+  CARD_CONFIGURATION_INVALID: '카드를 사용하지 못했어요.',
+  CARD_ACTIVATION_PENDING: '다른 카드가 발동을 기다리고 있어요.',
   CARD_EFFECT_ALREADY_ACTIVE: '다른 카드 효과가 적용되는 중이에요.',
-  CARD_STATE_CONFLICT: '카드 상태가 바뀌었어요. 다시 시도해 주세요.',
+  CARD_STATE_CONFLICT: '카드 상태가 바뀌었어요.',
   INVALID_CARD_TARGET: '카드를 쓸 대상을 찾지 못했어요.',
 
   // 서버 내부 오류
-  INTERNAL_SERVER_ERROR: '일시적인 오류가 생겼어요. 잠시 후 다시 시도해 주세요.',
+  INTERNAL_SERVER_ERROR: '일시적인 오류가 생겼어요.',
 };
 
 /** WebSocket 에러 이벤트(/user/queue/errors)를 토스트 문구로 바꾼다. */

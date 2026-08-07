@@ -66,7 +66,7 @@ export function LikedSongCard({ song }: LikedSongCardProps) {
             </span>
           ) : null}
           <span className="border border-white/10 bg-black/50 px-2 py-1">
-            LIKED <span className="text-zinc-600">{'::'}</span> {formatFavoritedAt(song.favoritedAt)}
+            LIKED <span className="text-zinc-600">{':'}</span> {formatFavoritedAt(song.favoritedAt)}
           </span>
         </div>
       </div>

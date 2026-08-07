@@ -70,7 +70,7 @@ export function DeviceSystemStatusBar({
           <span key={segment.label} className={segment.isOk ? 'text-zinc-500' : 'text-zinc-700'}>
             {segment.label}
             <span aria-hidden="true" className="ml-3 text-zinc-700">
-              ::
+              :
             </span>
           </span>
         ))
