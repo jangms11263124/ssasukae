@@ -1,11 +1,12 @@
 import type { FeedbackScores } from '@/entities/feedback';
 
-const VIEW_WIDTH = 340;
+/* 축 라벨을 키운 만큼 좌우 여백이 필요하다 — 폭을 넓히지 않으면 RHYTHM이 오른쪽에서 잘린다 */
+const VIEW_WIDTH = 360;
 const VIEW_HEIGHT = 292;
 const CENTER_X = VIEW_WIDTH / 2;
 const CENTER_Y = 150;
 const RADIUS = 104;
-const LABEL_RADIUS = RADIUS + 22;
+const LABEL_RADIUS = RADIUS + 20;
 
 const ACCENT = '#22d3ee';
 /* 정점 도트를 데이터 선과 분리하는 서피스 링 색 (SettingsPanel 배경 계열) */
@@ -84,7 +85,7 @@ export function MetricRadarChart({ scores }: MetricRadarChartProps) {
         viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
         role="img"
         aria-label="지표별 점수 레이더 차트"
-        className="mx-auto w-full max-w-[22rem]"
+        className="mx-auto w-full max-w-[24rem]"
       >
         {GRID_POLYGONS.map((points) => (
           <polygon
@@ -132,7 +133,7 @@ export function MetricRadarChart({ scores }: MetricRadarChartProps) {
             y={y}
             dy={dy}
             textAnchor={textAnchor}
-            className="fill-zinc-500 font-mono text-[9px] font-bold tracking-[0.18em]"
+            className="fill-zinc-300 font-mono text-[11px] font-bold tracking-[0.14em]"
           >
             {label}
           </text>
@@ -140,21 +141,21 @@ export function MetricRadarChart({ scores }: MetricRadarChartProps) {
       </svg>
 
       {/* 정확한 수치는 차트가 아니라 이 리스트가 담당한다 */}
-      <ul className="mt-6 space-y-2.5 border-t border-white/[0.06] pt-5">
+      <ul className="mt-6 space-y-3 border-t border-white/[0.06] pt-5">
         {METRICS.map((metric, index) => {
           const value = values[index];
           return (
             <li key={metric.key} className="flex items-center gap-4">
-              <span className="w-20 shrink-0 font-mono text-[0.55rem] font-bold tracking-[0.18em] text-zinc-500">
+              <span className="w-24 shrink-0 font-mono text-[0.66rem] font-bold tracking-[0.16em] text-zinc-300">
                 {metric.label}
               </span>
-              <span className="h-[3px] flex-1 bg-cyan-400/10">
+              <span className="h-1.5 flex-1 bg-cyan-400/15">
                 <span
                   className="block h-full bg-cyan-400"
                   style={{ width: `${((value ?? 0) / metric.max) * 100}%` }}
                 />
               </span>
-              <span className="w-10 shrink-0 text-right font-mono text-[0.7rem] font-bold tabular-nums text-zinc-100">
+              <span className="w-12 shrink-0 text-right font-mono text-sm font-bold tabular-nums text-white">
                 {formatMetricValue(metric.key, value)}
               </span>
             </li>
