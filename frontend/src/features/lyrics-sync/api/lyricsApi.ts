@@ -54,3 +54,18 @@ export async function fetchPlainLyrics(url: string, signal?: AbortSignal): Promi
 
   return response.text();
 }
+
+/**
+ * 분석 파이프라인이 만든 midi.json을 읽는다. 여기서는 음절 하이라이트
+ * (syllable_highlights)만 쓴다 — 채점 쪽은 같은 파일을 파싱 없이 Blob으로 통째로
+ * 넘기므로 함수를 공유하지 않는다.
+ */
+export async function fetchMidiJson(url: string, signal?: AbortSignal): Promise<unknown> {
+  const response = await fetch(url, { signal });
+
+  if (!response.ok) {
+    throw new Error(`정답 MIDI를 불러오지 못했습니다 (${response.status})`);
+  }
+
+  return response.json() as Promise<unknown>;
+}
