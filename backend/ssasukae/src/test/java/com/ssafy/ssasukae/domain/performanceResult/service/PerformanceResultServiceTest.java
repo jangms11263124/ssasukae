@@ -75,7 +75,6 @@ class PerformanceResultServiceTest {
       OffsetDateTime.of(2026, 7, 28, 10, 0, 0, 0, ZoneOffset.ofHours(9));
   private static final OffsetDateTime STARTED_AT = PREPARED_AT.plusSeconds(3);
   private static final OffsetDateTime FINISHED_AT = STARTED_AT.plusMinutes(3);
-  private static final Instant ANALYSIS_DEADLINE = FINISHED_AT.toInstant().plusSeconds(120);
 
   @Mock private UserRepository userRepository;
   @Mock private SongRepository songRepository;
@@ -87,11 +86,16 @@ class PerformanceResultServiceTest {
   @Mock private PerformanceWebSocketEventPublisher eventPublisher;
   @Mock private RoomParticipantRepository roomParticipantRepository;
 
+  private PerformanceRecoveryProperties recoveryProperties;
+  private Instant analysisDeadline;
   private PerformanceResultService service;
 
   @BeforeEach
   void setUp() {
-    service = createServiceAt(ANALYSIS_DEADLINE.minusSeconds(1));
+    recoveryProperties = new PerformanceRecoveryProperties();
+    analysisDeadline =
+        FINISHED_AT.toInstant().plus(recoveryProperties.getAnalysisTimeout());
+    service = createServiceAt(analysisDeadline.minusSeconds(1));
   }
 
   private PerformanceResultService createServiceAt(Instant currentTime) {
@@ -102,7 +106,7 @@ class PerformanceResultServiceTest {
         roomRepository,
         performanceStore,
         roomLeaderboardStore,
-        new PerformanceRecoveryProperties(),
+        recoveryProperties,
         Clock.fixed(currentTime, ZoneOffset.UTC),
         new PerformanceTransactionSupport(performanceStore, recoveryDeadlineStore),
         eventPublisher,
@@ -230,7 +234,7 @@ class PerformanceResultServiceTest {
   void getScoreRejectsResultAtDeadline() {
     Room room = playingRoom();
     PerformanceSnapShot analyzing = analyzingSnapshot();
-    service = createServiceAt(ANALYSIS_DEADLINE);
+    service = createServiceAt(analysisDeadline);
 
     when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
     when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));

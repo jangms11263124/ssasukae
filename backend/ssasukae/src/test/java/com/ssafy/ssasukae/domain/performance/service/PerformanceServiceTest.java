@@ -98,11 +98,14 @@ class PerformanceServiceTest {
 
   @Mock private CardService cardService;
 
+  private PerformanceRecoveryProperties recoveryProperties;
+
   private PerformanceService performanceService;
 
   @BeforeEach
   void setUp() {
     lenient().when(performanceStore.replace(any(), any())).thenReturn(true);
+    recoveryProperties = new PerformanceRecoveryProperties();
     PerformanceTransactionSupport transactionSupport =
         new PerformanceTransactionSupport(performanceStore, recoveryDeadlineStore);
     PerformanceCancellationProcessor cancellationProcessor =
@@ -118,7 +121,7 @@ class PerformanceServiceTest {
             songRepository,
             performanceStore,
             recoveryDeadlineStore,
-            new PerformanceRecoveryProperties(),
+            recoveryProperties,
             transactionSupport,
             cancellationProcessor,
             s3StorageService,
@@ -513,7 +516,12 @@ class PerformanceServiceTest {
     assertThat(changed.playbackFinishedAt()).isNotNull().isAfterOrEqualTo(STARTED_AT);
 
     verify(recoveryDeadlineStore)
-        .save(PERFORMANCE_ID, changed.playbackFinishedAt().toInstant().plusSeconds(120));
+        .save(
+            PERFORMANCE_ID,
+            changed
+                .playbackFinishedAt()
+                .toInstant()
+                .plus(recoveryProperties.getAnalysisTimeout()));
 
     verifyNoInteractions(eventPublisher);
 

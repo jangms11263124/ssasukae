@@ -15,7 +15,7 @@ import lombok.Setter;
 public class PerformanceRecoveryProperties {
 
   private Duration performerDisconnectGrace = Duration.ofSeconds(15);
-  private Duration analysisTimeout = Duration.ofMinutes(2);
+  private Duration analysisTimeout = Duration.ofMinutes(1);
   private Duration scanDelay = Duration.ofSeconds(1);
   private int batchSize = 100;
 }
