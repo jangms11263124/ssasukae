@@ -237,9 +237,32 @@ export const useStageStore = create<StageStore>((set) => ({
     set((state) => {
       const performance = snapshot.performance;
 
-      // 서버에 공연이 없다. 가창자·곡 선택은 아직 공연이 만들어지기 전 단계라 로컬 진행이
-      // 유일한 기준이므로 보존하고, 취소·종료된 공연의 잔여 상태만 정리한다.
+      // 서버에 공연이 없다. 다만 가창자 지정은 공연 생성 전에도 서버 stageRole에 남는다
+      // (역할은 취소·채점 완료 시점에 해제되므로 PERFORMER가 있으면 진행 중인 지정이다).
       if (performance === null) {
+        const performer = snapshot.participants.find(
+          (participant) => participant.stageRole === 'PERFORMER',
+        );
+
+        // 선곡·준비 진행 중(공연 생성 전 단계)의 로컬 상태가 유일한 기준이므로 보존한다.
+        if (
+          state.performanceId === null &&
+          (state.phase === 'SONG_SELECT' || state.phase === 'READY')
+        ) {
+          return state;
+        }
+
+        // 지정~선곡 사이에 새로고침한 가창자를 선곡 단계로 복원한다. 이 복원이 없으면
+        // 가창자만 WAITING으로 떨어지고, 나머지는 선곡 대기 화면에서 빠져나올 수 없다.
+        if (performer !== undefined) {
+          return {
+            ...INITIAL_PERFORMANCE_STATE,
+            phase: 'SONG_SELECT',
+            performerParticipantId: performer.participantId,
+          };
+        }
+
+        // 가창자·곡 선택 전이면 로컬 진행을 보존하고, 취소·종료된 공연의 잔여 상태만 정리한다.
         return state.performanceId === null ? state : INITIAL_PERFORMANCE_STATE;
       }
 
@@ -283,7 +306,16 @@ export const useStageStore = create<StageStore>((set) => ({
         lyricsDownloadUrl: performance.lyricsDownloadUrl,
         settings: { ...state.settings, ...performance.settings },
         phase,
-        score: phase === 'SCORE' ? state.score : null,
+        // 채점 완료 후 새로고침하면 LEADERBOARD_UPDATED를 다시 받을 수 없다. 리더보드에
+        // 이 공연의 점수가 이미 있으면 되살려 "채점 중..."에 영구히 갇히는 것을 막는다.
+        score:
+          phase === 'SCORE'
+            ? (state.score ??
+              snapshot.leaderboard?.find(
+                (entry) => entry.performanceId === performance.performanceId,
+              )?.finalScore ??
+              null)
+            : null,
         scoringFailed: performance.status === 'ANALYSIS_FAILED',
         // 로컬이 더 진행된 경우 스냅샷의 낡은 정지 상태·재생 위치로 덮어쓰지 않는다.
         isSuspended: localIsAhead ? state.isSuspended : isSuspended,

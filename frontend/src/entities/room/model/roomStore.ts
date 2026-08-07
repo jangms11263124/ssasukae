@@ -176,7 +176,12 @@ export const useRoomStore = create<RoomStore>((set) => ({
   applyConnectionStatusChanged: (payload) =>
     set((state) => ({
       participants: state.participants.map((p) =>
-        p.id === payload.participantId ? { ...p, connectionStatus: payload.status } : p,
+        p.id === payload.participantId
+          ? {
+              ...p,
+              connectionStatus: payload.status === 'ONLINE' ? 'CONNECTED' : payload.status,
+            }
+          : p,
       ),
     })),
 
