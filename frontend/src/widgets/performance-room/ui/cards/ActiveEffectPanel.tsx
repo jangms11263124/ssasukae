@@ -15,11 +15,20 @@ export function ActiveEffectPanel() {
   const visual = CARD_EFFECT_VISUALS[activeEffect.effectType];
   const valueLabel = formatCardEffectValue(activeEffect.effectType, activeEffect.effectValue);
 
+  // 무대 컷인·배너·테두리와 같은 효과색을 써서 어떤 공격인지 한눈에 이어 보이게 한다.
   return (
-    <div className="border border-fuchsia-500/50 bg-fuchsia-950/25 p-4">
-      <p className="font-mono text-[10px] tracking-[0.24em] text-fuchsia-400">ACTIVE EFFECT</p>
+    <div
+      className="border bg-black/40 p-4"
+      style={{ borderColor: `${visual.accent}80`, background: `${visual.accent}14` }}
+    >
+      <p
+        className="font-mono text-[10px] tracking-[0.24em]"
+        style={{ color: visual.accent }}
+      >
+        ACTIVE EFFECT
+      </p>
       <p className="mt-2 flex items-center gap-2 text-sm font-black uppercase italic text-white">
-        <WarningIcon />
+        <WarningIcon accent={visual.accent} />
         {visual.title}
         {valueLabel !== null ? <span className="font-mono not-italic">({valueLabel})</span> : null}
       </p>
@@ -30,7 +39,7 @@ export function ActiveEffectPanel() {
   );
 }
 
-function WarningIcon() {
+function WarningIcon({ accent }: { accent: string }) {
   return (
     <svg
       aria-hidden="true"
@@ -40,7 +49,8 @@ function WarningIcon() {
       strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className="size-4 shrink-0 text-fuchsia-400"
+      className="size-4 shrink-0"
+      style={{ color: accent }}
     >
       <path d="M12 4 21 19H3L12 4Z" />
       <path d="M12 10v4" />

@@ -1,8 +1,7 @@
 'use client';
 
-import { useRoomStore } from '@/entities/room';
-
 import { useCardStore } from '../../model/cardStore';
+import { useNicknameOf } from '../../model/useNicknameOf';
 import { useRemainingSeconds } from '../../model/useRemainingSeconds';
 
 /**
@@ -11,16 +10,14 @@ import { useRemainingSeconds } from '../../model/useRemainingSeconds';
  */
 export function CardCountdownOverlay() {
   const pendingActivation = useCardStore((state) => state.pendingActivation);
-  const participants = useRoomStore((state) => state.participants);
+  const nicknameOf = useNicknameOf();
   const remainingSeconds = useRemainingSeconds(pendingActivation?.activateAt ?? null);
 
   if (pendingActivation === null || remainingSeconds <= 0) {
     return null;
   }
 
-  const sourceNickname =
-    participants.find(({ id }) => id === pendingActivation.sourceParticipantId)?.nickname ??
-    '???';
+  const sourceNickname = nicknameOf(pendingActivation.sourceParticipantId);
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-4 z-20 flex justify-center">
@@ -29,7 +26,7 @@ export function CardCountdownOverlay() {
         <div>
           <p className="font-mono text-[10px] tracking-[0.24em] text-red-400">ATTACK INCOMING</p>
           <p className="mt-0.5 text-sm font-bold text-white">
-            {sourceNickname} 이(가) 카드를 사용했습니다
+            {sourceNickname}님이 카드를 사용했습니다
           </p>
         </div>
         <p className="min-w-8 text-center font-mono text-3xl font-black text-red-400">
