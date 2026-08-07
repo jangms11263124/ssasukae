@@ -9,6 +9,6 @@ export const HERO_COPY = {
 } as const;
 
 export const LOGIN_COPY = {
-  title: '소셜 로그인으로 지금 바로 입장하세요.',
-  description: '지금 바로 입장하기',
+  title: '무대에 설 준비 됐어?',
+  description: '소셜 계정으로 3초면 입장 끝.',
 } as const;
