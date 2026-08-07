@@ -8,7 +8,6 @@ const noop = () => undefined;
 
 const FALLBACK_SOCKET: RoomSocketApi = {
   isConnected: false,
-  latencyMs: null,
   sendPing: noop,
   sendPrepare: noop,
   sendPlaybackStart: noop,

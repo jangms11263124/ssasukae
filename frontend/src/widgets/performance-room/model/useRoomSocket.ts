@@ -41,16 +41,19 @@ import { showToast } from '@/shared/model/toastStore';
 
 import { hydrateCardsFromRoomSnapshot, useCardStore } from './cardStore';
 import { useChatStore } from './chatStore';
+import { useLatencyStore } from './latencyStore';
 import { useStageStore } from './stageStore';
 
 /** 연결 상태 확인 PING 전송 주기 (백엔드 하트비트 10초와 동일) */
 const PING_INTERVAL_MS = 10_000;
 
+/** 백엔드 PingWebSocketController는 방 경로가 아니라 전역 /app/ping에 매핑돼 있다 */
+const PING_DESTINATION = '/app/ping';
+const buildPingBody = () => ({ clientSentAt: new Date().toISOString() });
+
 export interface RoomSocketApi {
   isConnected: boolean;
-  /** 최근 PING-PONG 왕복 지연(ms). 아직 PONG을 받지 못했으면 null */
-  latencyMs: number | null;
-  /** 연결 상태 확인 PING을 즉시 전송한다 */
+  /** 연결 상태 확인 PING을 즉시 전송한다. 왕복 지연은 latencyStore가 받는다 */
   sendPing: () => void;
   /** 곡을 확정하고 공연 준비를 요청한다 (가창자 전용) */
   sendPrepare: (songId: number) => void;
@@ -80,7 +83,6 @@ export interface RoomSocketApi {
  */
 export function useRoomSocket(roomId: number | null): RoomSocketApi {
   const [isConnected, setIsConnected] = useState(false);
-  const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const clientRef = useRef<ReturnType<typeof createStompClient> | null>(null);
 
   useEffect(() => {
@@ -293,8 +295,8 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         return;
       }
       client.publish({
-        destination: `/app/rooms/${roomId}/ping`,
-        body: JSON.stringify({ clientSentAt: new Date().toISOString() }),
+        destination: PING_DESTINATION,
+        body: JSON.stringify(buildPingBody()),
       });
     };
 
@@ -317,7 +319,9 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         });
         subscribeJson<RoomWebSocketEvent<PongPayload>>(client, '/user/queue/pong', (event) => {
           const roundTrip = Date.now() - new Date(event.payload.clientSentAt).getTime();
-          setLatencyMs(Number.isFinite(roundTrip) && roundTrip >= 0 ? roundTrip : null);
+          useLatencyStore
+            .getState()
+            .setLatencyMs(Number.isFinite(roundTrip) && roundTrip >= 0 ? roundTrip : null);
         });
 
         // 구독을 먼저 연 뒤 현재 상태를 조회해 초기 연결·재연결 사이에 놓친 공연 이벤트를 복구한다.
@@ -339,12 +343,12 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
       onDisconnect: () => {
         stopPing();
         setIsConnected(false);
-        setLatencyMs(null);
+        useLatencyStore.getState().setLatencyMs(null);
       },
       onStompError: (brokerMessage) => {
         stopPing();
         setIsConnected(false);
-        setLatencyMs(null);
+        useLatencyStore.getState().setLatencyMs(null);
         showToast(
           toUserFacingMessage(brokerMessage, '서버 연결이 끊어졌어요.'),
           'error',
@@ -359,7 +363,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
       stopPing();
       clientRef.current = null;
       setIsConnected(false);
-      setLatencyMs(null);
+      useLatencyStore.getState().setLatencyMs(null);
       useChatStore.getState().resetChat();
       void client.deactivate();
     };
@@ -384,10 +388,8 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
 
     return {
       isConnected,
-      latencyMs,
       sendPing: () => {
-        if (roomId === null) return;
-        publish(`/app/rooms/${roomId}/ping`, { clientSentAt: new Date().toISOString() });
+        publish(PING_DESTINATION, buildPingBody());
       },
       sendPrepare: (songId) => {
         if (roomId === null) return;
@@ -444,5 +446,5 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         publish(`/app/rooms/${roomId}/participants/${participantId}/kick`);
       },
     };
-  }, [roomId, isConnected, latencyMs]);
+  }, [roomId, isConnected]);
 }

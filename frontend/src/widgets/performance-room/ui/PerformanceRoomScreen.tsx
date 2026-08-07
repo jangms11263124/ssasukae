@@ -14,6 +14,7 @@ import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { showToast } from '@/shared/model/toastStore';
 import { ConfirmDialog } from '@/shared/ui/dialog/ConfirmDialog';
 
+import { useLatencyStore } from '../model/latencyStore';
 import { OpenViduSessionProvider } from '../model/OpenViduSessionContext';
 import { RoomSocketProvider } from '../model/RoomSocketContext';
 import { StageAudioProvider } from '../model/StageAudioContext';
@@ -41,6 +42,15 @@ import { SingerSelectModalHost } from './stage-control/SingerSelectModalHost';
 
 interface PerformanceRoomScreenProps {
   roomIdFromUrl: number | null;
+}
+
+/** 지연값은 10초마다 갱신되므로, 방 화면 전체가 아니라 이 스팬만 재렌더되게 분리한다 */
+function PingReadout() {
+  const latencyMs = useLatencyStore((state) => state.latencyMs);
+
+  return (
+    <span className="tabular-nums">PING: {latencyMs !== null ? `${latencyMs}MS` : '--'}</span>
+  );
 }
 
 function RoomBootstrapLoading() {
@@ -221,11 +231,8 @@ function PerformanceRoomContent() {
               <span>
                 [ROOM_SYSTEM] ROOM_{session.roomId} :{' '}
                 {socket.isConnected ? 'WS_CONNECTED' : 'WS_CONNECTING...'}
-                {socket.isConnected && socket.latencyMs !== null
-                  ? ` : PING ${socket.latencyMs}MS`
-                  : ''}
               </span>
-              <span>INVITE_CODE: {session.inviteCode}</span>
+              <PingReadout />
             </footer>
 
             <RoomHelpFloatingButton />

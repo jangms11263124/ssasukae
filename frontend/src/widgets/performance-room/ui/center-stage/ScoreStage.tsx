@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 
 import { useRoomStore } from '@/entities/room';
+import { cn } from '@/shared/lib/cn';
 import { getScoreGrade, type ScoreGrade } from '@/shared/lib/scoreGrade';
 
 import { useStageStore } from '../../model/stageStore';
@@ -20,6 +21,16 @@ const SCORING_TIMEOUT_MS = 90_000;
 
 /** WaitingControls의 시작 최소 인원과 같은 기준 — 그 아래로 줄면 대기 화면으로 돌아간다 */
 const MIN_PARTICIPANTS_TO_START = 2;
+
+// 음수 delay로 각 막대가 처음부터 서로 다른 위상에서 일렁인다 (MainHome LATENCY_BARS와 같은 방식)
+const SCORING_BARS = [
+  { delay: '0s', height: 18 },
+  { delay: '-1.2s', height: 30 },
+  { delay: '-0.5s', height: 22 },
+  { delay: '-1.5s', height: 34 },
+  { delay: '-0.8s', height: 24 },
+  { delay: '-0.3s', height: 16 },
+] as const;
 
 /** 등급별 결과 문구 — 구간(S~F)은 마이페이지·AI 피드백과 같은 scoreGrade.ts 기준을 쓴다 */
 const SCORE_LABEL: Record<ScoreGrade, string> = {
@@ -73,12 +84,26 @@ export function ScoreStage() {
       <MediaControlsOverlay />
 
       <div className="absolute inset-0 grid place-items-center">
-        <div className="relative grid size-72 place-content-center place-items-center rounded-full border-[5px] border-white/35 bg-black/25 backdrop-blur-[2px]">
+        <div
+          className={cn(
+            'relative grid size-72 place-content-center place-items-center rounded-full border-[5px] bg-black/25 backdrop-blur-[2px]',
+            // 채점 중에는 링을 죽여 회전 아크가 도드라지게, 결과가 뜨면 원래 링으로 돌아온다
+            isScoring ? 'border-white/10' : 'border-white/35',
+          )}
+        >
           {isScoring ? (
-            <div
-              aria-hidden="true"
-              className="absolute -inset-[5px] animate-spin rounded-full border-[5px] border-transparent border-t-cyan-300/90 [animation-duration:1.4s]"
-            />
+            <>
+              {/* 혜성 꼬리 아크 — 머리는 진한 시안, 꼬리는 옅게 뒤따른다 */}
+              <div
+                aria-hidden="true"
+                className="absolute -inset-[5px] animate-spin rounded-full border-[5px] border-transparent border-t-cyan-300 border-r-cyan-300/25 drop-shadow-[0_0_12px_rgba(34,211,238,0.55)] [animation-duration:1.4s]"
+              />
+              {/* 안쪽 역회전 보조 링 — 푸시아 포인트 */}
+              <div
+                aria-hidden="true"
+                className="absolute inset-3 animate-spin rounded-full border border-transparent border-b-fuchsia-400/70 [animation-direction:reverse] [animation-duration:2.6s]"
+              />
+            </>
           ) : null}
           {scoringFailed ? (
             <>
@@ -91,9 +116,16 @@ export function ScoreStage() {
             </>
           ) : score === null ? (
             <>
-              <p className="animate-pulse text-3xl font-black tracking-tight text-cyan-300">
-                채점 중...
-              </p>
+              <div className="flex h-9 items-end justify-center gap-1.5" aria-hidden="true">
+                {SCORING_BARS.map((bar, index) => (
+                  <span
+                    key={index}
+                    className="w-1.5 origin-bottom animate-latency-bar rounded-full bg-cyan-300/90 shadow-[0_0_10px_rgba(34,211,238,0.55)]"
+                    style={{ animationDelay: bar.delay, height: bar.height }}
+                  />
+                ))}
+              </div>
+              <p className="mt-4 text-2xl font-black tracking-tight text-cyan-300">채점 중...</p>
               <p className="mt-2 font-mono text-[10px] tracking-[0.3em] text-zinc-500">
                 ANALYZING VOCAL
               </p>

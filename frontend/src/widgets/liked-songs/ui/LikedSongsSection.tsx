@@ -169,6 +169,7 @@ export function LikedSongsSection({ className }: LikedSongsSectionProps) {
   // debounce 대기이거나, 검색어 변경으로 이전 목록을 placeholder로 보여주는 중
   const isSearchLoading = trimmedQuery !== debouncedQuery || isPlaceholderData;
   const showListSkeleton = isPending || isSearchLoading;
+  const showEmptyState = !showListSkeleton && !isError && songs.length === 0;
 
   return (
     <section aria-label="찜한 노래 목록" className={cn('flex min-h-0 flex-col', className)}>
@@ -231,7 +232,13 @@ export function LikedSongsSection({ className }: LikedSongsSectionProps) {
           'data-[scrolling=true]:[&::-webkit-scrollbar-thumb]:bg-zinc-500/55',
         )}
       >
-        <div className="py-6 pr-1">
+        <div
+          className={cn(
+            'py-6 pr-1',
+            // 빈 상태는 목록 영역 세로 중앙에 띄운다 (m-auto가 동작하도록 컨테이너를 채운다)
+            showEmptyState && 'flex h-full flex-col',
+          )}
+        >
           {showListSkeleton ? (
             <>
               <p role="status" className="sr-only">
@@ -245,10 +252,10 @@ export function LikedSongsSection({ className }: LikedSongsSectionProps) {
               {error instanceof Error ? error.message : 'FAILED_TO_LOAD_TRACKS'}
             </p>
           ) : null}
-          {!showListSkeleton && !isError && songs.length === 0 ? (
-            <div className="py-24 text-center">
-              <p className="font-mono text-xs tracking-[0.2em] text-zinc-600">NO_SAVED_TRACKS</p>
-              <p className="mt-3 text-sm text-zinc-500">
+          {showEmptyState ? (
+            <div className="m-auto py-12 text-center">
+              <p className="font-mono text-sm tracking-[0.2em] text-zinc-500">NO_SAVED_TRACKS</p>
+              <p className="mt-4 text-base text-zinc-400">
                 {debouncedQuery
                   ? '검색 결과가 없습니다.'
                   : 'ADD SONG 버튼으로 마음에 드는 곡을 찜해 보세요.'}

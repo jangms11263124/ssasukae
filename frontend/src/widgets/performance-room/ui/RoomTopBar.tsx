@@ -21,7 +21,7 @@ function CopyIcon() {
       aria-hidden
       viewBox="0 0 24 24"
       fill="none"
-      className="block size-3.5 shrink-0 translate-y-px"
+      className="block size-4 shrink-0 translate-y-px"
       stroke="currentColor"
       strokeWidth="1.6"
     >
@@ -37,7 +37,7 @@ function CheckIcon() {
       aria-hidden
       viewBox="0 0 24 24"
       fill="none"
-      className="block size-3.5 shrink-0 translate-y-px"
+      className="block size-4 shrink-0 translate-y-px"
       stroke="currentColor"
       strokeWidth="2"
     >
@@ -153,8 +153,14 @@ export function RoomTopBar({
     <header className="flex shrink-0 items-center justify-between gap-6 border-b border-white/10 bg-[#101012] px-4 py-2.5 sm:px-5">
       <div className="flex min-w-0 flex-wrap items-center gap-2.5">
         <h1 className="truncate text-base font-semibold text-white">{room.name}</h1>
-        <span className="shrink-0 rounded-full bg-cyan-400/15 px-2.5 py-0.5 text-[11px] font-medium text-cyan-200">
-          {ROOM_MODE_LABEL[room.mode]}
+        {/* 메인의 SERVER_ONLINE, 프로필 메뉴의 SESSION_ACTIVE와 같은 도트+텍스트 계열.
+            박스가 없어 한글이 상자 위로 떠 보이는 문제 자체가 없다 — 도트와의 1px 광학차만 translate로 보정 */}
+        <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-medium text-cyan-200">
+          <span
+            aria-hidden="true"
+            className="size-1.5 rounded-full bg-cyan-300 shadow-[0_0_6px_rgba(34,211,238,0.8)]"
+          />
+          <span className="translate-y-px">{ROOM_MODE_LABEL[room.mode]}</span>
         </span>
       </div>
 
@@ -195,7 +201,7 @@ export function RoomTopBar({
             </span>
             <span
               className={cn(
-                'inline-flex h-8 w-3.5 shrink-0 items-center justify-center',
+                'inline-flex h-8 w-4 shrink-0 items-center justify-center',
                 copied ? 'text-emerald-300' : 'text-zinc-500',
               )}
             >

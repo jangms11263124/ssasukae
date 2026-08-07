@@ -34,14 +34,16 @@ export function StageIdentityBadge({ identity, size = 'md' }: StageIdentityBadge
   return (
     <div
       className={cn(
-        'inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/12 bg-black/55 text-zinc-100 backdrop-blur-sm',
+        // 영상 위 가독성용 연한 검정 박스만 남긴다(테두리 제거). 도트는 사용자 요청으로 뺐다 — 헤더 모드 표시에만 쓴다
+        'inline-flex max-w-full items-center gap-1.5 rounded-sm bg-black/60 text-zinc-100 backdrop-blur-sm',
         size === 'md' ? 'px-2.5 py-1' : 'px-2 py-0.5',
       )}
     >
       {isHost ? <CrownIcon className={size === 'md' ? 'size-3' : 'size-2.5'} /> : null}
       <span
         className={cn(
-          'truncate font-medium',
+          // 한글은 어센트가 커서 상자 중앙보다 1px 떠 보인다 — 초대코드 복사 버튼과 같은 광학 보정
+          'translate-y-px truncate font-medium',
           size === 'md' ? 'text-xs' : 'text-[10px]',
         )}
       >
