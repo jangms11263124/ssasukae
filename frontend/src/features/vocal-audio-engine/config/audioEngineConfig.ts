@@ -79,7 +79,7 @@ export const RNNOISE_WASM_SIMD_URL = '/noise-suppressor/rnnoise_simd.wasm';
  * 청자가 듣는 목소리가 뚝 떨어진다. 그 낙차를 메우는 고정 보정값 —
  * 녹음 비교로 캘리브레이션하는 지점이다 (목소리가 묻히면 올리고, 갈라지면 내린다).
  */
-export const BROADCAST_VOICE_MAKEUP_DB = 6;
+export const BROADCAST_VOICE_MAKEUP_DB = 16;
 
 /** 송출 믹스의 MR 트림(dB). 목소리를 올린 만큼 MR을 덜어 합산 피크를 지킨다 (모니터는 그대로) */
 export const BROADCAST_MR_TRIM_DB = -3;
