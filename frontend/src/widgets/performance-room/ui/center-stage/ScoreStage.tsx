@@ -144,7 +144,7 @@ export function ScoreStage() {
       </div>
 
       {isScoring ? null : (
-        <p className="absolute inset-x-0 top-10 text-center font-mono text-xs tracking-[0.18em] text-zinc-400">
+        <p className="absolute inset-x-0 top-3 text-center font-mono text-xs tracking-[0.18em] text-zinc-400">
           {canContinue
             ? '잠시 후 가창자 선택으로 넘어갑니다...'
             : '잠시 후 대기 화면으로 돌아갑니다...'}
