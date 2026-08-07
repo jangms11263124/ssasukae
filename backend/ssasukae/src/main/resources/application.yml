@@ -80,7 +80,7 @@ ai:
 performance:
   recovery:
     performer-disconnect-grace: 15s
-    analysis-timeout: 2m
+    analysis-timeout: ${PERFORMANCE_ANALYSIS_TIMEOUT:1m}
     scan-delay: 1s
     batch-size: 100
 
