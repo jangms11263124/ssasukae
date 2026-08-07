@@ -320,12 +320,16 @@
   inset: 0;
 }
 
-/* 배정 중 — 뒤 노래방 화면 흑백 */
+/*
+ * 배정 중 — 뒤 노래방 화면을 가라앉힌다.
+ * grayscale은 쓰지 않는다 — 캠 화면은 원래 어둡고 채도가 낮아 조금만 빼도
+ * 통째로 흑백처럼 죽어 보인다. 어둡기만 줘서 카드가 도드라지게 한다.
+ */
 .attack-card-deal-overlay__backdrop {
   z-index: 0;
   background: rgb(0 0 0 / 10%);
-  -webkit-backdrop-filter: grayscale(1) brightness(0.74) contrast(1.05);
-  backdrop-filter: grayscale(1) brightness(0.74) contrast(1.05);
+  -webkit-backdrop-filter: brightness(0.68) contrast(1.02);
+  backdrop-filter: brightness(0.68) contrast(1.02);
   opacity: 0;
   transition: opacity 0.55s ease;
   will-change: mask-position, clip-path;
@@ -350,7 +354,7 @@
     cubic-bezier(0.22, 0.92, 0.28, 1) var(--overlay-backdrop-release-delay) both;
 }
 
-/* 확정 후 — 방송 신호 스캔 (흑백 해제, 진입 broadcast 미러) */
+/* 확정 후 — 방송 신호 스캔 (가라앉힌 배경 해제, 진입 broadcast 미러) */
 .attack-card-deal-overlay__release {
   z-index: 1;
   opacity: 0;
@@ -548,7 +552,7 @@
   opacity: 0.72;
 }
 
-/* 착지 후 — 가벼운 스포트라이트 (흑백 배경과 병행) */
+/* 착지 후 — 가벼운 스포트라이트 (가라앉힌 배경과 병행) */
 .attack-card-deal-overlay__spotlight {
   z-index: 0;
   opacity: 0;
