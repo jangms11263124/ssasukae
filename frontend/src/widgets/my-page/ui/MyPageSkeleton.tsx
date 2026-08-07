@@ -3,7 +3,7 @@ import { cn } from '@/shared/lib/cn';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 import { Skeleton } from '@/shared/ui/skeleton/Skeleton';
 
-import { MYPAGE_PREVIEW_COUNT } from '../config/preview';
+import { ACTIVITY_PREVIEW_COUNT, FAVORITES_PREVIEW_COUNT } from '../config/preview';
 import { ChartIcon, HeartIcon, HistoryIcon } from './icons';
 
 const STAT_COLUMN_COUNT = 3;
@@ -21,10 +21,10 @@ function TrackRowSkeleton() {
   );
 }
 
-function TrackListSkeleton() {
+function TrackListSkeleton({ rows }: { rows: number }) {
   return (
     <div>
-      {Array.from({ length: MYPAGE_PREVIEW_COUNT }, (_, index) => (
+      {Array.from({ length: rows }, (_, index) => (
         <TrackRowSkeleton key={index} />
       ))}
     </div>
@@ -92,7 +92,7 @@ export function MyPageSkeleton() {
             <Skeleton className="h-2 w-24" />
             <Skeleton tone="faint" className="h-2.5 w-16" />
           </div>
-          <TrackListSkeleton />
+          <TrackListSkeleton rows={FAVORITES_PREVIEW_COUNT} />
         </SettingsPanel>
 
         <div className="flex flex-col gap-4">
@@ -117,7 +117,7 @@ export function MyPageSkeleton() {
               <Skeleton className="h-2 w-10 justify-self-end" />
               <Skeleton className="h-2 w-10 justify-self-end" />
             </div>
-            <TrackListSkeleton />
+            <TrackListSkeleton rows={ACTIVITY_PREVIEW_COUNT} />
           </SettingsPanel>
         </div>
       </div>

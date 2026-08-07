@@ -6,7 +6,7 @@ import { cn } from '@/shared/lib/cn';
 import { getScoreGrade, GRADE_CLASS } from '@/shared/lib/scoreGrade';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
-import { MYPAGE_PREVIEW_COUNT } from '../config/preview';
+import { ACTIVITY_PREVIEW_COUNT } from '../config/preview';
 import { formatPerformedAt } from '../lib/formatters';
 import { ChevronRightIcon, HistoryIcon } from './icons';
 import { TrackThumbnail } from './TrackThumbnail';
@@ -16,7 +16,7 @@ interface RecentActivityCardProps {
 }
 
 export function RecentActivityCard({ performances }: RecentActivityCardProps) {
-  const previewPerformances = performances.slice(0, MYPAGE_PREVIEW_COUNT);
+  const previewPerformances = performances.slice(0, ACTIVITY_PREVIEW_COUNT);
 
   return (
     <SettingsPanel title="RECENT ACTIVITY" icon={<HistoryIcon />}>

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
+import { TRACK_QUERY_PARAM } from '@/entities/feedback';
 import { AiFeedbackDetailSection } from '@/widgets/ai-feedback-detail';
 import { AuthenticatedHeader } from '@/widgets/authenticated-header';
 import { LiveFeedFooter } from '@/widgets/live-feed-footer';
@@ -13,17 +14,25 @@ export const metadata: Metadata = {
 
 interface AiFeedbackDetailPageProps {
   params: Promise<{ feedbackId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 // 정적인 셸(헤더·브레드크럼·푸터)은 서버에서 렌더링하고,
 // 데이터를 구독하는 AiFeedbackDetailSection만 클라이언트 경계로 남긴다.
-export default async function AiFeedbackDetailPage({ params }: AiFeedbackDetailPageProps) {
+export default async function AiFeedbackDetailPage({
+  params,
+  searchParams,
+}: AiFeedbackDetailPageProps) {
   const { feedbackId } = await params;
   const performanceId = Number(feedbackId);
 
   if (!Number.isInteger(performanceId) || performanceId <= 0) {
     notFound();
   }
+
+  // 목록에서 넘어온 TRACK_ 순번. 주소를 직접 친 경우는 없을 수 있다.
+  const trackNo = Number((await searchParams)[TRACK_QUERY_PARAM]);
+  const validTrackNo = Number.isInteger(trackNo) && trackNo > 0 ? trackNo : undefined;
 
   return (
     <div className="flex min-h-dvh flex-col bg-[#0b0b0d] text-zinc-100">
@@ -48,7 +57,7 @@ export default async function AiFeedbackDetailPage({ params }: AiFeedbackDetailP
         </div>
 
         <div className="mt-8">
-          <AiFeedbackDetailSection performanceId={performanceId} />
+          <AiFeedbackDetailSection performanceId={performanceId} trackNo={validTrackNo} />
         </div>
       </main>
 
