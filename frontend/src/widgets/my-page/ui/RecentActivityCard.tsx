@@ -18,8 +18,9 @@ interface RecentActivityCardProps {
 export function RecentActivityCard({ performances }: RecentActivityCardProps) {
   const previewPerformances = performances.slice(0, ACTIVITY_PREVIEW_COUNT);
 
+  // flex-1: 우측 컬럼의 남는 높이를 흡수해 좌측 FAVORITES 카드와 하단이 맞는다
   return (
-    <SettingsPanel title="RECENT ACTIVITY" icon={<HistoryIcon />}>
+    <SettingsPanel title="RECENT ACTIVITY" icon={<HistoryIcon />} className="flex-1">
       <Link
         href="/ai-feedback"
         className={cn(
