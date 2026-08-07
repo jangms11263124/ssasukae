@@ -71,6 +71,19 @@ export const LYRICS_SYNC_OFFSET_MS = 0;
 export const LISTENER_LYRICS_DELAY_MS = 220;
 
 /**
+ * 음절 데이터로 소절을 만들 때, 마지막 음절과 다음 소절 사이가 이보다 벌어지면
+ * 간주로 보고 빈 줄을 넣는다 — 지난 소절을 내리고 카운트다운의 기준점이 된다.
+ * LRC의 빈 줄에 해당하는 신호를 음절 타이밍에서 복원하는 값이다.
+ */
+export const SYLLABLE_LINE_CLEAR_GAP_MS = 2_000;
+
+/**
+ * 음절 하이라이트 갱신 주기. 음절 하나가 보통 150~300ms라 그 절반이면 어긋남이
+ * 눈에 띄지 않고, 소절 넘김(100ms 틱)과 달리 말단 컴포넌트만 리렌더하므로 부담이 작다.
+ */
+export const SYLLABLE_TICK_INTERVAL_MS = 50;
+
+/**
  * 다음 소절까지 노래방식 3·2·1을 띄우기 시작하는 시점.
  * 3초를 넘기면 숫자가 4, 5로 올라가 카운트다운으로 읽히지 않는다.
  */

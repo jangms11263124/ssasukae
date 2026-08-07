@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   fetchLyricsCandidates,
+  fetchMidiJson,
   fetchPlainLyrics,
   findLineIndexAt,
   findNextTextIndex,
+  parseSyllableHighlights,
   selectLyrics,
   LISTENER_LYRICS_DELAY_MS,
   LYRICS_COUNTDOWN_LEAD_MS,
@@ -16,6 +18,7 @@ import {
   SONG_DURATION_WAIT_MS,
   type LyricsLine,
   type LyricsMissReason,
+  type SyllableTiming,
 } from '@/features/lyrics-sync';
 import type { VocalAudioEngine } from '@/features/vocal-audio-engine';
 
@@ -53,12 +56,20 @@ export interface SyncedLyricsState {
   status: 'IDLE' | 'LOADING' | 'READY' | 'UNAVAILABLE';
   /** 지금 부를 소절. 간주 구간이거나 재생 전이면 빈 문자열 */
   currentLine: string;
+  /** 지금 부를 소절의 음절 타이밍. midi.json에 음절 데이터가 없는 곡이면 null */
+  currentSyllables: SyllableTiming[] | null;
   /** 다음 소절 미리보기. 재생 전에는 첫 소절이 들어온다 */
   nextLine: string;
   /** LOADING·UNAVAILABLE일 때 보여줄 안내 문구 */
   message: string | null;
   /** 인트로·간주 끝의 3·2·1. 그 밖에는 null */
   countdown: number | null;
+  /**
+   * 음절 하이라이트가 읽는 재생 시계(ms). 소절 넘김과 달리 선행 표시(LYRICS_LEAD_MS)
+   * 없이 실제 발성 시점에 맞춘다. 오버레이 말단이 자체 틱으로 읽는다 — 컨텍스트 값에
+   * 음절 인덱스를 넣으면 음절마다 무대 전체가 리렌더되기 때문이다.
+   */
+  getHighlightTimeMs: () => number;
 }
 
 /**
@@ -151,19 +162,22 @@ function useLyricsClock(isPerformer: boolean, engine: VocalAudioEngine | null): 
 }
 
 /**
- * 선곡된 곡의 싱크 가사를 LRCLIB에서 받아, MR 재생 위치에 맞춰 소절을 넘긴다.
+ * 선곡된 곡의 싱크 가사를 받아, MR 재생 위치에 맞춰 소절을 넘긴다.
  * useStageAudioEngine·useStageScoring과 같은 자리의 도메인 접착 훅이다.
  *
- * 백엔드는 타임스탬프 없는 가사 원문만 주므로 타임스탬프는 LRCLIB에서 받는다.
- * 대신 그 원문을 정답지로 써서 후보가 같은 곡인지 대조한다 (동명이곡 오매칭 방지).
+ * 타이밍은 두 곳에서 온다. 1순위는 midi.json의 음절 하이라이트다 — 분석 파이프라인이
+ * 우리 MR 음원에서 직접 뽑은 값이라 정확하고, 음절 단위 진행 표시까지 된다.
+ * 음절 데이터가 없는 곡만 LRCLIB에서 소절 타임스탬프를 받는다(음절 표시는 없다).
  *
- * 곡 길이가 우리 음원과 맞는 후보만 쓴다 (라우트에서 걸러진다). 맞는 후보가 없으면
- * 어긋난 가사를 흘리는 대신 미지원으로 안내한다.
+ * LRCLIB 폴백에서는 백엔드 가사 원문을 정답지로 써서 후보가 같은 곡인지 대조하고
+ * (동명이곡 오매칭 방지), 곡 길이가 우리 음원과 맞는 후보만 쓴다 (라우트에서 걸러진다).
+ * 맞는 후보가 없으면 어긋난 가사를 흘리는 대신 미지원으로 안내한다.
  */
 export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
   const phase = useStageStore((state) => state.phase);
   const selectedSong = useStageStore((state) => state.selectedSong);
   const lyricsDownloadUrl = useStageStore((state) => state.lyricsDownloadUrl);
+  const midiJsonDownloadUrl = useStageStore((state) => state.midiJsonDownloadUrl);
   const { engine } = useStageAudioContext();
 
   const songId = selectedSong?.id ?? null;
@@ -183,7 +197,7 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
    * artist는 스냅샷이 늦게 채우므로, 채워지면 키가 바뀌며 다시 조회된다.
    */
   const requestKey = shouldLoad
-    ? `${songId}|${artist ?? ''}|${durationSeconds}|${lyricsDownloadUrl ?? ''}`
+    ? `${songId}|${artist ?? ''}|${durationSeconds}|${lyricsDownloadUrl ?? ''}|${midiJsonDownloadUrl ?? ''}`
     : null;
 
   const [result, setResult] = useState<{ key: string; state: LoadState } | null>(null);
@@ -218,13 +232,30 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
 
     void (async () => {
       try {
-        const [response, plainLyrics] = await Promise.all([
-          fetchLyricsCandidates({ title, artist, durationSeconds }, controller.signal),
-          // 검증용이라 없어도 진행한다. 실패하면 검증을 건너뛰고 1순위 후보를 쓴다.
+        const [plainLyrics, midiJson] = await Promise.all([
+          // 음절 정렬·LRCLIB 검증용이라 없어도 진행한다.
           lyricsDownloadUrl === null
             ? Promise.resolve(null)
             : fetchPlainLyrics(lyricsDownloadUrl, controller.signal).catch(() => null),
+          // 음절 데이터가 없는 옛 곡도 있으므로 실패는 LRCLIB 폴백으로 넘긴다.
+          midiJsonDownloadUrl === null
+            ? Promise.resolve(null)
+            : fetchMidiJson(midiJsonDownloadUrl, controller.signal).catch(() => null),
         ]);
+
+        if (controller.signal.aborted) return;
+
+        // 음절 타이밍이 있으면 그대로 끝 — 외부(LRCLIB) 조회를 아예 하지 않는다.
+        const syllableLines = parseSyllableHighlights(midiJson, plainLyrics);
+        if (syllableLines !== null) {
+          setResult({ key: requestKey, state: { status: 'READY', lines: syllableLines } });
+          return;
+        }
+
+        const response = await fetchLyricsCandidates(
+          { title, artist, durationSeconds },
+          controller.signal,
+        );
 
         if (controller.signal.aborted) return;
 
@@ -245,7 +276,7 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
     })();
 
     return () => controller.abort();
-  }, [requestKey, title, artist, durationSeconds, lyricsDownloadUrl]);
+  }, [requestKey, title, artist, durationSeconds, lyricsDownloadUrl, midiJsonDownloadUrl]);
 
   // 지난 곡의 결과를 새 곡에 쓰지 않도록 키가 맞을 때만 인정한다.
   const load: LoadState = !isSongLoaded
@@ -263,6 +294,13 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
   const activeIndex = current?.index ?? -1;
 
   const getPositionMs = useLyricsClock(isPerformer, engine);
+
+  // 음절 하이라이트용 시계. 소절 틱과 같은 보정을 쓰되 선행 표시(LYRICS_LEAD_MS)는 뺀다 —
+  // 소절은 미리 떠야 준비가 되지만, 음절이 발성보다 먼저 차오르면 오히려 어긋나 보인다.
+  const getHighlightTimeMs = useCallback(
+    () => getPositionMs() + LYRICS_SYNC_OFFSET_MS - (isPerformer ? 0 : LISTENER_LYRICS_DELAY_MS),
+    [getPositionMs, isPerformer],
+  );
 
   /**
    * 소절 경계만 찾으면 되므로 매 프레임(rAF) 돌 필요가 없다. 무대에서는 MediaPipe와
@@ -303,9 +341,11 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
     return {
       status: load.status,
       currentLine: '',
+      currentSyllables: null,
       nextLine: '',
       message: load.status === 'LOADING' ? '가사를 불러오는 중입니다' : null,
       countdown: null,
+      getHighlightTimeMs,
     };
   }
 
@@ -313,9 +353,11 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
     return {
       status: 'UNAVAILABLE',
       currentLine: '',
+      currentSyllables: null,
       nextLine: '',
       message: MISS_MESSAGES[load.reason],
       countdown: null,
+      getHighlightTimeMs,
     };
   }
 
@@ -325,8 +367,10 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
   return {
     status: 'READY',
     currentLine: activeIndex >= 0 ? (lines[activeIndex]?.text ?? '') : '',
+    currentSyllables: activeIndex >= 0 ? (lines[activeIndex]?.syllables ?? null) : null,
     nextLine: nextIndex >= 0 ? lines[nextIndex].text : '',
     message: null,
     countdown: current?.countdown ?? null,
+    getHighlightTimeMs,
   };
 }

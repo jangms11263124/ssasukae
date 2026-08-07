@@ -73,7 +73,8 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
   const activeEffect = useCardStore((state) => state.activeEffect);
   const lyricsHidden = isPerformer && activeEffect?.effectType === 'LYRICS_HIDE';
 
-  // MR 재생 위치에 맞춰 소절이 넘어간다. 타임스탬프는 LRCLIB에서 받는다.
+  // MR 재생 위치에 맞춰 소절이 넘어간다. 타이밍은 midi.json 음절 데이터가 1순위,
+  // 없으면 LRCLIB 폴백이다.
   // 조회는 READY부터 화면 레벨(StageLyricsProvider)에서 돌고 있어 여기서는 결과만 읽는다.
   const lyrics = useStageLyricsContext();
 
@@ -171,7 +172,12 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
         <LyricsBlackout />
       ) : lyrics.status === 'READY' ? (
         <>
-          <LyricsOverlay currentLine={lyrics.currentLine} nextLine={lyrics.nextLine} />
+          <LyricsOverlay
+            currentLine={lyrics.currentLine}
+            syllables={lyrics.currentSyllables}
+            nextLine={lyrics.nextLine}
+            getTimeMs={lyrics.getHighlightTimeMs}
+          />
           {/* 가사 가리기 카드에 걸렸을 때는 들어갈 타이밍도 같이 가려져야 공격이 성립한다 */}
           {lyrics.countdown !== null ? <LyricsCountdown seconds={lyrics.countdown} /> : null}
         </>
