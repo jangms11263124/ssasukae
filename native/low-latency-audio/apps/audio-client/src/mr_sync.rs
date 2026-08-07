@@ -5,11 +5,25 @@ use std::{
 
 pub const START_GUARD: Duration = Duration::from_millis(300);
 pub const READY_REPEAT: Duration = Duration::from_millis(500);
-pub const POSITION_REPEAT: Duration = Duration::from_millis(500);
+/// 리더가 재생 위치를 알리는 주기. 이 값이 곧 드리프트 보정 주기다.
+///
+/// 500 ms 였을 때 보정 속도가 초당 0.5 ms 에 그쳐, 시작이 50 ms 어긋나면 복구에 100 초가
+/// 걸렸다. 100 ms 로 줄이면 5 배 빨라지는데, 추가 트래픽은 피어당 초당 10 패킷이라
+/// 오디오(400 pps) 대비 무시할 수준이고 보정 한 걸음의 크기는 그대로라 음질 영향도 없다.
+pub const POSITION_REPEAT: Duration = Duration::from_millis(100);
 pub const MEMBERSHIP_STABLE: Duration = Duration::from_millis(500);
 pub const READY_TIMEOUT: Duration = Duration::from_secs(15);
-pub const DRIFT_THRESHOLD_SAMPLES: usize = 480;
-pub const MAX_POSITION_NUDGE_SAMPLES: usize = 24;
+/// 이 이하의 오차는 보정하지 않는 불감대. 96 samples = 2 ms.
+///
+/// 480(10 ms)이었을 때는 10 ms 어긋난 채로 수렴이 끝나 버렸다. 합창에서 10 ms 는
+/// 3.4 m 떨어져 부르는 것과 같아 무시할 수 없다.
+pub const DRIFT_THRESHOLD_SAMPLES: usize = 96;
+/// 한 번에 건너뛸 수 있는 최대 샘플. 48 samples = 1 ms.
+///
+/// [`crate::MrTrack::nudge_position`] 은 위치를 그냥 점프시키므로 한 걸음이 크면 클릭음이
+/// 난다. 1 ms 는 그 경계 안쪽이다. 보정 속도는 걸음 크기보다 [`POSITION_REPEAT`] 를
+/// 줄여서 올리는 편이 음질에 안전하다.
+pub const MAX_POSITION_NUDGE_SAMPLES: usize = 48;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct MembershipChange {
@@ -475,9 +489,28 @@ mod tests {
 
     #[test]
     fn drift_nudge_is_thresholded_and_bounded() {
-        assert_eq!(bounded_position_nudge(10_000, 10_100), 0);
-        assert_eq!(bounded_position_nudge(10_000, 11_000), 24);
-        assert_eq!(bounded_position_nudge(11_000, 10_000), -24);
+        // 불감대 안(96 samples = 2 ms 이하)이면 건드리지 않는다.
+        assert_eq!(bounded_position_nudge(10_000, 10_050), 0);
+        assert_eq!(bounded_position_nudge(10_000, 10_096), 0);
+        // 불감대를 넘으면 한 걸음 상한(48 samples = 1 ms)까지만 당긴다.
+        assert_eq!(bounded_position_nudge(10_000, 10_200), 48);
+        assert_eq!(bounded_position_nudge(10_000, 11_000), 48);
+        assert_eq!(bounded_position_nudge(11_000, 10_000), -48);
+    }
+
+    /// 보정 속도가 실제로 빨라졌는지 못 박아 둔다.
+    ///
+    /// 500 ms 주기 × 24 samples 였을 때는 초당 0.5 ms 라, 시작이 50 ms 어긋나면
+    /// 복구에 100 초가 걸렸다. 이 값이 다시 느려지면 여기서 걸린다.
+    #[test]
+    fn drift_correction_recovers_at_least_five_milliseconds_per_second() {
+        let corrections_per_second = 1000.0 / POSITION_REPEAT.as_millis() as f64;
+        let milliseconds_per_step = MAX_POSITION_NUDGE_SAMPLES as f64 / 48.0;
+        let recovery_per_second = corrections_per_second * milliseconds_per_step;
+        assert!(
+            recovery_per_second >= 5.0,
+            "보정 속도가 초당 {recovery_per_second} ms 로 너무 느리다"
+        );
     }
 
     #[test]
