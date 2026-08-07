@@ -57,6 +57,9 @@ pub(crate) struct InputCallbackStats {
     pub(crate) callback_count: Arc<AtomicU64>,
     pub(crate) max_processing_ns: Arc<AtomicU64>,
     peak_bits: Arc<AtomicU32>,
+    /// 레벨 미터 전용 피크. 1 초 주기의 [`InputCallbackStats::take_level`] 과 소비 주기가
+    /// 달라야 해서 따로 둔다. 미터는 20 Hz 로 읽어 가고, 진단 지표는 1 초를 유지한다.
+    meter_peak_bits: Arc<AtomicU32>,
     clipped_samples: Arc<AtomicU64>,
 }
 
@@ -76,6 +79,8 @@ impl InputCallbackStats {
             1.0
         };
         self.peak_bits.fetch_max(peak.to_bits(), Ordering::Relaxed);
+        self.meter_peak_bits
+            .fetch_max(peak.to_bits(), Ordering::Relaxed);
         if peak >= 0.98 {
             self.clipped_samples.fetch_add(1, Ordering::Relaxed);
         }
@@ -86,6 +91,11 @@ impl InputCallbackStats {
             f32::from_bits(self.peak_bits.swap(0, Ordering::Relaxed)),
             self.clipped_samples.swap(0, Ordering::Relaxed),
         )
+    }
+
+    /// 레벨 미터용 피크(0.0 ~ 1.0). 읽으면 초기화된다.
+    pub(crate) fn take_meter_peak(&self) -> f32 {
+        f32::from_bits(self.meter_peak_bits.swap(0, Ordering::Relaxed))
     }
 }
 

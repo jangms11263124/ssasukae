@@ -2,7 +2,7 @@ import { getAccessToken } from '@/shared/model/authStore';
 
 /** 저지연 오디오 앱 설치 파일. 쿼리 버전은 설치 파일 교체 시 브라우저 캐시를 무효화한다. */
 export const LOW_LATENCY_APP_DOWNLOAD_URL =
-  '/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi?v=0.1.8';
+  '/downloads/SSAFYStar-LowLatencyAudio-Setup-x64.msi?v=0.1.9';
 
 export const LOW_LATENCY_APP_FILE_NAME = 'SSAFYStar-LowLatencyAudio-Setup-x64.msi';
 

@@ -48,6 +48,11 @@ public class OpenViduGateway implements MediaSessionGateway {
 
     @Override
     public void disconnect(String sessionId, String connectionId) {
+        // LOW_LATENCY 방 참가자는 OpenVidu 커넥션 없이 온라인 상태가 되므로 connectionId 가 없다.
+        if (connectionId == null || connectionId.isBlank()) {
+            return;
+        }
+
         try {
             Session session = findActiveSession(sessionId);
             session.forceDisconnect(connectionId);

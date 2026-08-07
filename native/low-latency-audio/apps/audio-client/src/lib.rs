@@ -19,9 +19,9 @@ use mr_sync::{
     bounded_position_nudge, client_ids_to_mask, mask_to_client_ids, remaining_start_delay,
     MrSyncState, START_GUARD,
 };
-use peer::{BufferedOpusFrame, PeerAudioState, JITTER_MAX_FRAMES, JITTER_PREBUFFER_FRAMES};
+use peer::{BufferedOpusFrame, PeerAudioState, JITTER_MAX_FRAMES, JITTER_MAX_TARGET_FRAMES};
 #[cfg(test)]
-use peer::{JITTER_TARGET_FRAMES, STALE_FRAME_MARGIN};
+use peer::{JITTER_MIN_TARGET_FRAMES, STALE_FRAME_MARGIN};
 #[cfg(test)]
 use playback::AdaptiveResampler;
 use playback::{
@@ -41,7 +41,7 @@ use signaling::{
     MAX_CLIENTS,
 };
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io,
     net::{ToSocketAddrs, UdpSocket},
     sync::{
@@ -67,6 +67,8 @@ const MR_DUCK_THRESHOLD: f32 = 0.01;
 const MR_DUCK_FULL_LEVEL: f32 = 0.15;
 const MR_DUCK_RELEASE_PER_SAMPLE: f32 = 0.0005;
 const MAX_CONCEALED_FRAMES_PER_GAP: u64 = 4;
+/// 보이스 스테이지 레벨 미터 갱신 주기. 20 Hz.
+const VOICE_LEVEL_INTERVAL: Duration = Duration::from_millis(50);
 const TRIM_CROSSFADE_SAMPLES: usize = 48;
 const RECOVERY_CROSSFADE_SAMPLES: usize = 16;
 const FRAME_CLOCK_MAX_ADJUSTMENT_PPM: i64 = 3_000;
@@ -90,6 +92,11 @@ pub struct EmbeddedConfig {
     pub reverb_time_seconds: f32,
     pub input_device_id: Option<String>,
     pub output_device_id: Option<String>,
+    /// true 면 WASAPI 를 열지 않고 결정적 합성 프레임을 주고받는다.
+    ///
+    /// 오디오 장치 없이 시그널링·ICE·암호화·지터 버퍼·재생 클럭까지 전 구간을 돌릴 수 있어,
+    /// 한 대에서 여러 클라이언트를 띄우는 회귀 측정에 쓴다. 실제 통화는 항상 false 다.
+    pub synthetic: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -165,6 +172,11 @@ pub enum EmbeddedEvent {
         client_id: u64,
         connected: bool,
     },
+    /// ICE 재시도 예산을 모두 소진해 이 피어와 직접 연결이 불가능하다고 확정된 상태.
+    /// TURN 릴레이가 없으므로 복구 경로가 없다. UI는 사용자에게 원인과 대안을 안내해야 한다.
+    PeerUnreachable {
+        client_id: u64,
+    },
     /// 서버가 알려준 피어 이탈. 참가자 목록에서 제거해야 한다.
     PeerGone {
         client_id: u64,
@@ -175,6 +187,11 @@ pub enum EmbeddedEvent {
         concealment_percent: f64,
         underruns: u64,
         resyncs: u64,
+        /// 전송 계층 수신 큐가 버린 패킷 수(직전 1초 증가분).
+        ///
+        /// 지터 버퍼에 닿기도 전에 사라지므로 은닉·언더런 지표에는 잡히지 않는다.
+        /// 0 이 아니면 버스트 도착으로 음성이 유실되고 있다는 뜻이다.
+        dropped_packets: u64,
     },
     MrFinished {
         performance_id: u64,
@@ -209,6 +226,14 @@ pub enum EmbeddedEvent {
         peak_dbfs: f32,
         clipping: bool,
         clipped_samples: u64,
+    },
+    /// 보이스 스테이지용 실시간 레벨(0.0 ~ 1.0). 20 Hz 로 올라온다.
+    ///
+    /// 1 초 주기인 [`EmbeddedEvent::InputLevel`] 은 미터로 쓰기엔 너무 느려서 따로 둔다.
+    /// `peers` 는 (client_id, peak) 쌍이고, 연결된 피어만 담는다.
+    VoiceLevels {
+        local_peak: f32,
+        peers: Vec<(u64, f32)>,
     },
     Stopped,
 }
@@ -490,7 +515,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
         return Err("--nickname must be at most 64 UTF-8 bytes".into());
     }
     let duration = Duration::from_secs(365 * 24 * 60 * 60);
-    let synthetic = false;
+    let synthetic = config.synthetic;
     let effects_config = EffectsConfig {
         output_gain: config.mic_gain_percent / 100.0,
         dry: config.dry_percent / 100.0,
@@ -661,6 +686,8 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
     let mut peer_exchange_keys = BTreeMap::<u64, [u8; 32]>::new();
     let mut peer_receive_mix = BTreeMap::<u64, PeerReceiveMix>::new();
     let mut connection_states = BTreeMap::<u64, bool>::new();
+    // 직접 연결 실패를 확정 통보한 피어. 상태가 종료 상태라 한 번만 올린다.
+    let mut unreachable_reported = BTreeSet::<u64>::new();
     let mut capture_queue_us = Vec::new();
     let mut signaling_buffer = vec![0_u8; MAX_PACKET_BYTES];
     // P2P 모드에서는 오디오가 서버를 거치지 않아, 이 Ping이 없으면 서버가 통화 중인
@@ -670,6 +697,8 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
     let mut previous_live_concealed = 0_u64;
     let mut previous_live_resyncs = 0_u64;
     let mut previous_live_underruns = 0_u64;
+    let mut previous_live_queue_drops = 0_u64;
+    let mut next_voice_levels = Instant::now();
     let mut mr_track: Option<MrTrack> = None;
     let mut mr_volume = 0.72_f32;
     let mut cancel_request = None::<u64>;
@@ -844,6 +873,19 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
         }
 
         for (&peer_id, transport) in &transports {
+            // transports 는 빈 슬롯까지 미리 만들어 두므로, 실제로 등록된 피어에 대해서만
+            // 실패를 알린다. 그러지 않으면 아무도 없는 슬롯 때문에 UI에 유령 참가자가 생긴다.
+            if transport.unreachable()
+                && peers.contains_key(&peer_id)
+                && unreachable_reported.insert(peer_id)
+            {
+                println!(
+                    "Peer {peer_id} audio path: unreachable (direct P2P failed, no relay fallback)"
+                );
+                if let Some(events) = &embedded_events {
+                    let _ = events.send(EmbeddedEvent::PeerUnreachable { client_id: peer_id });
+                }
+            }
             let connected = transport.connected();
             let disconnected = transport.take_disconnected_event();
             let previous = connection_states
@@ -1416,6 +1458,12 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             }
             if audio_playback_enabled {
                 peer.discard_stale_buffered_frames(playout_update_now);
+                if let Some(target) = peer.adapt_jitter_target(playout_update_now) {
+                    println!(
+                        "Peer {peer_id} jitter target -> {:.1} ms",
+                        target as f64 * FRAME_DURATION_MICROS as f64 / 1_000.0
+                    );
+                }
             }
             if peer.start_playout_if_ready() && !playout_started {
                 playout_started = true;
@@ -1437,6 +1485,9 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             let mut remote_frames = Vec::<[f32; SAMPLES_PER_FRAME]>::new();
             let mut has_remote_playout = false;
             let mut minimum_buffered = JITTER_MAX_FRAMES;
+            // 프레임 클럭도 적응형 목표를 따라가야 한다. 목표가 5 ms 로 줄었는데
+            // 클럭이 예전 상수를 향하면 서로 반대로 당긴다.
+            let mut minimum_target = JITTER_MAX_TARGET_FRAMES;
             for (&peer_id, peer) in &mut peers {
                 if !transports
                     .get(&peer_id)
@@ -1451,6 +1502,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                     continue;
                 }
                 has_remote_playout = true;
+                minimum_target = minimum_target.min(peer.jitter_target_frames);
                 if peer.frame_buffer.len() > (peer.jitter_target_frames + 2).min(JITTER_MAX_FRAMES)
                 {
                     if let Some((&newest, _)) = peer.frame_buffer.last_key_value() {
@@ -1541,6 +1593,9 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                 };
                 peer.last_playback_frame = Some(frame);
                 peer.playout_sequence = Some(sequence.wrapping_add(1));
+                // 로컬 믹스 설정을 타기 전 원본으로 잰다. 내가 이 사람 볼륨을 줄였다고
+                // 그 사람이 안 부르는 것처럼 보이면 안 된다.
+                peer.observe_output_frame(&frame);
                 minimum_buffered = minimum_buffered.min(peer.frame_buffer.len());
                 let mut rendered = frame;
                 if peer_receive_mix
@@ -1575,7 +1630,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             push_playback_frame(destination, &vocals, &mut playback_overflows);
             push_playback_frame(mr_destination, &mr_frame, &mut playback_overflows);
             let (clock_interval, clock_adjustment_ppm) = if has_remote_playout {
-                frame_clock_interval(minimum_buffered, JITTER_PREBUFFER_FRAMES - 1)
+                frame_clock_interval(minimum_buffered, minimum_target.saturating_sub(1))
             } else {
                 (interval, 0)
             };
@@ -1583,6 +1638,26 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             frame_clock_adjustment_measurements += 1;
             next_playout += clock_interval;
             playout_steps += 1;
+        }
+
+        // 레벨 미터는 1 초 주기 지표와 별도로 20 Hz 로 내보낸다. 그보다 느리면 미터가
+        // 멈춰 보이고, 더 빠르면 GUI 리페인트(5 ms)보다 잦아져 의미가 없다.
+        let level_now = Instant::now();
+        if level_now >= next_voice_levels {
+            next_voice_levels = level_now + VOICE_LEVEL_INTERVAL;
+            if let Some(events) = &embedded_events {
+                let peer_levels: Vec<(u64, f32)> = peers
+                    .iter()
+                    .filter(|(peer_id, _)| {
+                        transports.get(peer_id).is_some_and(IceTransport::connected)
+                    })
+                    .map(|(&peer_id, peer)| (peer_id, peer.output_peak))
+                    .collect();
+                let _ = events.send(EmbeddedEvent::VoiceLevels {
+                    local_peak: input_callback_stats.take_meter_peak(),
+                    peers: peer_levels,
+                });
+            }
         }
 
         let live_now = Instant::now();
@@ -1637,6 +1712,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
                     concealment_percent,
                     underruns: total_underruns.saturating_sub(previous_live_underruns),
                     resyncs: total_resyncs.saturating_sub(previous_live_resyncs),
+                    dropped_packets: incoming_queue_drops.saturating_sub(previous_live_queue_drops),
                 });
                 let _ = events.send(EmbeddedEvent::InputLevel {
                     peak_dbfs,
@@ -1648,6 +1724,7 @@ fn run_relay(runtime: EmbeddedRuntime) -> Result<(), Box<dyn std::error::Error>>
             previous_live_concealed = total_concealed;
             previous_live_resyncs = total_resyncs;
             previous_live_underruns = total_underruns;
+            previous_live_queue_drops = incoming_queue_drops;
             while next_live_status <= live_now {
                 next_live_status += Duration::from_secs(1);
             }
@@ -2373,7 +2450,7 @@ mod tests {
 
     #[test]
     fn frame_clock_slows_when_network_queue_is_low() {
-        let target_frames = JITTER_PREBUFFER_FRAMES - 1;
+        let target_frames = JITTER_MAX_TARGET_FRAMES - 1;
         let (low_interval, low_ppm) = frame_clock_interval(0, target_frames);
         let (target_interval, target_ppm) = frame_clock_interval(target_frames, target_frames);
         let (high_interval, high_ppm) = frame_clock_interval(JITTER_MAX_FRAMES, target_frames);
@@ -2414,8 +2491,10 @@ mod tests {
         peer.frame_buffer.insert(
             10,
             buffered_frame(
-                now - Duration::from_micros(FRAME_DURATION_MICROS * JITTER_TARGET_FRAMES as u64)
-                    - STALE_FRAME_MARGIN
+                // 나이 한계는 현재 목표를 따라간다. 기본값(하한)에 마진을 더한 값보다 오래된 프레임이다.
+                now - Duration::from_micros(
+                    FRAME_DURATION_MICROS * JITTER_MIN_TARGET_FRAMES as u64,
+                ) - STALE_FRAME_MARGIN
                     - Duration::from_millis(1),
             ),
         );
@@ -2433,7 +2512,7 @@ mod tests {
     fn peer_join_waits_for_its_own_prebuffer() {
         let now = Instant::now();
         let mut peer = PeerAudioState::default();
-        for sequence in 40..40 + JITTER_PREBUFFER_FRAMES as u64 {
+        for sequence in 40..40 + JITTER_MIN_TARGET_FRAMES as u64 {
             peer.frame_buffer.insert(sequence, buffered_frame(now));
         }
 
@@ -2462,17 +2541,60 @@ mod tests {
     }
 
     #[test]
-    fn jitter_buffer_targets_ten_milliseconds() {
+    fn jitter_buffer_starts_at_five_milliseconds_and_caps_at_ten() {
         let peer = PeerAudioState::default();
-        assert_eq!(JITTER_PREBUFFER_FRAMES, 4);
-        assert_eq!(JITTER_TARGET_FRAMES, 4);
+        assert_eq!(JITTER_MIN_TARGET_FRAMES, 2); // 5 ms
+        assert_eq!(JITTER_MAX_TARGET_FRAMES, 4); // 10 ms
         assert_eq!(JITTER_MAX_FRAMES, 6);
-        assert_eq!(peer.jitter_target_frames, 4);
+        // 깨끗한 회선을 가정하고 하한에서 출발한다. 사고가 나면 즉시 올라간다.
+        assert_eq!(peer.jitter_target_frames, JITTER_MIN_TARGET_FRAMES);
         assert_eq!(
-            Duration::from_micros(FRAME_DURATION_MICROS * JITTER_TARGET_FRAMES as u64)
+            Duration::from_micros(FRAME_DURATION_MICROS * JITTER_MIN_TARGET_FRAMES as u64),
+            Duration::from_millis(5)
+        );
+        assert_eq!(
+            Duration::from_micros(FRAME_DURATION_MICROS * JITTER_MAX_TARGET_FRAMES as u64),
+            Duration::from_millis(10)
+        );
+        // 나이 한계는 목표에 따라 함께 움직인다.
+        assert_eq!(
+            Duration::from_micros(FRAME_DURATION_MICROS * JITTER_MAX_TARGET_FRAMES as u64)
                 + STALE_FRAME_MARGIN,
             Duration::from_millis(20)
         );
+    }
+
+    #[test]
+    fn jitter_target_grows_on_incident_and_shrinks_after_quiet_period() {
+        let start = Instant::now();
+        let mut peer = PeerAudioState::default();
+        assert_eq!(peer.jitter_target_frames, JITTER_MIN_TARGET_FRAMES);
+
+        // 사고가 나면 즉시 한 프레임 올라간다.
+        peer.concealed_frames += 1;
+        assert_eq!(peer.adapt_jitter_target(start), Some(3));
+        peer.late_playback_frames += 1;
+        assert_eq!(peer.adapt_jitter_target(start), Some(4));
+
+        // 상한을 넘지 않는다.
+        peer.playback_resyncs += 1;
+        assert_eq!(peer.adapt_jitter_target(start), None);
+        assert_eq!(peer.jitter_target_frames, JITTER_MAX_TARGET_FRAMES);
+
+        // 조용해도 유예 시간 전에는 줄지 않는다.
+        assert_eq!(
+            peer.adapt_jitter_target(start + Duration::from_secs(1)),
+            None
+        );
+
+        // 충분히 조용하면 한 프레임씩 내려가고, 하한에서 멈춘다.
+        let mut now = start + Duration::from_secs(6);
+        assert_eq!(peer.adapt_jitter_target(now), Some(3));
+        now += Duration::from_secs(6);
+        assert_eq!(peer.adapt_jitter_target(now), Some(2));
+        now += Duration::from_secs(6);
+        assert_eq!(peer.adapt_jitter_target(now), None);
+        assert_eq!(peer.jitter_target_frames, JITTER_MIN_TARGET_FRAMES);
     }
 
     #[test]

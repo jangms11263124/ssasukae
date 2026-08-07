@@ -32,12 +32,39 @@ const BACKGROUND: Color32 = Color32::from_rgb(8, 9, 10);
 const PANEL: Color32 = Color32::from_rgb(25, 26, 28);
 const PANEL_ALT: Color32 = Color32::from_rgb(32, 33, 35);
 const BORDER: Color32 = Color32::from_rgb(70, 73, 75);
+/// 패널 테두리와 구분선. 배경과 가깝게 낮춰야 칸이 도드라지지 않는다.
+const PANEL_LINE: Color32 = Color32::from_rgb(42, 44, 47);
+/// 경고. 빨강까지 갈 정도는 아닌 상태에 쓴다.
+const WARN: Color32 = Color32::from_rgb(255, 190, 64);
+/// 가창자 재접속 유예. 일반 모드와 같은 값이어야 카운트다운이 어긋나지 않는다.
+/// (`application.yml` performer-disconnect-grace, 프론트 PERFORMER_RECONNECT_GRACE_SECONDS)
+const PERFORMER_RECONNECT_GRACE: Duration = Duration::from_secs(15);
 const MUTED: Color32 = Color32::from_rgb(151, 153, 156);
 // 프론트 도메인이 아니라 API 도메인이다. 프론트를 거치면 /ws 업그레이드가 프록시를
 // 통과하지 못해 방 이벤트 구독이 끊긴다.
 const PRODUCTION_BACKEND_URL: &str = "https://api.ssafystar-k.site";
 const PRODUCTION_RENDEZVOUS_SERVER: &str = "15.165.205.31:50000";
+/// 직접 연결이 불가능할 때 일반 모드로 안내할 웹 주소. API 도메인과 달리 프론트 도메인이다.
+const PRODUCTION_WEB_URL: &str = "https://ssafystar-k.site";
 const LEAVE_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// 기본 브라우저로 URL을 연다. 실패해도 앱 흐름을 막지 않는다.
+#[cfg(windows)]
+fn open_in_browser(url: &str) {
+    use std::os::windows::process::CommandExt;
+    // CREATE_NO_WINDOW. release 빌드는 콘솔이 없어서 이게 없으면 cmd 창이 깜빡인다.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    if let Err(error) = std::process::Command::new("cmd")
+        .args(["/C", "start", "", url])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+    {
+        eprintln!("Failed to open {url}: {error}");
+    }
+}
+
+#[cfg(not(windows))]
+fn open_in_browser(_url: &str) {}
 
 fn main() -> eframe::Result {
     if let Some(action) = protocol_registration::requested_action() {
@@ -74,21 +101,47 @@ fn main() -> eframe::Result {
     )
 }
 
-fn install_korean_font(ctx: &egui::Context) {
-    let Ok(bytes) = fs::read(r"C:\Windows\Fonts\malgun.ttf") else {
-        return;
-    };
+/// 웹과 동일한 서체를 쓴다.
+///
+/// 프론트는 `--font-sans`=Anybody, `--font-mono`=JetBrains Mono 이고 한글은 `system-ui`
+/// 로 떨어진다(`frontend/src/shared/config/fonts.ts`, `globals.css:21-22`).
+/// 두 서체 모두 한글 글리프가 없으므로 라틴/숫자는 웹 서체가, 한글은 맑은 고딕이 맡도록
+/// 같은 패밀리 안에 순서대로 넣는다. egui 는 앞 글꼴에 글리프가 없으면 다음으로 넘어간다.
+///
+/// 폰트 파일은 프론트에서 복사해 앱 안에 둔다. 상대 경로로 프론트를 참조하면 native 만
+/// 따로 빌드할 때 깨지는데, 이 앱은 별도 설치본으로 배포되므로 자립해야 한다.
+const ANYBODY_FONT: &[u8] = include_bytes!("../assets/fonts/Anybody-Variable.ttf");
+const JETBRAINS_MONO_FONT: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Variable.ttf");
+
+fn install_fonts(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert(
-        "malgun-gothic".into(),
-        egui::FontData::from_owned(bytes).into(),
+        "anybody".into(),
+        egui::FontData::from_static(ANYBODY_FONT).into(),
     );
-    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-        fonts
-            .families
-            .entry(family)
-            .or_default()
-            .insert(0, "malgun-gothic".into());
+    fonts.font_data.insert(
+        "jetbrains-mono".into(),
+        egui::FontData::from_static(JETBRAINS_MONO_FONT).into(),
+    );
+
+    // 한글 폴백. 없으면 라틴만 웹 서체로 나오고 한글은 egui 기본 글꼴이 맡는다.
+    let korean = fs::read(r"C:\Windows\Fonts\malgun.ttf").ok().map(|bytes| {
+        fonts.font_data.insert(
+            "malgun-gothic".into(),
+            egui::FontData::from_owned(bytes).into(),
+        );
+        "malgun-gothic".to_owned()
+    });
+
+    for (family, primary) in [
+        (egui::FontFamily::Proportional, "anybody"),
+        (egui::FontFamily::Monospace, "jetbrains-mono"),
+    ] {
+        let entry = fonts.families.entry(family).or_default();
+        if let Some(korean) = &korean {
+            entry.insert(0, korean.clone());
+        }
+        entry.insert(0, primary.into());
     }
     ctx.set_fonts(fonts);
 }
@@ -263,6 +316,11 @@ struct Participant {
     name: String,
     connected: bool,
     is_me: bool,
+    /// ICE 재시도 예산을 소진해 직접 연결이 불가능하다고 확정된 참가자.
+    /// connected=false 와 달리 "기다리면 붙는다"가 아니라 "이 환경에서는 안 된다"는 뜻이다.
+    unreachable: bool,
+    /// 보이스 스테이지 레벨(0.0 ~ 1.0). 20 Hz 로 갱신된다.
+    level: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -392,6 +450,10 @@ struct App {
     concealment_percent: f64,
     underruns: u64,
     resyncs: u64,
+    /// 전송 계층 수신 큐가 버린 누적 패킷 수. 은닉 지표로는 보이지 않는 유실이다.
+    dropped_packets: u64,
+    /// 초대코드를 복사한 시각. 잠깐 "복사됨"으로 바꿔 눌린 걸 알린다.
+    invite_copied_at: Option<Instant>,
     connected_peers: usize,
     song_query: String,
     song_catalog: Vec<Song>,
@@ -416,6 +478,13 @@ struct App {
     controls_active_performance: bool,
     cancel_confirmation_open: bool,
     cancel_request_pending: bool,
+    /// 중지를 요청한 시각. 응답이 없을 때 되돌리기 위한 기준이다.
+    cancel_requested_at: Option<Instant>,
+    /// 시작 요청 중. 연타로 중복 요청이 나가지 않게 막는다.
+    start_request_pending: bool,
+    start_requested_at: Option<Instant>,
+    /// 공연이 일시 중지된 시각. 일반 모드의 유예 카운트다운과 같은 역할이다.
+    performance_suspended_at: Option<Instant>,
     authentication_required: bool,
     replacement_access_token: String,
     mr_ready_clients: usize,
@@ -447,7 +516,9 @@ impl App {
         cc: &eframe::CreationContext<'_>,
         instance_guard: single_instance::InstanceGuard,
     ) -> Self {
-        install_korean_font(&cc.egui_ctx);
+        install_fonts(&cc.egui_ctx);
+        // 로고 PNG 를 그리려면 이미지 로더를 먼저 등록해야 한다.
+        egui_extras::install_image_loaders(&cc.egui_ctx);
         let mut visuals = egui::Visuals::dark();
         visuals.panel_fill = BACKGROUND;
         visuals.window_fill = PANEL;
@@ -548,6 +619,8 @@ impl App {
             concealment_percent: 0.0,
             underruns: 0,
             resyncs: 0,
+            dropped_packets: 0,
+            invite_copied_at: None,
             connected_peers: if preview || mock_spring_test { 2 } else { 0 },
             song_query: String::new(),
             song_catalog: if preview {
@@ -599,6 +672,10 @@ impl App {
             controls_active_performance: false,
             cancel_confirmation_open: false,
             cancel_request_pending: false,
+            cancel_requested_at: None,
+            start_request_pending: false,
+            start_requested_at: None,
+            performance_suspended_at: None,
             authentication_required: false,
             replacement_access_token: String::new(),
             mr_ready_clients: 0,
@@ -637,6 +714,8 @@ impl App {
                         name: "유진".into(),
                         connected: true,
                         is_me: true,
+                        unreachable: false,
+                        level: 0.42,
                     },
                 ),
                 (
@@ -645,6 +724,8 @@ impl App {
                         name: "민석".into(),
                         connected: true,
                         is_me: false,
+                        unreachable: false,
+                        level: 0.68,
                     },
                 ),
                 (
@@ -653,6 +734,8 @@ impl App {
                         name: "현호".into(),
                         connected: true,
                         is_me: false,
+                        unreachable: false,
+                        level: 0.12,
                     },
                 ),
             ]);
@@ -806,6 +889,7 @@ impl App {
             reverb_time_seconds: self.reverb_time,
             input_device_id: self.selected_input_device_id.clone(),
             output_device_id: self.selected_output_device_id.clone(),
+            synthetic: false,
         };
         thread::spawn(move || {
             let forward_tx = worker_tx.clone();
@@ -878,6 +962,8 @@ impl App {
                             name,
                             connected: true,
                             is_me: true,
+                            unreachable: false,
+                            level: 0.0,
                         },
                     );
                     self.screen = Screen::Room;
@@ -906,6 +992,8 @@ impl App {
                             name: nickname,
                             connected: false,
                             is_me: false,
+                            unreachable: false,
+                            level: 0.0,
                         });
                 }
                 WorkerEvent::Client(EmbeddedEvent::PeerConnection {
@@ -914,11 +1002,18 @@ impl App {
                 }) => {
                     self.participants
                         .entry(client_id)
-                        .and_modify(|participant| participant.connected = connected)
+                        .and_modify(|participant| {
+                            participant.connected = connected;
+                            if connected {
+                                participant.unreachable = false;
+                            }
+                        })
                         .or_insert(Participant {
                             name: format!("참가자 {client_id}"),
                             connected,
                             is_me: false,
+                            unreachable: false,
+                            level: 0.0,
                         });
                     self.diagnostic(
                         "peer_connection",
@@ -928,18 +1023,43 @@ impl App {
                         }),
                     );
                 }
+                WorkerEvent::Client(EmbeddedEvent::PeerUnreachable { client_id }) => {
+                    // 목록에 없는 참가자는 만들지 않는다. 실패 통보만으로 유령을 띄우지 않기 위해서다.
+                    if let Some(participant) = self.participants.get_mut(&client_id) {
+                        participant.connected = false;
+                        participant.unreachable = true;
+                    }
+                    self.diagnostic(
+                        "peer_unreachable",
+                        serde_json::json!({ "clientId": client_id }),
+                    );
+                }
+                WorkerEvent::Client(EmbeddedEvent::VoiceLevels { local_peak, peers }) => {
+                    for participant in self.participants.values_mut() {
+                        if participant.is_me {
+                            participant.level = local_peak;
+                        }
+                    }
+                    for (client_id, peak) in peers {
+                        if let Some(participant) = self.participants.get_mut(&client_id) {
+                            participant.level = peak;
+                        }
+                    }
+                }
                 WorkerEvent::Client(EmbeddedEvent::Metrics {
                     connected_peers,
                     ping_ms,
                     concealment_percent,
                     underruns,
                     resyncs,
+                    dropped_packets,
                 }) => {
                     self.connected_peers = connected_peers;
                     self.ping_ms = ping_ms;
                     self.concealment_percent = concealment_percent;
                     self.underruns = underruns;
                     self.resyncs = resyncs;
+                    self.dropped_packets = self.dropped_packets.saturating_add(dropped_packets);
                     if self.last_diagnostic_metrics.elapsed() >= Duration::from_secs(5) {
                         self.last_diagnostic_metrics = Instant::now();
                         self.diagnostic(
@@ -950,6 +1070,7 @@ impl App {
                                 "concealmentPercent": concealment_percent,
                                 "underruns": underruns,
                                 "resyncs": resyncs,
+                                "droppedPackets": dropped_packets,
                             }),
                         );
                     }
@@ -1270,11 +1391,16 @@ impl App {
                 BackendEvent::PlaybackEnded {
                     performance_id,
                     cancelled,
+                    reason,
                 } => {
                     if self.active_performance_id == Some(performance_id) {
                         self.diagnostic(
                             "playback_ended",
-                            serde_json::json!({ "performanceId": performance_id }),
+                            serde_json::json!({
+                                "performanceId": performance_id,
+                                "cancelled": cancelled,
+                                "reason": reason,
+                            }),
                         );
                         if let Some(sender) = &self.command_tx {
                             let _ = sender.send(EmbeddedCommand::StopMr {
@@ -1282,10 +1408,46 @@ impl App {
                             });
                         }
                         self.reset_finished_performance();
-                        self.cancel_request_pending = false;
                         if cancelled {
-                            self.song_status = "노래 시작자가 재생을 취소했습니다".into();
+                            // 왜 끝났는지에 따라 문구가 달라야 한다. 퇴장·연결 끊김으로
+                            // 끝난 걸 "취소했습니다"로 알리면 오해를 부른다.
+                            self.song_status = match reason.as_deref() {
+                                Some("PERFORMER_DISCONNECTED") => {
+                                    "시작한 사람의 연결이 끊겨 노래가 끝났어요".into()
+                                }
+                                Some("SAFETY_TERMINATION") => {
+                                    "시작한 사람이 방을 나가 노래가 끝났어요".into()
+                                }
+                                _ => "시작한 사람이 노래를 중지했어요".to_owned(),
+                            };
                         }
+                    }
+                }
+                BackendEvent::PerformanceSuspended { performance_id } => {
+                    if self.active_performance_id == Some(performance_id) {
+                        // 일반 모드는 무대를 덮고 유예 시간을 센다. 여기서도 반주를 멈추고
+                        // 재개를 기다린다. 계속 틀어두면 돌아온 사람과 위치가 어긋난다.
+                        self.performance_suspended_at = Some(Instant::now());
+                        if let Some(sender) = &self.command_tx {
+                            let _ = sender.send(EmbeddedCommand::StopMr {
+                                performance_id: Some(performance_id),
+                            });
+                        }
+                        self.song_status = "연결이 끊겨 공연이 일시 중지됐어요".into();
+                        self.diagnostic(
+                            "performance_suspended",
+                            serde_json::json!({ "performanceId": performance_id }),
+                        );
+                    }
+                }
+                BackendEvent::PerformanceResumed { performance_id } => {
+                    if self.active_performance_id == Some(performance_id) {
+                        self.performance_suspended_at = None;
+                        self.song_status = "공연이 다시 시작됐어요".into();
+                        self.diagnostic(
+                            "performance_resumed",
+                            serde_json::json!({ "performanceId": performance_id }),
+                        );
                     }
                 }
                 BackendEvent::RoomTerminated => {
@@ -1301,7 +1463,12 @@ impl App {
                     self.maybe_finish_leave();
                 }
                 BackendEvent::RequestFailed(error) => {
+                    // 실패했는데 대기 잠금을 그대로 두면 버튼이 "요청 중..."에 갇힌다.
                     self.local_prepare_song_id = None;
+                    self.start_request_pending = false;
+                    self.start_requested_at = None;
+                    self.cancel_request_pending = false;
+                    self.cancel_requested_at = None;
                     self.song_status = error;
                 }
                 BackendEvent::Stopped => {
@@ -1409,6 +1576,10 @@ impl App {
         self.controls_active_performance = false;
         self.cancel_confirmation_open = false;
         self.cancel_request_pending = false;
+        self.cancel_requested_at = None;
+        self.start_request_pending = false;
+        self.start_requested_at = None;
+        self.performance_suspended_at = None;
         self.mr_ready_clients = 0;
         self.mr_total_clients = 0;
         self.mr_waiting_clients.clear();
@@ -1508,18 +1679,23 @@ impl App {
             self.active_performance_id = Some(90_001);
             self.playback_state = PlaybackState::Ready;
             self.mr_state = MrState::Ready;
+            // 미리보기에서도 내가 시작한 공연이어야 중지·취소 버튼을 확인할 수 있다.
+            self.controls_active_performance = true;
             self.song_status = "미리보기 공연 준비 완료".into();
             return true;
         }
         let Some(sender) = &self.backend_command_tx else {
-            self.song_status = "Spring Boot 연결이 준비되지 않았습니다".into();
+            self.song_status = "서버에 연결되지 않아 준비할 수 없어요".into();
             return false;
         };
         if sender.send(BackendCommand::PrepareSong { song_id }).is_ok() {
             self.local_prepare_song_id = Some(song_id);
-            self.song_status = "Spring Boot에 공연 준비를 요청했습니다".into();
+            self.song_status = "공연 준비를 요청했어요".into();
             return true;
         }
+        // 전송 실패를 삼키면 사용자는 버튼이 눌렸는지조차 알 수 없다.
+        self.song_status = "준비 요청을 보내지 못했어요 · 다시 시도해 주세요".into();
+        self.diagnostic("performance_prepare_send_failed", serde_json::json!({}));
         false
     }
 
@@ -1534,15 +1710,45 @@ impl App {
             return;
         }
         let Some(sender) = &self.backend_command_tx else {
-            self.song_status = "Spring Boot 연결이 준비되지 않았습니다".into();
+            self.song_status = "서버에 연결되지 않아 시작할 수 없어요".into();
             return;
         };
         if sender
             .send(BackendCommand::StartPlayback { performance_id })
             .is_ok()
         {
-            self.song_status = "Spring Boot에 재생 시작을 요청했습니다".into();
+            // 응답이 올 때까지 버튼을 잠근다. 잠그지 않으면 연타로 요청이 중복된다.
+            self.start_request_pending = true;
+            self.start_requested_at = Some(Instant::now());
+            self.song_status = "재생 시작을 요청했어요".into();
+        } else {
+            self.song_status = "시작 요청을 보내지 못했어요 · 다시 시도해 주세요".into();
+            self.diagnostic("performance_start_send_failed", serde_json::json!({}));
         }
+    }
+
+    /// 시작 요청이 응답 없이 매달리는 걸 막는다. 중지와 같은 이유다.
+    fn poll_start_timeout(&mut self) {
+        const START_TIMEOUT: Duration = Duration::from_secs(10);
+        if !self.start_request_pending {
+            return;
+        }
+        // 재생이 시작됐으면 잠금을 푼다.
+        if self.playback_state == PlaybackState::Playing {
+            self.start_request_pending = false;
+            self.start_requested_at = None;
+            return;
+        }
+        let Some(requested_at) = self.start_requested_at else {
+            return;
+        };
+        if requested_at.elapsed() < START_TIMEOUT {
+            return;
+        }
+        self.start_request_pending = false;
+        self.start_requested_at = None;
+        self.song_status = "시작 응답이 없습니다 · 다시 시도해 주세요".into();
+        self.diagnostic("performance_start_timeout", serde_json::json!({}));
     }
 
     fn finish_leave(&mut self) {
@@ -1570,6 +1776,10 @@ impl App {
         self.controls_active_performance = false;
         self.cancel_confirmation_open = false;
         self.cancel_request_pending = false;
+        self.cancel_requested_at = None;
+        self.start_request_pending = false;
+        self.start_requested_at = None;
+        self.performance_suspended_at = None;
         self.mr_ready_clients = 0;
         self.mr_total_clients = 0;
         self.mr_waiting_clients.clear();
@@ -1842,12 +2052,37 @@ impl App {
         if !self.controls_active_performance || self.cancel_request_pending {
             return;
         }
-        self.cancel_request_pending = true;
-        self.cancel_confirmation_open = false;
-        self.song_status = "노래 취소 요청을 전송했습니다".into();
+        // 반주는 어떤 경우에도 즉시 멈춘다.
         if let Some(sender) = &self.command_tx {
             let _ = sender.send(EmbeddedCommand::CancelMr { performance_id });
         }
+        self.cancel_confirmation_open = false;
+
+        // 미리보기는 백엔드도 P2P도 없어 완료 이벤트가 돌아오지 않는다.
+        // 기다리면 영영 곡 선택으로 못 돌아가므로 여기서 바로 정리한다.
+        if self.preview {
+            self.reset_finished_performance();
+            self.song_status = "노래를 중지했어요 · 다음 곡을 골라주세요".into();
+            return;
+        }
+
+        // 방 상태 정리는 백엔드가 해야 하지만, 끊겨 있다면 응답을 기다릴 수 없다.
+        // 붙잡아 두면 사용자는 중지도 못 하고 다음 곡도 못 고르는 상태에 갇힌다.
+        let backend_reachable = self.backend_command_tx.is_some() && self.backend_connected;
+        if !backend_reachable {
+            self.reset_finished_performance();
+            self.song_status =
+                "서버 연결이 끊겨 노래만 멈췄어요 · 방 상태는 다시 연결되면 정리됩니다".into();
+            self.diagnostic(
+                "performance_cancel_offline",
+                serde_json::json!({ "performanceId": performance_id }),
+            );
+            return;
+        }
+        self.cancel_request_pending = true;
+        self.cancel_requested_at = Some(Instant::now());
+        self.cancel_confirmation_open = false;
+        self.song_status = "노래 중지 요청을 전송했습니다".into();
         if let Some(sender) = &self.backend_command_tx {
             let _ = sender.send(BackendCommand::CancelPerformance { performance_id });
         }
@@ -1857,33 +2092,70 @@ impl App {
         );
     }
 
+    /// 중지 요청이 응답 없이 매달리는 걸 막는다.
+    ///
+    /// 백엔드가 응답하지 않으면 버튼이 "중지 처리 중..."에 갇혀 사용자가 다시 시도할 수도,
+    /// 상황을 이해할 수도 없다. 시간이 지나면 되돌리고 다시 누를 수 있게 한다.
+    fn poll_cancel_timeout(&mut self) {
+        const CANCEL_TIMEOUT: Duration = Duration::from_secs(8);
+        if !self.cancel_request_pending {
+            return;
+        }
+        let Some(requested_at) = self.cancel_requested_at else {
+            return;
+        };
+        if requested_at.elapsed() < CANCEL_TIMEOUT {
+            return;
+        }
+        // 응답을 못 받았어도 이 앱에서는 이미 노래가 멈춰 있다. 상태를 되돌려
+        // 다음 곡을 고를 수 있게 한다. 방 상태가 어긋나면 이후 서버 이벤트가 바로잡는다.
+        self.reset_finished_performance();
+        self.song_status = "서버 응답이 없어 이 앱에서만 정리했어요 · 다음 곡을 골라주세요".into();
+        self.diagnostic("performance_cancel_timeout", serde_json::json!({}));
+    }
+
+    /// 웹 패널과 같은 처리. 테두리를 배경에 가깝게 낮추고 모서리를 둥글린다.
+    /// 선이 강하면 칸이 도드라져 화면이 시끄러워진다.
     fn panel() -> egui::Frame {
         egui::Frame::new()
             .fill(PANEL)
-            .stroke(Stroke::new(1.0_f32, BORDER))
+            .stroke(Stroke::new(1.0_f32, PANEL_LINE))
             .inner_margin(18.0)
-            .corner_radius(0)
+            .corner_radius(10)
     }
 
+    /// 섹션 제목. 웹은 mono + 넓은 자간(`tracking-[0.16em]`)에 얇은 밑줄이다.
     fn section_title(ui: &mut egui::Ui, title: &str, detail: &str) {
         ui.horizontal(|ui| {
             ui.label(
                 RichText::new(title)
-                    .monospace()
-                    .size(16.0)
+                    .size(13.0)
                     .strong()
+                    .extra_letter_spacing(1.6)
                     .color(CYAN),
             );
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(RichText::new(detail).monospace().size(11.0).color(MUTED));
-            });
+            if !detail.is_empty() {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(RichText::new(detail).size(11.0).color(MUTED));
+                });
+            }
         });
-        ui.separator();
+        ui.add_space(8.0);
+        Self::hairline(ui);
+        ui.add_space(12.0);
     }
 
+    /// 웹의 얇은 구분선. egui 기본 `separator()` 는 굵고 밝아서 직접 그린다.
+    fn hairline(ui: &mut egui::Ui) {
+        let (rect, _) =
+            ui.allocate_exact_size(egui::vec2(ui.available_width(), 1.0), egui::Sense::hover());
+        ui.painter().rect_filled(rect, 0.0, PANEL_LINE);
+    }
+
+    /// 라벨은 muted, 값은 흰색이 기본. 색은 상태를 말할 때만 쓴다.
     fn metric(ui: &mut egui::Ui, label: &str, value: impl Into<String>, color: Color32) {
         ui.horizontal(|ui| {
-            ui.label(RichText::new(label).monospace().size(11.0).color(MUTED));
+            ui.label(RichText::new(label).size(11.0).color(MUTED));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
                     RichText::new(value.into())
@@ -1893,60 +2165,107 @@ impl App {
                 );
             });
         });
+        ui.add_space(4.0);
     }
 
-    fn header(&self, ctx: &egui::Context) {
+    /// 웹 일반 모드의 방 상단바와 같은 구성.
+    /// `방 이름 ● 저지연 모드 ... 초대코드 [복사]  참가자 N/4  방 나가기`
+    fn header(&mut self, ctx: &egui::Context) {
+        let launch = self
+            .launch
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(LaunchContext::preview);
+        let in_room = self.screen == Screen::Room;
         egui::TopBottomPanel::top("header")
-            .exact_height(82.0)
-            .frame(egui::Frame::new().fill(PANEL).inner_margin(20.0))
+            .exact_height(64.0)
+            .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin {
+                left: 20,
+                right: 20,
+                top: 12,
+                bottom: 12,
+            }))
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
-                    ui.vertical(|ui| {
+                    // 웹과 같은 브랜드 로고. 방 안에서는 방 이름이 주인공이라 로고를 작게 둔다.
+                    ui.add(
+                        egui::Image::new(egui::include_image!("../assets/brand/logo.png"))
+                            .fit_to_exact_size(Vec2::new(34.0, 34.0)),
+                    );
+                    ui.add_space(12.0);
+                    if in_room {
                         ui.label(
-                            RichText::new("SSAFY STAR")
-                                .monospace()
-                                .size(22.0)
+                            RichText::new(&launch.room_name)
+                                .size(19.0)
                                 .strong()
                                 .color(Color32::WHITE),
                         );
+                        ui.add_space(12.0);
+                    }
+                    let (dot, label, color) = match self.screen {
+                        Screen::Waiting => ("●", "연결 대기", MUTED),
+                        Screen::Connecting => ("●", "연결 중", CYAN),
+                        Screen::Room => ("●", "저지연 모드", GREEN),
+                        Screen::Error => ("●", "확인 필요", RED),
+                    };
+                    ui.label(RichText::new(dot).size(10.0).color(color));
+                    ui.label(RichText::new(label).size(12.0).color(color));
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if !in_room {
+                            return;
+                        }
+                        let leave = egui::Button::new(
+                            RichText::new(if self.leaving {
+                                "종료 중"
+                            } else {
+                                "방 나가기"
+                            })
+                            .size(12.0)
+                            .color(RED),
+                        )
+                        .fill(Color32::TRANSPARENT)
+                        .stroke(Stroke::new(1.0_f32, RED));
+                        // 폭을 고정해야 글자가 버튼 안에서 가운데로 잡힌다.
+                        // 폭 0 이면 내용에 딱 붙어 정렬이 보이지 않는다.
+                        if ui
+                            .add_enabled(!self.leaving, leave.min_size(Vec2::new(104.0, 34.0)))
+                            .clicked()
+                        {
+                            self.leave_room();
+                        }
+                        ui.add_space(14.0);
                         ui.label(
-                            RichText::new("LOW LATENCY AUDIO")
-                                .monospace()
+                            RichText::new(format!("참가자 {}/4", self.participants.len()))
+                                .size(12.0)
+                                .color(Color32::WHITE),
+                        );
+                        ui.add_space(14.0);
+                        // 초대코드 + 복사. 웹 상단바와 같은 자리다.
+                        let copied = self
+                            .invite_copied_at
+                            .is_some_and(|at| at.elapsed() < Duration::from_secs(2));
+                        let copy = egui::Button::new(
+                            RichText::new(if copied { "복사됨" } else { "복사" })
                                 .size(11.0)
+                                .color(if copied { GREEN } else { CYAN }),
+                        )
+                        .fill(PANEL_ALT)
+                        .stroke(Stroke::new(1.0_f32, if copied { GREEN } else { BORDER }));
+                        if ui.add(copy.min_size(Vec2::new(0.0, 28.0))).clicked() {
+                            ui.ctx().copy_text(launch.invite_code.clone());
+                            self.invite_copied_at = Some(Instant::now());
+                        }
+                        ui.add_space(8.0);
+                        ui.label(
+                            RichText::new(&launch.invite_code)
+                                .monospace()
+                                .size(15.0)
+                                .strong()
                                 .color(CYAN),
                         );
-                    });
-                    ui.add_space(70.0);
-                    let navigation = ["AUDIO ONLY", "DIRECT P2P", "NO VIDEO"];
-                    ui.label(
-                        RichText::new(navigation[0])
-                            .monospace()
-                            .size(12.0)
-                            .color(Color32::WHITE),
-                    );
-                    ui.add_space(34.0);
-                    ui.label(
-                        RichText::new(navigation[1])
-                            .monospace()
-                            .size(12.0)
-                            .color(MUTED),
-                    );
-                    ui.add_space(34.0);
-                    ui.label(
-                        RichText::new(navigation[2])
-                            .monospace()
-                            .size(12.0)
-                            .color(MUTED),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let (label, color) = match self.screen {
-                            Screen::Waiting => ("WEB LAUNCH WAITING", MUTED),
-                            Screen::Connecting => ("CONNECTING", CYAN),
-                            Screen::Room => ("ROOM LOCKED", GREEN),
-                            Screen::Error => ("ACTION REQUIRED", RED),
-                        };
-                        ui.label(RichText::new(label).monospace().size(12.0).color(color));
-                        ui.label(RichText::new("●").color(color));
+                        ui.add_space(6.0);
+                        ui.label(RichText::new("초대코드").size(11.0).color(MUTED));
                     });
                 });
             });
@@ -1958,22 +2277,59 @@ impl App {
             .frame(egui::Frame::new().fill(PANEL).inner_margin(12.0))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new("[AUDIO_SYSTEM]")
-                            .monospace()
-                            .size(10.0)
-                            .color(CYAN),
-                    );
+                    // 웹 하단 상태바와 같은 형식: [ROOM_222] 상태 … 지연
+                    // 방에 들어가기 전에는 방 번호가 없으므로 시스템 태그를 쓴다.
+                    let tag = self
+                        .launch
+                        .as_ref()
+                        .filter(|_| self.screen == Screen::Room)
+                        .map(|launch| format!("[ROOM_{}]", launch.room_id))
+                        .unwrap_or_else(|| "[SSAFY_STAR]".to_owned());
+                    ui.label(RichText::new(tag).monospace().size(10.0).color(CYAN));
                     ui.label(RichText::new(&self.status).size(11.0).color(MUTED));
+                    // 연결 품질은 상시 들여다볼 값이 아니라 이상할 때만 눈에 띄면 된다.
+                    // 왼쪽 패널 한 칸을 차지하지 않도록 여기에 한 줄로 모은다.
+                    // 방 밖에서는 잴 대상이 없으므로 띄우지 않는다.
+                    if self.screen != Screen::Room {
+                        return;
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(
-                            RichText::new(
-                                "ONE PROCESS  ·  OPUS 2.5MS  ·  DIRECT P2P  ·  CHACHA20-POLY1305",
-                            )
-                            .monospace()
-                            .size(10.0)
-                            .color(MUTED),
-                        );
+                        let mono = |text: String, color: Color32| {
+                            RichText::new(text).monospace().size(10.0).color(color)
+                        };
+                        ui.label(mono(
+                            self.ping_ms
+                                .map(|value| format!("지연 {value:.0}ms"))
+                                .unwrap_or_else(|| "지연 --".into()),
+                            match self.ping_ms {
+                                Some(value) if value <= 30.0 => GREEN,
+                                Some(_) => WARN,
+                                None => MUTED,
+                            },
+                        ));
+                        ui.label(mono(" · ".into(), PANEL_LINE));
+                        ui.label(mono(
+                            format!("유실 {}", self.dropped_packets),
+                            if self.dropped_packets == 0 {
+                                MUTED
+                            } else {
+                                RED
+                            },
+                        ));
+                        ui.label(mono(" · ".into(), PANEL_LINE));
+                        ui.label(mono(
+                            format!("끊김 {}", self.underruns),
+                            if self.underruns == 0 { MUTED } else { RED },
+                        ));
+                        ui.label(mono(" · ".into(), PANEL_LINE));
+                        ui.label(mono(
+                            format!("보정 {:.1}%", self.concealment_percent),
+                            if self.concealment_percent < 1.0 {
+                                MUTED
+                            } else {
+                                WARN
+                            },
+                        ));
                     });
                 });
             });
@@ -2064,13 +2420,13 @@ impl App {
             ui.add_space(34.0);
             Self::panel().show(ui, |ui| {
                 ui.set_width(700.0);
-                Self::metric(ui, "WEB LAUNCH", "TOKEN RECEIVED", GREEN);
+                Self::metric(ui, "웹 실행", "TOKEN RECEIVED", GREEN);
                 ui.add_space(14.0);
-                Self::metric(ui, "AUDIO DEVICE", "WASAPI EXCLUSIVE 준비", CYAN);
+                Self::metric(ui, "오디오 장치", "WASAPI EXCLUSIVE 준비", CYAN);
                 ui.add_space(14.0);
-                Self::metric(ui, "RENDEZVOUS", "참가자 정보 교환 중", CYAN);
+                Self::metric(ui, "중계 서버", "참가자 정보 교환 중", CYAN);
                 ui.add_space(14.0);
-                Self::metric(ui, "VOICE PATH", "DIRECT P2P 연결 중", PURPLE);
+                Self::metric(ui, "음성 경로", "DIRECT P2P 연결 중", PURPLE);
             });
             ui.add_space(22.0);
             ui.label(
@@ -2129,104 +2485,60 @@ impl App {
         });
     }
 
+    /// 왼쪽 열 — 내 오디오와 연결 정보.
+    ///
+    /// 방 이름·초대코드·참가자 수·방 나가기는 상단바가, 참가자 목록은 가운데가 맡는다.
     fn room_left_ui(&mut self, ui: &mut egui::Ui) {
-        let launch = self
-            .launch
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(LaunchContext::preview);
-        Self::panel().show(ui, |ui| {
-            Self::section_title(ui, "ROOM", "AUDIO ONLY");
-            ui.label(
-                RichText::new(&launch.room_name)
-                    .size(20.0)
-                    .strong()
-                    .color(Color32::WHITE),
-            );
-            ui.label(RichText::new("저지연 음성 모드").size(11.0).color(MUTED));
-            ui.add_space(14.0);
-            Self::metric(ui, "INVITE", &launch.invite_code, CYAN);
-            Self::metric(ui, "ROOM", &launch.room_id, MUTED);
-            Self::metric(
-                ui,
-                "SPRING",
-                if self.backend_connected {
-                    "CONNECTED"
-                } else {
-                    "RECONNECTING"
-                },
-                if self.backend_connected { GREEN } else { MUTED },
-            );
-            ui.add_space(12.0);
-            ui.label(
-                RichText::new("웹 방과 연결되어 다른 방 입장이 잠겨 있습니다.")
-                    .size(10.0)
-                    .color(MUTED),
-            );
-        });
-        ui.add_space(14.0);
-        Self::panel().show(ui, |ui| {
-            Self::section_title(
-                ui,
-                "PARTICIPANTS",
-                &format!("{} / 4", self.participants.len()),
-            );
-            if self.participants.is_empty() {
-                ui.label(
-                    RichText::new("참가자 연결을 기다리고 있습니다.")
-                        .size(11.0)
-                        .color(MUTED),
-                );
-            }
-            for participant in self.participants.values() {
-                egui::Frame::new()
-                    .fill(PANEL_ALT)
-                    .inner_margin(10.0)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let color = if participant.connected { CYAN } else { MUTED };
-                            ui.label(RichText::new("●").color(color));
-                            let suffix = if participant.is_me { " (나)" } else { "" };
-                            ui.label(
-                                RichText::new(format!("{}{}", participant.name, suffix))
-                                    .size(13.0)
-                                    .color(Color32::WHITE),
-                            );
-                            ui.with_layout(
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    ui.label(
-                                        RichText::new(if participant.connected {
-                                            "P2P"
-                                        } else {
-                                            "WAIT"
-                                        })
-                                        .monospace()
-                                        .size(9.0)
-                                        .color(color),
-                                    );
-                                },
-                            );
-                        });
-                    });
-                ui.add_space(7.0);
-            }
-        });
-        ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
-            let button = egui::Button::new(
-                RichText::new(if self.leaving {
-                    "종료 중..."
-                } else {
-                    "방 퇴장 및 앱 연결 종료"
-                })
-                .color(RED),
-            )
+        self.my_audio_ui(ui);
+        ui.add_space(12.0);
+        let unreachable_names = self
+            .participants
+            .values()
+            .filter(|participant| participant.unreachable)
+            .map(|participant| participant.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !unreachable_names.is_empty() {
+            self.unreachable_notice_ui(ui, &unreachable_names);
+        }
+    }
+
+    fn unreachable_notice_ui(&mut self, ui: &mut egui::Ui, names: &str) {
+        egui::Frame::new()
             .fill(Color32::from_rgb(50, 20, 22))
-            .stroke(Stroke::new(1.0_f32, RED));
-            if ui.add_enabled(!self.leaving, button).clicked() {
-                self.leave_room();
-            }
-        });
+            .stroke(Stroke::new(1.0_f32, RED))
+            .inner_margin(10.0)
+            .show(ui, |ui| {
+                ui.label(
+                    RichText::new(format!("{names} 님과 연결하지 못했어요"))
+                        .size(12.0)
+                        .strong()
+                        .color(RED),
+                );
+                ui.add_space(5.0);
+                ui.label(
+                    RichText::new(
+                        "저지연 모드는 참가자끼리 직접 연결해야 합니다. \
+                         회사·학교 네트워크나 일부 통신사에서는 막힐 수 있어요.",
+                    )
+                    .size(11.0)
+                    .color(MUTED),
+                );
+                ui.add_space(9.0);
+                let button = egui::Button::new(
+                    RichText::new("웹에서 일반 모드로 열기")
+                        .size(12.0)
+                        .color(CYAN),
+                )
+                .fill(PANEL_ALT)
+                .stroke(Stroke::new(1.0_f32, CYAN));
+                if ui
+                    .add(button.min_size(Vec2::new(ui.available_width(), 34.0)))
+                    .clicked()
+                {
+                    open_in_browser(&format!("{PRODUCTION_WEB_URL}/lobby"));
+                }
+            });
     }
 
     fn participant_row(
@@ -2284,24 +2596,26 @@ impl App {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if !is_me
                             && ui
-                                .selectable_label(muted, if muted { "음소거됨" } else { "MUTE" })
+                                .selectable_label(muted, if muted { "음소거됨" } else { "음소거" })
                                 .clicked()
                         {
                             mute_clicked = true;
                         }
                         ui.label(
-                            RichText::new(if connected { "VOICE LINK" } else { "WAITING" })
-                                .monospace()
-                                .size(9.0)
+                            RichText::new(if connected { "연결됨" } else { "대기 중" })
+                                .size(10.0)
                                 .color(color),
                         );
                     });
                 });
+                // 이 사람 목소리가 지금 들어오고 있는지. 영상 타일의 발화자 표시를 대신한다.
+                ui.add_space(8.0);
+                Self::level_bar(ui, participant.level, color, connected);
                 if is_me {
-                    ui.add_space(4.0);
+                    ui.add_space(6.0);
                     ui.label(
-                        RichText::new("내 송신 음량과 이펙트는 우측 MY MIC에서 조절")
-                            .size(9.0)
+                        RichText::new("내 소리 조절은 왼쪽 '내 오디오'에서")
+                            .size(10.0)
                             .color(MUTED),
                     );
                 } else if let Some(mix) = mix {
@@ -2309,25 +2623,25 @@ impl App {
                         mix.muted = !mix.muted;
                         changed = true;
                     }
-                    ui.add_space(4.0);
+                    ui.add_space(8.0);
                     ui.columns(3, |columns| {
                         changed |= Self::effect_slider(
                             &mut columns[0],
-                            "VOLUME",
+                            "음량",
                             &mut mix.volume,
                             0.0..=150.0,
                             "%",
                         );
                         changed |= Self::effect_slider(
                             &mut columns[1],
-                            "ECHO",
+                            "에코",
                             &mut mix.echo,
                             0.0..=60.0,
                             "%",
                         );
                         changed |= Self::effect_slider(
                             &mut columns[2],
-                            "REVERB",
+                            "리버브",
                             &mut mix.reverb,
                             0.0..=60.0,
                             "%",
@@ -2348,52 +2662,240 @@ impl App {
             .as_ref()
             .map(|song| format!("내 선곡  {} · {}", song.title, song.artist))
             .unwrap_or_else(|| "내 선곡이 없습니다".into());
+        let _ = &local_selection;
+        // 웹 일반 모드처럼 "질문 한 줄 + 안내 + 큰 버튼 하나".
+        // 곡 검색 → 공연 준비 → 시작 세 단계를 버튼 하나가 상태에 따라 이어받는다.
+        let can_prepare = (self.preview || self.backend_connected)
+            && self.selected_song_id.is_some()
+            && self.playback_state == PlaybackState::Idle;
+        let can_start = self.can_request_playback_start();
+        let waiting_for_mr = !self.preview
+            && self.controls_active_performance
+            && self.mr_state == MrState::Ready
+            && self.mr_total_clients > 0
+            && self.mr_ready_clients < self.mr_total_clients;
+
+        #[derive(Clone, Copy)]
+        enum Step {
+            Search,
+            Prepare,
+            Start,
+            Stop,
+            Busy,
+        }
+        let owns_performance =
+            self.controls_active_performance && self.active_performance_id.is_some();
+        // 방에서 진행 중인 공연이 내 로컬 선곡보다 우선한다. 순서를 뒤집으면
+        // 남이 시작한 곡이 도는 중에도 내 선곡이 없다는 이유로 '곡 검색'이 떠 버린다.
+        //
+        // 일시 중지는 재생보다 먼저 본다. 일반 모드가 무대를 덮는 것과 같은 우선순위다.
+        let suspended_remaining = self.performance_suspended_at.map(|at| {
+            PERFORMER_RECONNECT_GRACE
+                .saturating_sub(at.elapsed())
+                .as_secs()
+        });
+        let (step, heading, hint) = if let Some(remaining) = suspended_remaining {
+            (
+                Step::Busy,
+                "연결이 끊겨 일시 중지됐어요",
+                if remaining > 0 {
+                    "곧 다시 시작되지 않으면 공연이 끝나요"
+                } else {
+                    "공연 종료를 처리하는 중이에요"
+                },
+            )
+        } else if self.playback_state == PlaybackState::Playing {
+            if owns_performance {
+                (Step::Stop, "노래가 재생 중이에요", "")
+            } else {
+                (
+                    Step::Busy,
+                    "노래가 재생 중이에요",
+                    "시작한 사람만 중지할 수 있어요",
+                )
+            }
+        } else if waiting_for_mr {
+            (
+                Step::Start,
+                "반주를 받는 중이에요",
+                "모두 준비되면 시작할 수 있어요",
+            )
+        } else if can_start {
+            (Step::Start, "시작할 준비가 됐어요", "")
+        } else if self.mr_state == MrState::Failed {
+            // 반주 준비가 깨진 상태다. "준비 중"이라고 하면 계속 기다리게 된다.
+            (
+                Step::Busy,
+                "반주 준비에 실패했어요",
+                if owns_performance {
+                    "준비를 취소하고 다시 시도해 주세요"
+                } else {
+                    "시작한 사람이 다시 시도할 수 있어요"
+                },
+            )
+        } else if self.mr_state == MrState::Downloading {
+            (
+                Step::Busy,
+                "반주를 내려받는 중이에요",
+                "잠시만 기다려 주세요",
+            )
+        } else if self.active_performance_id.is_some() {
+            // 준비는 됐지만 아직 시작 조건이 아닌 상태. 시작한 사람에게는 취소 길이 필요하다.
+            if owns_performance {
+                (Step::Busy, "공연을 준비하고 있어요", "잠시만 기다려 주세요")
+            } else {
+                (
+                    Step::Busy,
+                    "다른 참가자가 곡을 준비하고 있어요",
+                    "시작한 사람만 중지할 수 있어요",
+                )
+            }
+        } else if self.selected_song.is_none() {
+            (
+                Step::Search,
+                "어떤 노래를 부를까요?",
+                "곡을 고르면 시작할 수 있어요",
+            )
+        } else if can_prepare {
+            (
+                Step::Prepare,
+                "이 곡으로 시작할까요?",
+                "참가자 모두에게 반주가 전달돼요",
+            )
+        } else {
+            (
+                Step::Busy,
+                "지금은 시작할 수 없어요",
+                if self.backend_connected {
+                    ""
+                } else {
+                    "서버와 다시 연결되면 이어집니다"
+                },
+            )
+        };
+
+        // 안내는 한 줄만 둔다. 앱이 준 상태 문구가 있으면 그쪽이 더 구체적이라 우선한다.
+        // 둘 다 띄우면 같은 말이 두세 줄 겹친다.
+        let subtext = if self.song_status.is_empty() {
+            hint.to_owned()
+        } else {
+            self.song_status.clone()
+        };
+
         Self::panel().show(ui, |ui| {
-            Self::section_title(ui, "SONG CONTROL", "로컬 선곡 · 방 공연 준비 · 시작");
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label(RichText::new(local_selection).size(12.0).color(CYAN));
-                    ui.label(RichText::new(&self.song_status).size(9.0).color(MUTED));
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let can_start = self.can_request_playback_start();
-                    let start_label = if !self.preview
-                        && self.controls_active_performance
-                        && self.mr_state == MrState::Ready
-                        && self.mr_total_clients > 0
-                        && self.mr_ready_clients < self.mr_total_clients
-                    {
-                        format!(
-                            "MR 준비 {}/{}",
-                            self.mr_ready_clients, self.mr_total_clients
-                        )
+            Self::section_title(ui, "곡 선택", "");
+            if let Some(song) = self.selected_song.clone() {
+                ui.label(
+                    RichText::new(&song.title)
+                        .size(17.0)
+                        .strong()
+                        .color(Color32::WHITE),
+                );
+                ui.label(RichText::new(&song.artist).size(11.0).color(MUTED));
+                ui.add_space(14.0);
+            }
+            ui.label(RichText::new(heading).size(14.0).color(Color32::WHITE));
+            if !subtext.is_empty() {
+                ui.label(RichText::new(&subtext).size(11.0).color(MUTED));
+            }
+            ui.add_space(14.0);
+
+            let full = ui.available_width();
+            let (label, enabled) = match step {
+                Step::Search => ("곡 검색".to_owned(), true),
+                Step::Prepare => ("공연 준비".to_owned(), true),
+                Step::Start if waiting_for_mr => (
+                    format!(
+                        "반주 준비 {}/{}",
+                        self.mr_ready_clients, self.mr_total_clients
+                    ),
+                    false,
+                ),
+                Step::Start if self.start_request_pending => ("시작 요청 중...".to_owned(), false),
+                Step::Start => ("시작하기".to_owned(), can_start),
+                Step::Stop => (
+                    if self.cancel_request_pending {
+                        "중지 처리 중...".to_owned()
                     } else {
-                        "재생 시작".into()
-                    };
-                    if ui
-                        .add_enabled(can_start, egui::Button::new(start_label))
-                        .clicked()
-                    {
-                        self.request_playback_start();
-                    }
-                    if ui
-                        .add_sized([92.0, 34.0], egui::Button::new("곡 검색"))
-                        .clicked()
-                    {
+                        "노래 중지".to_owned()
+                    },
+                    !self.cancel_request_pending,
+                ),
+                Step::Busy => ("재생 중".to_owned(), false),
+            };
+            // 중지는 되돌릴 수 없는 동작이라 시안이 아니라 빨강으로 구분한다.
+            let (fill, text_color, border) = match (enabled, matches!(step, Step::Stop)) {
+                (true, true) => (Color32::from_rgb(66, 20, 23), RED, RED),
+                (true, false) => (CYAN, Color32::BLACK, CYAN),
+                (false, _) => (PANEL_ALT, MUTED, PANEL_LINE),
+            };
+            let primary =
+                egui::Button::new(RichText::new(label).size(14.0).strong().color(text_color))
+                    .fill(fill)
+                    .stroke(Stroke::new(1.0_f32, border))
+                    .corner_radius(8);
+            if ui
+                .add_enabled(enabled, primary.min_size(Vec2::new(full, 46.0)))
+                .clicked()
+            {
+                match step {
+                    Step::Search => {
                         self.song_search_open = true;
                         self.request_song_search();
                     }
-                    let can_prepare = (self.preview || self.backend_connected)
-                        && self.selected_song_id.is_some()
-                        && self.playback_state == PlaybackState::Idle;
-                    if ui
-                        .add_enabled(can_prepare, egui::Button::new("공연 준비"))
-                        .clicked()
-                    {
+                    Step::Prepare => {
                         self.prepare_selected_song();
                     }
-                });
-            });
+                    Step::Start => {
+                        self.request_playback_start();
+                    }
+                    Step::Stop => {
+                        self.cancel_confirmation_open = true;
+                    }
+                    Step::Busy => {}
+                }
+            }
+
+            ui.add_space(8.0);
+            // 준비만 해 두고 마음이 바뀌었을 때 빠져나갈 길. 없으면 시작 외에 방법이 없다.
+            if owns_performance && self.playback_state != PlaybackState::Playing {
+                let undo = egui::Button::new(
+                    RichText::new(if self.cancel_request_pending {
+                        "취소 처리 중..."
+                    } else {
+                        "준비 취소"
+                    })
+                    .size(12.0)
+                    .color(if self.cancel_request_pending {
+                        MUTED
+                    } else {
+                        RED
+                    }),
+                )
+                .fill(Color32::TRANSPARENT)
+                .stroke(Stroke::new(1.0_f32, PANEL_LINE))
+                .corner_radius(8);
+                if ui
+                    .add_enabled(
+                        !self.cancel_request_pending,
+                        undo.min_size(Vec2::new(full, 34.0)),
+                    )
+                    .clicked()
+                {
+                    self.cancel_confirmation_open = true;
+                }
+            } else if self.selected_song.is_some() && self.playback_state == PlaybackState::Idle {
+                // 이미 고른 곡을 바꾸는 길은 보조로 남겨 둔다.
+                let change =
+                    egui::Button::new(RichText::new("다른 곡 고르기").size(12.0).color(MUTED))
+                        .fill(Color32::TRANSPARENT)
+                        .stroke(Stroke::new(1.0_f32, PANEL_LINE))
+                        .corner_radius(8);
+                if ui.add(change.min_size(Vec2::new(full, 34.0))).clicked() {
+                    self.song_search_open = true;
+                    self.request_song_search();
+                }
+            }
         });
     }
 
@@ -2806,7 +3308,7 @@ impl App {
             return;
         }
         let mut keep_open = true;
-        egui::Window::new("노래 취소")
+        egui::Window::new("노래 중지")
             .id(egui::Id::new("performance_cancel_confirmation"))
             .order(egui::Order::Foreground)
             .collapsible(false)
@@ -2821,7 +3323,7 @@ impl App {
             )
             .show(ctx, |ui| {
                 ui.label(
-                    RichText::new("재생 중인 노래를 취소할까요?")
+                    RichText::new("재생 중인 노래를 중지할까요?")
                         .size(19.0)
                         .strong()
                         .color(Color32::WHITE),
@@ -2843,7 +3345,7 @@ impl App {
                         if ui
                             .add(
                                 egui::Button::new(
-                                    RichText::new("노래 취소").strong().color(Color32::WHITE),
+                                    RichText::new("노래 중지").strong().color(Color32::WHITE),
                                 )
                                 .fill(Color32::from_rgb(92, 24, 28))
                                 .stroke(Stroke::new(1.0_f32, RED)),
@@ -2859,9 +3361,30 @@ impl App {
         self.cancel_confirmation_open &= keep_open;
     }
 
+    fn level_bar(ui: &mut egui::Ui, level: f32, accent: Color32, connected: bool) {
+        let height = 8.0_f32;
+        let (rect, _) = ui.allocate_exact_size(
+            egui::vec2(ui.available_width(), height),
+            egui::Sense::hover(),
+        );
+        let painter = ui.painter();
+        painter.rect_filled(rect, 2.0, Color32::from_rgb(18, 19, 21));
+        if !connected {
+            return;
+        }
+        let filled = level.clamp(0.0, 1.0);
+        if filled <= 0.0 {
+            return;
+        }
+        let mut bar = rect;
+        bar.set_width(rect.width() * filled);
+        // 클리핑 근처는 빨갛게. 마이크가 너무 큰 걸 바로 알 수 있다.
+        let color = if filled >= 0.9 { RED } else { accent };
+        painter.rect_filled(bar, 2.0, color);
+    }
+
+    /// 가운데 열 — 참가자 한 곳. 누가 부르고 있는지(레벨)와 내게 들리는 음량 조절을 함께 둔다.
     fn room_center_ui(&mut self, ui: &mut egui::Ui) {
-        self.song_control_ui(ui);
-        ui.add_space(14.0);
         if false && self.backend_only_test {
             Self::panel().show(ui, |ui| {
                 Self::section_title(ui, "INTEGRATION CHECK", "실제 Spring Boot 응답 상태");
@@ -2870,9 +3393,9 @@ impl App {
                     ui,
                     "STOMP",
                     if self.backend_connected {
-                        "CONNECTED"
+                        "연결됨"
                     } else {
-                        "RECONNECTING"
+                        "재연결 중"
                     },
                     if self.backend_connected { GREEN } else { RED },
                 );
@@ -2880,9 +3403,9 @@ impl App {
                     ui,
                     "SONG API",
                     if self.song_catalog.is_empty() {
-                        "NOT TESTED"
+                        "확인 전"
                     } else {
-                        "RESPONSE OK"
+                        "정상"
                     },
                     if self.song_catalog.is_empty() {
                         MUTED
@@ -2894,9 +3417,9 @@ impl App {
                     ui,
                     "PERFORMANCE",
                     match self.playback_state {
-                        PlaybackState::Idle => "NOT STARTED",
+                        PlaybackState::Idle => "시작 전",
                         PlaybackState::Ready => "PREPARED",
-                        PlaybackState::Playing => "PLAYING",
+                        PlaybackState::Playing => "재생 중",
                     },
                     if self.playback_state == PlaybackState::Idle {
                         MUTED
@@ -2932,23 +3455,16 @@ impl App {
             return;
         }
         Self::panel().show(ui, |ui| {
-            Self::section_title(ui, "LIVE VOICE MIXER", "참가자별 내 수신 소리 조절");
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new("VOLUME · ECHO · REVERB는 내 출력에만 적용됩니다")
-                        .size(10.0)
-                        .color(MUTED),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(format!("{} VOICE LINKS", self.connected_peers))
-                            .monospace()
-                            .size(13.0)
-                            .color(PURPLE),
-                    );
-                });
-            });
-            ui.add_space(12.0);
+            Self::section_title(
+                ui,
+                "참가자",
+                &format!(
+                    "{} / 4 · 연결 {}",
+                    self.participants.len(),
+                    self.connected_peers
+                ),
+            );
+            ui.add_space(10.0);
             let participants: Vec<(u64, Participant)> = self
                 .participants
                 .iter()
@@ -3033,9 +3549,16 @@ impl App {
         .changed()
     }
 
+    /// 오른쪽 열 — 지금 재생 중인 곡이 먼저, 그 아래 선곡.
     fn room_right_ui(&mut self, ui: &mut egui::Ui) {
+        self.now_playing_ui(ui);
+        ui.add_space(12.0);
+        self.song_control_ui(ui);
+    }
+
+    fn now_playing_ui(&mut self, ui: &mut egui::Ui) {
         Self::panel().show(ui, |ui| {
-            Self::section_title(ui, "NOW PLAYING", "재생 중인 노래");
+            Self::section_title(ui, "재생 중", "");
             if let Some(song) = &self.prepared_song {
                 ui.label(RichText::new(&song.title).size(17.0).strong().color(
                     if self.playback_state == PlaybackState::Playing {
@@ -3050,9 +3573,9 @@ impl App {
                     ui,
                     "ROOM",
                     match self.playback_state {
-                        PlaybackState::Idle => "IDLE",
-                        PlaybackState::Ready => "READY",
-                        PlaybackState::Playing => "PLAYING",
+                        PlaybackState::Idle => "대기",
+                        PlaybackState::Ready => "준비됨",
+                        PlaybackState::Playing => "재생 중",
                     },
                     if self.playback_state == PlaybackState::Playing {
                         PURPLE
@@ -3062,12 +3585,12 @@ impl App {
                 );
                 Self::metric(
                     ui,
-                    "LOCAL MR",
+                    "반주",
                     match self.mr_state {
                         MrState::Idle => "NOT LOADED",
                         MrState::Downloading => "DOWNLOADING",
-                        MrState::Ready => "READY",
-                        MrState::Playing => "PLAYING",
+                        MrState::Ready => "준비됨",
+                        MrState::Playing => "재생 중",
                         MrState::Failed => "FAILED",
                     },
                     match self.mr_state {
@@ -3079,7 +3602,7 @@ impl App {
                 if self.mr_total_clients > 0 {
                     Self::metric(
                         ui,
-                        "MR READY",
+                        "반주 준비",
                         format!("{} / {}", self.mr_ready_clients, self.mr_total_clients),
                         if self.mr_ready_clients == self.mr_total_clients {
                             GREEN
@@ -3089,7 +3612,7 @@ impl App {
                     );
                     Self::metric(
                         ui,
-                        "SYNC LEADER",
+                        "동기 기준",
                         self.mr_leader_id
                             .map(|leader| format!("CLIENT {leader}"))
                             .unwrap_or_else(|| "-".into()),
@@ -3098,7 +3621,7 @@ impl App {
                     if !self.mr_waiting_clients.is_empty() {
                         Self::metric(
                             ui,
-                            "WAITING",
+                            "대기 중",
                             self.client_labels(&self.mr_waiting_clients),
                             MUTED,
                         );
@@ -3106,7 +3629,7 @@ impl App {
                     if !self.mr_mismatched_clients.is_empty() {
                         Self::metric(
                             ui,
-                            "MR MISMATCH",
+                            "반주 불일치",
                             self.client_labels(&self.mr_mismatched_clients),
                             RED,
                         );
@@ -3114,14 +3637,14 @@ impl App {
                     if let Some(seconds) = self.mr_timeout_remaining_seconds {
                         Self::metric(
                             ui,
-                            "READY TIMEOUT",
+                            "대기 시간",
                             format!("{seconds}s"),
                             if seconds <= 5 { RED } else { CYAN },
                         );
                     }
                     Self::metric(
                         ui,
-                        "DRIFT FIX",
+                        "보정량",
                         format!("{} samples", self.mr_drift_correction_samples),
                         if self.mr_drift_correction_samples == 0 {
                             GREEN
@@ -3131,7 +3654,7 @@ impl App {
                     );
                     Self::metric(
                         ui,
-                        "MR SOURCE",
+                        "반주 출처",
                         if self.mr_cache_hit {
                             "CACHE"
                         } else {
@@ -3141,15 +3664,10 @@ impl App {
                     );
                 }
                 ui.add_space(12.0);
-                let mr_volume_changed = Self::effect_slider(
-                    ui,
-                    "LOCAL MR VOLUME",
-                    &mut self.mr_volume,
-                    0.0..=150.0,
-                    "%",
-                );
+                let mr_volume_changed =
+                    Self::effect_slider(ui, "반주 볼륨", &mut self.mr_volume, 0.0..=150.0, "%");
                 ui.label(
-                    RichText::new("LOCAL ONLY · 상대방에게 송신하지 않음")
+                    RichText::new("내게만 들립니다 · 상대에게 전송되지 않아요")
                         .monospace()
                         .size(9.0)
                         .color(MUTED),
@@ -3157,33 +3675,8 @@ impl App {
                 if mr_volume_changed {
                     self.send_mr_volume();
                 }
-                if self.controls_active_performance
-                    && self.active_performance_id.is_some()
-                    && self.playback_state == PlaybackState::Playing
-                {
-                    ui.add_space(12.0);
-                    if ui
-                        .add_enabled(
-                            !self.cancel_request_pending,
-                            egui::Button::new(if self.cancel_request_pending {
-                                "취소 처리 중..."
-                            } else {
-                                "노래 취소"
-                            })
-                            .min_size(Vec2::new(265.0, 38.0))
-                            .fill(Color32::from_rgb(66, 20, 23))
-                            .stroke(Stroke::new(1.0_f32, RED)),
-                        )
-                        .clicked()
-                    {
-                        self.cancel_confirmation_open = true;
-                    }
-                    ui.label(
-                        RichText::new("이 노래를 시작한 사용자만 취소할 수 있습니다")
-                            .size(9.0)
-                            .color(MUTED),
-                    );
-                }
+                // 중지 버튼은 '곡 선택' 패널의 주 동작 자리로 옮겼다. 여기에 또 두면
+                // 같은 동작이 화면에 두 번 나온다.
             } else {
                 ui.add_space(8.0);
                 ui.label(
@@ -3207,49 +3700,12 @@ impl App {
                 ui.add_space(8.0);
             }
         });
-        ui.add_space(14.0);
-        if false && self.backend_only_test {
-            Self::panel().show(ui, |ui| {
-                Self::section_title(ui, "TEST MODE", "AUDIO DISABLED");
-                ui.label(
-                    RichText::new(
-                        "이 모드에서는 오디오 장치와 rendezvous 서버에 연결하지 않습니다.",
-                    )
-                    .size(12.0)
-                    .color(MUTED),
-                );
-                ui.add_space(18.0);
-                Self::metric(
-                    ui,
-                    "BACKEND",
-                    self.launch
-                        .as_ref()
-                        .map(|launch| launch.backend_url.clone())
-                        .unwrap_or_else(|| "-".into()),
-                    CYAN,
-                );
-                Self::metric(
-                    ui,
-                    "ROOM ID",
-                    self.launch
-                        .as_ref()
-                        .map(|launch| launch.room_id.clone())
-                        .unwrap_or_else(|| "-".into()),
-                    CYAN,
-                );
-                ui.add_space(18.0);
-                ui.label(
-                    RichText::new(
-                        "공연 준비는 현재 사용자가 해당 방의 온라인 가창자일 때만 성공합니다.",
-                    )
-                    .size(11.0)
-                    .color(MUTED),
-                );
-            });
-            return;
-        }
+    }
+
+    /// 내 오디오 — 마이크 상태·입력 레벨·장치와, 상대에게 나가는 소리 조절을 한 패널에 둔다.
+    fn my_audio_ui(&mut self, ui: &mut egui::Ui) {
         Self::panel().show(ui, |ui| {
-            Self::section_title(ui, "MICROPHONE", "WASAPI SHARED INPUT");
+            Self::section_title(ui, "내 오디오", "마이크 · 내보내는 소리");
             let label = if self.microphone_muted {
                 "마이크 송신 다시 켜기"
             } else {
@@ -3258,7 +3714,7 @@ impl App {
             let color = if self.microphone_muted { GREEN } else { RED };
             if ui
                 .add_sized(
-                    [265.0, 42.0],
+                    [ui.available_width(), 42.0],
                     egui::Button::new(RichText::new(label).color(Color32::WHITE))
                         .fill(PANEL_ALT)
                         .stroke(Stroke::new(1.0_f32, color)),
@@ -3278,13 +3734,13 @@ impl App {
                 GREEN
             };
             ui.label(
-                RichText::new("INPUT LEVEL")
+                RichText::new("입력 레벨")
                     .monospace()
                     .size(11.0)
                     .color(MUTED),
             );
             ui.add_sized(
-                [265.0, 20.0],
+                [ui.available_width(), 20.0],
                 egui::ProgressBar::new(level)
                     .text(format!("{:.1} dBFS", self.input_peak_dbfs))
                     .fill(level_color),
@@ -3309,7 +3765,7 @@ impl App {
             ui.add_space(8.0);
             Self::metric(
                 ui,
-                "INPUT",
+                "입력",
                 Self::selected_device_label(
                     &self.audio_devices.inputs,
                     &self.selected_input_device_id,
@@ -3318,47 +3774,48 @@ impl App {
             );
             Self::metric(
                 ui,
-                "OUTPUT",
+                "출력",
                 Self::selected_device_label(
                     &self.audio_devices.outputs,
                     &self.selected_output_device_id,
                 ),
                 CYAN,
             );
-            Self::metric(ui, "PERIOD", "2 MS", CYAN);
-            Self::metric(
-                ui,
-                "DEVICE",
-                self.audio_device_status.clone(),
-                if self.audio_device_status.contains("실패") {
-                    RED
-                } else {
-                    GREEN
-                },
-            );
+            if self.audio_device_status.contains("실패") {
+                ui.label(
+                    RichText::new(&self.audio_device_status)
+                        .size(10.0)
+                        .color(RED),
+                );
+            }
             ui.add_space(8.0);
             if ui
-                .add_sized([265.0, 34.0], egui::Button::new("마이크·출력 장치 설정"))
+                .add_sized([ui.available_width(), 34.0], egui::Button::new("장치 설정"))
                 .clicked()
             {
                 self.device_settings_open = true;
             }
-        });
-        ui.add_space(14.0);
-        Self::panel().show(ui, |ui| {
-            Self::section_title(ui, "MY MIC SEND", "상대방에게 송신");
+            ui.add_space(14.0);
+            ui.separator();
+            ui.add_space(10.0);
+            ui.label(
+                RichText::new("상대에게 들리는 내 소리")
+                    .size(11.0)
+                    .color(MUTED),
+            );
+            ui.add_space(8.0);
             let mut changed = false;
             ui.columns(2, |columns| {
                 changed |= Self::compact_effect_slider(
                     &mut columns[0],
-                    "SEND VOLUME",
+                    "내 음량",
                     &mut self.mic_gain,
                     0.0..=150.0,
                     "%",
                 );
                 changed |= Self::compact_effect_slider(
                     &mut columns[1],
-                    "DRY SIGNAL",
+                    "원음",
                     &mut self.dry,
                     0.0..=120.0,
                     "%",
@@ -3368,14 +3825,14 @@ impl App {
             ui.columns(2, |columns| {
                 changed |= Self::compact_effect_slider(
                     &mut columns[0],
-                    "ECHO",
+                    "에코",
                     &mut self.echo,
                     0.0..=40.0,
                     "%",
                 );
                 changed |= Self::compact_effect_slider(
                     &mut columns[1],
-                    "ECHO DELAY",
+                    "에코 지연",
                     &mut self.echo_delay,
                     50.0..=300.0,
                     " ms",
@@ -3385,14 +3842,14 @@ impl App {
             ui.columns(2, |columns| {
                 changed |= Self::compact_effect_slider(
                     &mut columns[0],
-                    "REVERB",
+                    "리버브",
                     &mut self.reverb,
                     0.0..=40.0,
                     "%",
                 );
                 changed |= Self::compact_effect_slider(
                     &mut columns[1],
-                    "REVERB TIME",
+                    "리버브 길이",
                     &mut self.reverb_time,
                     0.3..=3.0,
                     " s",
@@ -3402,57 +3859,23 @@ impl App {
                 self.send_effects();
             }
         });
-        ui.add_space(14.0);
-        Self::panel().show(ui, |ui| {
-            Self::section_title(
-                ui,
-                "NETWORK",
-                if self.connected_peers > 0 {
-                    "DIRECT P2P"
-                } else {
-                    "WAITING"
-                },
-            );
-            Self::metric(
-                ui,
-                "PING",
-                self.ping_ms
-                    .map(|value| format!("{value:.1} ms"))
-                    .unwrap_or_else(|| "측정 중".into()),
-                self.ping_ms
-                    .map(|value| if value <= 30.0 { GREEN } else { RED })
-                    .unwrap_or(MUTED),
-            );
-            Self::metric(
-                ui,
-                "CONCEALMENT",
-                format!("{:.2}%", self.concealment_percent),
-                CYAN,
-            );
-            Self::metric(
-                ui,
-                "UNDERRUN",
-                self.underruns.to_string(),
-                if self.underruns == 0 { GREEN } else { RED },
-            );
-            Self::metric(
-                ui,
-                "RESYNC",
-                self.resyncs.to_string(),
-                if self.resyncs == 0 { GREEN } else { RED },
-            );
-        });
     }
 
     fn room_ui(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("room_left")
             .resizable(false)
-            .exact_width(250.0)
+            .exact_width(300.0)
             .frame(egui::Frame::new().fill(BACKGROUND).inner_margin(16.0))
-            .show(ctx, |ui| self.room_left_ui(ui));
+            .show(ctx, |ui| {
+                // 내 오디오 슬라이더가 길어 창 높이를 넘긴다. 가운데·오른쪽과 같이 스크롤을 준다.
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .show(ui, |ui| self.room_left_ui(ui));
+            });
         egui::SidePanel::right("room_right")
             .resizable(false)
-            .exact_width(315.0)
+            .exact_width(300.0)
             .frame(egui::Frame::new().fill(BACKGROUND).inner_margin(16.0))
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical()
@@ -3490,6 +3913,8 @@ impl eframe::App for App {
         self.poll_backend_events();
         self.poll_mr_events();
         self.poll_mr_end_deadline();
+        self.poll_cancel_timeout();
+        self.poll_start_timeout();
         self.poll_device_preview();
         self.maybe_finish_leave();
         if self.close_pending {
