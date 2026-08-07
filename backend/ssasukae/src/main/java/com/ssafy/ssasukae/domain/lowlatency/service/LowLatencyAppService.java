@@ -2,6 +2,8 @@ package com.ssafy.ssasukae.domain.lowlatency.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import com.ssafy.ssasukae.domain.auth.dto.TokenReissueResponse;
@@ -13,13 +15,20 @@ import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
+import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 import com.ssafy.ssasukae.domain.room.type.RoomMode;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
+import com.ssafy.ssasukae.domain.room.websocket.RoomWebSocketEventType;
+import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantConnectionStatusChangedPayload;
+import com.ssafy.ssasukae.domain.room.websocket.payload.ParticipantJoinedPayload;
+import com.ssafy.ssasukae.domain.room.websocket.type.ParticipantStatus;
 import com.ssafy.ssasukae.global.exception.CustomException;
 import com.ssafy.ssasukae.global.exception.lowlatency.LowLatencyErrorCode;
 import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
 import com.ssafy.ssasukae.global.security.jwt.JwtProperties;
 import com.ssafy.ssasukae.global.security.jwt.JwtTokenProvider;
+import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
+import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 
 import lombok.RequiredArgsConstructor;
 
@@ -34,6 +43,7 @@ public class LowLatencyAppService {
   private final JwtProperties jwtProperties;
   private final AuthService authService;
   private final LowLatencyProperties lowLatencyProperties;
+  private final WebSocketEventPublisher webSocketEventPublisher;
 
   @Transactional
   public LowLatencyAppSessionResponse createAppSession(
@@ -47,9 +57,13 @@ public class LowLatencyAppService {
     }
 
     // The native audio app is the presence connection for LOW_LATENCY rooms.
-    // There is intentionally no OpenVidu media connection in this mode.
+    // There is intentionally no OpenVidu media connection in this mode, so the OpenVidu
+    // webhook never fires for these participants. This is the only place that can tell the
+    // rest of the room that they came online.
     if (!participant.isOnline()) {
+      ConnectionStatus previousStatus = participant.getConnectionStatus();
       participant.reconnect(null);
+      publishPresence(room.getId(), participant, previousStatus);
     }
 
     String sid = jwtTokenProvider.getSid(currentAccessToken);
@@ -112,5 +126,53 @@ public class LowLatencyAppService {
 
   private long accessTokenExpiresInSeconds() {
     return Math.max(1L, jwtProperties.getAccessTokenExpiration() / 1_000L);
+  }
+
+  /**
+   * OpenViduWebhookService#handleParticipantJoined 와 동일한 분기로 프레즌스를 브로드캐스트한다. 첫 입장(PREPARING)이면
+   * PARTICIPANT_JOINED, 재접속(DISCONNECTED)이면 상태 변경 이벤트를 보낸다.
+   */
+  private void publishPresence(
+      Long roomId, RoomParticipant participant, ConnectionStatus previousStatus) {
+    if (previousStatus == ConnectionStatus.PREPARING) {
+      ParticipantJoinedPayload joined =
+          new ParticipantJoinedPayload(
+              participant.getId(),
+              participant.getUser().getId(),
+              participant.getUser().getNickname(),
+              participant.getUser().getProfileImageUrl());
+      afterCommit(
+          () ->
+              webSocketEventPublisher.publishToRoom(
+                  roomId,
+                  WebSocketEvent.roomEvent(
+                      RoomWebSocketEventType.PARTICIPANT_JOINED, roomId, joined)));
+      return;
+    }
+
+    ParticipantConnectionStatusChangedPayload online =
+        new ParticipantConnectionStatusChangedPayload(
+            participant.getId(), ParticipantStatus.ONLINE);
+    afterCommit(
+        () ->
+            webSocketEventPublisher.publishToRoom(
+                roomId,
+                WebSocketEvent.roomEvent(
+                    RoomWebSocketEventType.PARTICIPANT_CONNECTION_STATUS_CHANGED, roomId, online)));
+  }
+
+  private void afterCommit(Runnable action) {
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      action.run();
+      return;
+    }
+
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            action.run();
+          }
+        });
   }
 }

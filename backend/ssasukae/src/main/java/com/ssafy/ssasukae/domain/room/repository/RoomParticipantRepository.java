@@ -67,5 +67,18 @@ public interface RoomParticipantRepository extends JpaRepository<RoomParticipant
             Collection<ConnectionStatus> connectionStatuses
     );
 
+    /**
+     * 사용자가 현재 참여 중인 방의 참가자를 찾는다.
+     *
+     * <p>STOMP 세션은 방 번호를 들고 있지 않아 userId 만으로 찾아야 한다.
+     * 한 사용자는 한 방에만 활성으로 있을 수 있으므로(RoomService#validateNoActiveRoom)
+     * 결과는 최대 하나지만, 만료 후 재입장 이력이 남을 수 있어 최신 것을 쓴다.
+     */
+    @EntityGraph(attributePaths = "room")
+    Optional<RoomParticipant> findFirstByUserIdAndConnectionStatusInOrderByJoinedAtDescIdDesc(
+            Long userId,
+            Collection<ConnectionStatus> connectionStatuses
+    );
+
     List<RoomParticipant> findRoomParticipantsByRoom(Room room);
 }

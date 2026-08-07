@@ -1,9 +1,11 @@
 package com.ssafy.ssasukae.domain.room.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -30,11 +32,14 @@ import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 import com.ssafy.ssasukae.domain.room.type.RoomMode;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
+import com.ssafy.ssasukae.domain.room.websocket.RoomWebSocketEventType;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.repository.UserRepository;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
 import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.room.RoomErrorCode;
+import com.ssafy.ssasukae.global.websocket.message.WebSocketEvent;
 import com.ssafy.ssasukae.global.websocket.publisher.WebSocketEventPublisher;
 import com.ssafy.ssasukae.integration.openvidu.MediaSessionGateway;
 import com.ssafy.ssasukae.integration.aws.S3StorageService;
@@ -44,6 +49,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -372,6 +378,81 @@ class RoomServiceMediaSessionTest {
 
     assertThat(receiver.getConnectionStatus()).isEqualTo(ConnectionStatus.KICKED);
     verify(mediaSessionGateway, never()).disconnect(any(), any());
+  }
+
+  @Test
+  @DisplayName("저지연 참가자는 connectionId가 없어도 퇴장에 실패하지 않고 PARTICIPANT_LEFT를 발행한다")
+  void leaveRoomWithoutMediaConnectionStillBroadcastsLeft() {
+    Room room = room(10L, "openvidu-low-latency-session");
+    RoomParticipant participant = lowLatencyParticipant(room, 100L, 2L);
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByRoomIdAndUserId(10L, 2L))
+        .thenReturn(Optional.of(participant));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
+
+    assertThatCode(() -> roomService.leaveRoom(2L, 10L)).doesNotThrowAnyException();
+
+    assertThat(participant.getConnectionStatus()).isEqualTo(ConnectionStatus.LEFT);
+    verify(mediaSessionGateway, never()).disconnect(any(), any());
+    assertThat(capturePublishedEvent().eventType())
+        .isEqualTo(RoomWebSocketEventType.PARTICIPANT_LEFT.name());
+  }
+
+  @Test
+  @DisplayName("OpenVidu 연결 종료가 실패해도 PARTICIPANT_LEFT는 발행한다")
+  void leaveRoomBroadcastsLeftEvenWhenMediaDisconnectFails() {
+    Room room = room(10L, "openvidu-session-1");
+    RoomParticipant participant = connectedParticipant(room, 100L, 2L, "participant-connection");
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByRoomIdAndUserId(10L, 2L))
+        .thenReturn(Optional.of(participant));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(participant));
+    doThrow(new CustomException(RoomErrorCode.MEDIA_SESSION_OPERATION_FAILED))
+        .when(mediaSessionGateway)
+        .disconnect("openvidu-session-1", "participant-connection");
+
+    assertThatCode(() -> roomService.leaveRoom(2L, 10L)).doesNotThrowAnyException();
+
+    assertThat(capturePublishedEvent().eventType())
+        .isEqualTo(RoomWebSocketEventType.PARTICIPANT_LEFT.name());
+  }
+
+  @Test
+  @DisplayName("저지연 참가자 강퇴도 실패하지 않고 PARTICIPANT_KICKED를 발행한다")
+  void kickLowLatencyParticipantWithoutMediaConnection() {
+    User host = user(1L);
+    Room room = room(10L, "openvidu-low-latency-session", host);
+    RoomParticipant sender = connectedParticipant(room, 101L, 1L, "host-connection");
+    RoomParticipant receiver = lowLatencyParticipant(room, 100L, 2L);
+    when(userRepository.findById(1L)).thenReturn(Optional.of(host));
+    when(roomRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(room));
+    when(roomParticipantRepository.findByRoomIdAndUserId(10L, 1L)).thenReturn(Optional.of(sender));
+    when(roomParticipantRepository.findByIdForUpdate(101L)).thenReturn(Optional.of(sender));
+    when(roomParticipantRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(receiver));
+
+    assertThatCode(() -> roomService.kickParticipant(10L, 100L, 1L)).doesNotThrowAnyException();
+
+    assertThat(receiver.getConnectionStatus()).isEqualTo(ConnectionStatus.KICKED);
+    verify(mediaSessionGateway, never()).disconnect(any(), any());
+    assertThat(capturePublishedEvent().eventType())
+        .isEqualTo(RoomWebSocketEventType.PARTICIPANT_KICKED.name());
+  }
+
+  private WebSocketEvent<?> capturePublishedEvent() {
+    ArgumentCaptor<WebSocketEvent<?>> captor = ArgumentCaptor.captor();
+    verify(webSocketEventPublisher).publishToRoom(eq(10L), captor.capture());
+    return captor.getValue();
+  }
+
+  /**
+   * LOW_LATENCY 방 참가자. 네이티브 앱이 프레즌스 연결을 대신하므로 OpenVidu connectionId 없이
+   * CONNECTED 상태가 된다({@code LowLatencyAppService#createAppSession}).
+   */
+  private RoomParticipant lowLatencyParticipant(Room room, Long id, Long userId) {
+    RoomParticipant participant = RoomParticipant.join(room, user(userId), LocalDateTime.now());
+    ReflectionTestUtils.setField(participant, "id", id);
+    participant.reconnect(null);
+    return participant;
   }
 
   private User user(Long id) {

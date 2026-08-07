@@ -150,7 +150,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "audio-client"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "audio-core",
  "chacha20poly1305",
@@ -170,14 +170,16 @@ dependencies = [
 
 [[package]]
 name = "audio-core"
-version = "0.1.8"
+version = "0.1.9"
 
 [[package]]
 name = "audio-gui"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "audio-client",
  "eframe",
+ "egui_extras",
+ "image",
  "reqwest",
  "serde",
  "serde_json",
@@ -189,7 +191,7 @@ dependencies = [
 
 [[package]]
 name = "audio-relay-server"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "ctrlc",
  "protocol",
@@ -859,6 +861,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_extras"
+version = "0.31.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "624659a2e972a46f4d5f646557906c55f1cd5a0836eddbe610fdf1afba1b4226"
+dependencies = [
+ "ahash",
+ "egui",
+ "enum-map",
+ "image",
+ "log",
+ "profiling",
+]
+
+[[package]]
 name = "egui_glow"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -892,6 +908,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "enum-map"
+version = "2.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6866f3bfdf8207509a033af1a75a7b08abda06bbaaeae6669323fd5a097df2e9"
+dependencies = [
+ "enum-map-derive",
+ "serde",
+]
+
+[[package]]
+name = "enum-map-derive"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f282cfdfe92516eb26c2af8589c274c7c17681f5ecc03c18255fe741c6aa64eb"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -1852,7 +1889,7 @@ dependencies = [
 
 [[package]]
 name = "metrics"
-version = "0.1.8"
+version = "0.1.9"
 
 [[package]]
 name = "miniz_oxide"
@@ -1948,7 +1985,7 @@ dependencies = [
 
 [[package]]
 name = "network-tester-client"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "ctrlc",
  "metrics",
@@ -2520,7 +2557,7 @@ checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 
 [[package]]
 name = "protocol"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "ed25519-dalek",
  "rand_core 0.6.4",

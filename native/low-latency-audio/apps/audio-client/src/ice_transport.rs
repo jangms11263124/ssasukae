@@ -27,10 +27,28 @@ const STATE_CHECKING: u8 = 1;
 const STATE_CONNECTED: u8 = 2;
 const STATE_DISCONNECTED: u8 = 3;
 const STATE_FAILED: u8 = 4;
+/// 재시도 예산을 모두 쓴 종료 상태. 이 피어와는 더 이상 연결을 시도하지 않는다.
+const STATE_UNREACHABLE: u8 = 5;
+/// 연결 시도 한 번의 상한이 10초(dial/accept 타임아웃)이므로 약 30초 뒤 포기한다.
+///
+/// TURN 릴레이가 없어서 ICE가 실패하면 대체 경로가 없다. 무한히 재시도해봐야 사용자는
+/// 아무 설명 없이 계속 기다리게 되므로, 예산을 소진하면 실패로 확정해 위로 알린다.
+/// 한 번이라도 연결에 성공한 뒤 끊긴 경우는 정상적인 재연결이므로 예산을 소모하지 않는다.
+const MAX_CONNECT_ATTEMPTS: u32 = 3;
 const DELIVERY_ACK_INTERVAL: Duration = Duration::from_millis(20);
-// Eight 2.5 ms packets cap each real-time queue at 20 ms. When the incoming
-// queue is full, the oldest packet is evicted so fresh voice is preserved.
-const REALTIME_PACKET_QUEUE_CAPACITY: usize = 8;
+/// 송신 큐. 8개 × 2.5 ms = 20 ms 로, [`MAX_OUTGOING_AUDIO_AGE`] 와 같은 범위를 넘기지 않는다.
+const OUTGOING_PACKET_QUEUE_CAPACITY: usize = 8;
+/// 수신 큐. ICE 스레드에서 오디오 메인 루프로 넘기는 인계 버퍼일 뿐이고, 재생 시점은
+/// 지터 버퍼가 시퀀스와 프레임 클럭으로 정한다. 따라서 이 큐를 키워도 지연은 늘지 않는다.
+///
+/// 8개(20 ms)였을 때, 지연 스파이크로 패킷이 뭉쳐 도착하면 메인 루프 한 주기(2.5 ms)
+/// 사이에 8개를 훌쩍 넘겨 오래된 것부터 버려졌다. 실측에서 원격 회선 12%, 고정 회선에서도
+/// 0.2~0.5% 가 여기서 사라졌다(루프백은 0). 게다가 가장 오래된 것부터 버리는 탓에
+/// 지터 버퍼가 필요로 하는 연속 시퀀스를 앞에서부터 끊었다.
+///
+/// 늦은 프레임 폐기는 하류에서 나이를 보고 판단하며(`MAX_RECEIVE_TO_MAIN_DELAY`,
+/// `discard_stale_buffered_frames`) 그쪽은 집계도 남는다. 전송 계층은 버리지 말고 넘긴다.
+const INCOMING_PACKET_QUEUE_CAPACITY: usize = 64;
 const MAX_OUTGOING_AUDIO_AGE: Duration = Duration::from_millis(20);
 
 struct IncomingPacketQueue {
@@ -78,16 +96,18 @@ pub struct IceTransport {
 impl IceTransport {
     pub fn start(client_id: u64, epoch: Instant) -> Result<Self, Box<dyn std::error::Error>> {
         let (remote_tx, remote_rx) = std_mpsc::channel();
-        let (outgoing_tx, outgoing_rx) = mpsc::channel(REALTIME_PACKET_QUEUE_CAPACITY);
+        let (outgoing_tx, outgoing_rx) = mpsc::channel(OUTGOING_PACKET_QUEUE_CAPACITY);
         let outgoing_rx = Arc::new(tokio::sync::Mutex::new(outgoing_rx));
         let remote_rx = Arc::new(Mutex::new(remote_rx));
-        let incoming_queue = Arc::new(IncomingPacketQueue::new(REALTIME_PACKET_QUEUE_CAPACITY));
+        let incoming_queue = Arc::new(IncomingPacketQueue::new(INCOMING_PACKET_QUEUE_CAPACITY));
         let local_description = Arc::new(Mutex::new(String::new()));
         let state = Arc::new(AtomicU8::new(STATE_GATHERING));
         let disconnected_event = Arc::new(AtomicBool::new(false));
         let incoming_queue_drops = Arc::new(AtomicU64::new(0));
         let stale_outgoing_audio_drops = Arc::new(AtomicU64::new(0));
         let security = Arc::new(RwLock::new(None));
+        // 이번 시도에서 연결에 성공했는지. 재시도 예산 계산에만 쓰므로 스레드 안에서만 산다.
+        let established_for_thread = Arc::new(AtomicBool::new(false));
         let description_for_thread = Arc::clone(&local_description);
         let state_for_thread = Arc::clone(&state);
         let disconnected_event_for_thread = Arc::clone(&disconnected_event);
@@ -109,9 +129,11 @@ impl IceTransport {
                     return;
                 };
                 let mut attempt = 0_u64;
+                let mut consecutive_failures = 0_u32;
                 loop {
                     attempt += 1;
                     state_for_thread.store(STATE_GATHERING, Ordering::Relaxed);
+                    established_for_thread.store(false, Ordering::Relaxed);
                     println!("ICE attempt {attempt}: gathering fresh candidates");
                     let result = runtime.block_on(run_ice(
                         client_id,
@@ -125,11 +147,28 @@ impl IceTransport {
                         Arc::clone(&incoming_queue_drops_for_thread),
                         Arc::clone(&stale_outgoing_audio_drops_for_thread),
                         Arc::clone(&security_for_thread),
+                        Arc::clone(&established_for_thread),
                         epoch,
                     ));
                     if let Err(error) = result {
                         state_for_thread.store(STATE_FAILED, Ordering::Relaxed);
-                        println!("ICE attempt {attempt} failed: {error}; retrying with a new UDP mapping");
+                        if established_for_thread.load(Ordering::Relaxed) {
+                            // 붙었다가 끊긴 경우다. 정상적인 재연결이므로 예산을 되돌린다.
+                            consecutive_failures = 0;
+                            println!("ICE attempt {attempt} dropped after connecting: {error}; reconnecting");
+                        } else {
+                            consecutive_failures += 1;
+                            println!(
+                                "ICE attempt {attempt} failed: {error} ({consecutive_failures}/{MAX_CONNECT_ATTEMPTS})"
+                            );
+                            if consecutive_failures >= MAX_CONNECT_ATTEMPTS {
+                                state_for_thread.store(STATE_UNREACHABLE, Ordering::Relaxed);
+                                println!(
+                                    "ICE gave up after {MAX_CONNECT_ATTEMPTS} attempts: direct P2P is unavailable on this network (no TURN fallback)"
+                                );
+                                return;
+                            }
+                        }
                     }
                     thread::sleep(Duration::from_millis(500));
                 }
@@ -177,6 +216,12 @@ impl IceTransport {
         self.state.load(Ordering::Relaxed) == STATE_CONNECTED
     }
 
+    /// 재시도 예산을 모두 소진해 이 피어와의 직접 연결을 포기한 상태.
+    /// TURN 릴레이가 없으므로 여기서 복구되지 않는다.
+    pub fn unreachable(&self) -> bool {
+        self.state.load(Ordering::Relaxed) == STATE_UNREACHABLE
+    }
+
     pub fn take_disconnected_event(&self) -> bool {
         self.disconnected_event.swap(false, Ordering::Relaxed)
     }
@@ -203,6 +248,7 @@ async fn run_ice(
     incoming_queue_drops: Arc<AtomicU64>,
     stale_outgoing_audio_drops: Arc<AtomicU64>,
     security: Arc<RwLock<Option<Arc<PeerCipher>>>>,
+    connection_established: Arc<AtomicBool>,
     epoch: Instant,
 ) -> Result<(), String> {
     let urls = [
@@ -336,6 +382,7 @@ async fn run_ice(
                     connection
                 };
                 state.store(STATE_CONNECTED, Ordering::Relaxed);
+                connection_established.store(true, Ordering::Relaxed);
                 println!("Audio path: direct P2P selected by ICE");
 
                 let send_connection = Arc::clone(&connection);
