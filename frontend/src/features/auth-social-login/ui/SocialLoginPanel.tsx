@@ -22,14 +22,14 @@ export function SocialLoginPanel({ className }: SocialLoginPanelProps) {
 
   return (
     <section
-      className={cn(jetBrainsMono.className, 'mx-auto w-full max-w-[310px]', className)}
+      className={cn(jetBrainsMono.className, 'mx-auto w-full max-w-[360px]', className)}
       aria-labelledby="login-title"
     >
       <header className="space-y-2 text-left">
-        <h2 id="login-title" className="text-sm font-bold tracking-[0.08em] text-neon-pink">
+        <h2 id="login-title" className="text-lg font-bold tracking-[0.08em] text-neon-pink">
           {LOGIN_COPY.title}
         </h2>
-        <p className="text-xs tracking-wide text-zinc-200">{LOGIN_COPY.description}</p>
+        <p className="text-sm tracking-wide text-zinc-400">{LOGIN_COPY.description}</p>
       </header>
 
       <div className="mt-11 flex flex-col gap-5">
