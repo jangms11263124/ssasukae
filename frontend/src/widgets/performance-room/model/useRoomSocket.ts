@@ -263,7 +263,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
             payload.performanceId === stageStore.performanceId
           ) {
             stageStore.applyScoringFailed();
-            showToast('채점하지 못했어요.', 'error');
+            showToast('채점에 실패해서 점수 없이 넘어가요.', 'error');
           }
           // FINISHED 전이는 점수를 담은 LEADERBOARD_UPDATED가 함께 오므로 여기선 처리하지 않는다.
           break;
@@ -346,10 +346,7 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
         setIsConnected(false);
         setLatencyMs(null);
         showToast(
-          toUserFacingMessage(
-            brokerMessage,
-            '서버 연결이 끊어졌어요. 잠시 후 다시 시도해 주세요.',
-          ),
+          toUserFacingMessage(brokerMessage, '서버 연결이 끊어졌어요.'),
           'error',
         );
       },

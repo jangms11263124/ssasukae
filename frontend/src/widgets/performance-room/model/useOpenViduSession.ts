@@ -426,7 +426,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
     connectTimer = window.setTimeout(() => {
       connect().catch(() => {
         if (!isStale()) {
-          showToast('화상 연결에 실패했어요. 잠시 후 다시 시도해 주세요.', 'error');
+          showToast('화상 연결에 실패했어요.', 'error');
         }
       });
     }, CONNECT_DELAY_MS);
@@ -506,7 +506,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
       }
     }
     if (original === null) {
-      showToast('마이크를 다시 연결하지 못했어요. 새로고침해 주세요.', 'error');
+      showToast('마이크를 다시 연결하지 못해 새로고침이 필요해요.', 'error');
     }
     publisher.publishAudio(useStageStore.getState().micOn && !readMicBlocked());
   }, [applyMixTrack]);

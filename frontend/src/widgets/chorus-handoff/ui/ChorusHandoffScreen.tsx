@@ -54,7 +54,7 @@ export function ChorusHandoffScreen({ roomIdFromUrl }: ChorusHandoffScreenProps)
 
   useEffect(() => {
     if (roomIdFromUrl === null) {
-      showToast('방 정보가 없어요. 다시 들어와 주세요.', 'error');
+      showToast('방 정보가 없어요.', 'error');
       router.replace('/lobby');
       return;
     }

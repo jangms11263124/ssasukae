@@ -119,7 +119,7 @@ export function useRoomBootstrap(roomIdFromUrl: number | null): RoomBootstrapSta
       return;
     }
 
-    showToast('방 정보가 없어요. 다시 입장해 주세요.', 'error');
+    showToast('방 정보가 없어요.', 'error');
   }, [session, authLoading, user, roomIdFromUrl]);
 
   const shouldRedirect =
