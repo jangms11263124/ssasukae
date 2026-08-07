@@ -4,11 +4,18 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 
 import {
+  favoriteQueryKeys,
+  getFavoriteSongs,
+  type FavoriteSong,
+  type FavoriteSongPage,
+} from '@/entities/favorite';
+import {
   formatSongDuration,
   searchSongs,
   SongThumbnail,
   type SongFilter,
   type SongSearchItem,
+  type SongSearchResult,
 } from '@/entities/song';
 import { cn } from '@/shared/lib/cn';
 import { useInfiniteScrollTrigger } from '@/shared/lib/useInfiniteScrollTrigger';
@@ -23,12 +30,17 @@ const SEARCH_PAGE_SIZE = 20;
 const SKELETON_ROW_COUNT = 6;
 const NEXT_PAGE_SKELETON_ROW_COUNT = 3;
 
-// MY_FAVORITES는 전용 필터가 검색 API에 없어 응답의 favorite 필드로 걸러낸다.
-const TAB_TO_FILTER: Record<TabKey, SongFilter> = {
-  ALL: 'ALL',
-  POPULAR: 'POPULAR',
-  MY_FAVORITES: 'ALL',
-};
+// 찜 목록 응답을 검색 결과 행과 같은 모양으로 맞춘다. 찜 목록이므로 favorite은 항상 true다.
+function toSearchItem(song: FavoriteSong): SongSearchItem {
+  return {
+    songId: song.songId,
+    title: song.title,
+    artist: song.artist,
+    durationSeconds: song.durationSeconds ?? 0,
+    thumbnailUrl: song.thumbnailUrl,
+    favorite: true,
+  };
+}
 
 function SearchIcon() {
   return (
@@ -119,6 +131,9 @@ export function SongSearchModal({ onClose, renderSongAction }: SongSearchModalPr
   // 백엔드 제약: query는 2자 이상만 유효하다. 1자는 전체 목록으로 검색한다.
   const effectiveQuery = debouncedQuery.length >= 2 ? debouncedQuery : '';
 
+  const isFavoritesTab = activeTab === 'MY_FAVORITES';
+  const searchFilter: SongFilter = activeTab === 'POPULAR' ? 'POPULAR' : 'ALL';
+
   const {
     data,
     isPending,
@@ -128,16 +143,27 @@ export function SongSearchModal({ onClose, renderSongAction }: SongSearchModalPr
     isFetchingNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: ['songs', 'search', effectiveQuery, TAB_TO_FILTER[activeTab]],
-    queryFn: ({ pageParam }) =>
-      searchSongs({
-        query: effectiveQuery || undefined,
-        filter: TAB_TO_FILTER[activeTab],
-        cursor: pageParam,
-        size: SEARCH_PAGE_SIZE,
-      }),
+    // MY_FAVORITES는 찜 목록 API를 그대로 쓴다. 찜 페이지와 키·페이지 모양을 공유해
+    // 찜 토글의 낙관적 패치와 invalidate가 이 탭에도 함께 적용된다.
+    queryKey: isFavoritesTab
+      ? favoriteQueryKeys.list(effectiveQuery)
+      : ['songs', 'search', effectiveQuery, searchFilter],
+    queryFn: ({ pageParam }): Promise<SongSearchResult | FavoriteSongPage> =>
+      isFavoritesTab
+        ? getFavoriteSongs({
+            query: effectiveQuery || undefined,
+            cursor: pageParam,
+            size: SEARCH_PAGE_SIZE,
+          })
+        : searchSongs({
+            query: effectiveQuery || undefined,
+            filter: searchFilter,
+            cursor: pageParam,
+            size: SEARCH_PAGE_SIZE,
+          }),
     initialPageParam: undefined as number | undefined,
-    getNextPageParam: (lastPage) => lastPage.cursor ?? undefined,
+    getNextPageParam: (lastPage) =>
+      ('cursor' in lastPage ? lastPage.cursor : lastPage.nextCursor) ?? undefined,
     placeholderData: keepPreviousData,
     // 찜 낙관적 패치를 모달 재오픈 직후 refetch가 덮어쓰지 않도록 잠시 신선하게 본다.
     staleTime: 30_000,
@@ -148,9 +174,10 @@ export function SongSearchModal({ onClose, renderSongAction }: SongSearchModalPr
     Boolean(hasNextPage) && !isFetchingNextPage,
   );
 
-  const songs = (data?.pages.flatMap((page) => page.items) ?? []).filter(
-    (song) => activeTab !== 'MY_FAVORITES' || song.favorite,
-  );
+  const songs =
+    data?.pages.flatMap((page) =>
+      'items' in page ? page.items : page.songs.map(toSearchItem),
+    ) ?? [];
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
@@ -261,9 +288,12 @@ export function SongSearchModal({ onClose, renderSongAction }: SongSearchModalPr
                   {song.artist}
                 </p>
               </div>
-              <span className="shrink-0 font-mono text-xs text-zinc-400">
-                {formatSongDuration(song.durationSeconds)}
-              </span>
+              {/* 찜 목록 응답에는 durationSeconds가 아직 없을 수 있다 (백엔드 추가 예정) */}
+              {song.durationSeconds > 0 ? (
+                <span className="shrink-0 font-mono text-xs text-zinc-400">
+                  {formatSongDuration(song.durationSeconds)}
+                </span>
+              ) : null}
               {renderSongAction(song)}
             </li>
           ))}
