@@ -23,7 +23,7 @@ export function AuthenticatedNav() {
   return (
     <nav
       aria-label="메인 메뉴"
-      className="hidden items-center gap-14 font-mono text-[10px] tracking-[0.22em] text-zinc-400 md:flex"
+      className="hidden items-center gap-14 font-mono text-xs tracking-[0.2em] text-zinc-300 md:flex"
     >
       {NAV_ITEMS.map((item) => {
         const active = isNavItemActive(pathname, item.href);
@@ -37,7 +37,7 @@ export function AuthenticatedNav() {
               'border-b pb-2 transition-colors',
               active
                 ? 'border-cyan-300 text-cyan-200'
-                : 'border-transparent hover:text-zinc-200',
+                : 'border-transparent hover:text-white',
             )}
           >
             {item.label}

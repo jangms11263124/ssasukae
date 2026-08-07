@@ -64,7 +64,7 @@ export function RoomCreateForm() {
               profileImageUrl: user?.profileImageUrl ?? null,
             },
           });
-          showToast(`'${trimmedName}' 방을 만들었어요.`, 'success');
+          showToast('방을 만들었어요.', 'success');
           router.push(buildRoomPath(mode, response.roomId));
         },
         onError: (error) => {
@@ -75,7 +75,7 @@ export function RoomCreateForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div>
         <label htmlFor="room-name" className="text-sm font-semibold text-zinc-200">
           방 이름
@@ -103,7 +103,7 @@ export function RoomCreateForm() {
               <label
                 key={roomMode.value}
                 className={cn(
-                  'cursor-pointer border p-5 transition-colors',
+                  'cursor-pointer border p-4 transition-colors',
                   isSelected
                     ? 'border-cyan-300/70 bg-cyan-300/8'
                     : 'border-white/10 bg-white/[0.02] hover:border-white/25',

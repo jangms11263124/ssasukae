@@ -81,7 +81,14 @@ export function ScoreStage() {
             />
           ) : null}
           {scoringFailed ? (
-            <p className="text-3xl font-black tracking-tight text-rose-400">채점 실패</p>
+            <>
+              <p className="text-3xl font-black tracking-tight text-rose-400">
+                채점하지 못했어요
+              </p>
+              <p className="mt-2 font-mono text-[10px] tracking-[0.3em] text-zinc-500">
+                ANALYSIS_FAILED
+              </p>
+            </>
           ) : score === null ? (
             <>
               <p className="animate-pulse text-3xl font-black tracking-tight text-cyan-300">

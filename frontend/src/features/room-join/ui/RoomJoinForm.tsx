@@ -123,7 +123,7 @@ export function RoomJoinForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div>
         <label htmlFor="invite-code" className="text-sm font-semibold text-zinc-200">
           초대 코드

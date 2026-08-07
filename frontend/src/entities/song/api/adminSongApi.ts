@@ -24,7 +24,7 @@ export interface UploadAdminSongResponse {
 }
 
 function getAiUploadErrorMessage(status: number): string {
-  if (status === 401) return '업로드 인증이 만료됐어요. 다시 시도해 주세요.';
+  if (status === 401) return '업로드 인증이 만료됐어요.';
   if (status === 403) return '곡 등록 권한을 확인하지 못했어요.';
   if (status === 413) return '첨부 파일의 용량 제한을 초과했어요.';
   if (status === 400 || status === 422) return '입력 내용과 첨부 파일 형식을 확인해 주세요.';

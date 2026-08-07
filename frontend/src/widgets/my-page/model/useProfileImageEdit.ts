@@ -18,7 +18,7 @@ export const PROFILE_IMAGE_EDIT_COPY = {
   uploading: '[EDIT_MODE] 이미지를 올리는 중이에요...',
   hint: `[EDIT_MODE] ${PROFILE_IMAGE_TYPE_LABEL}, ${PROFILE_IMAGE_MAX_SIZE_LABEL} 이하 이미지만 올릴 수 있어요.`,
   saved: '프로필 이미지를 바꿨어요.',
-  saveFailed: '프로필 이미지를 바꾸지 못했어요. 다시 시도해 주세요.',
+  saveFailed: '프로필 이미지를 바꾸지 못했어요.',
 } as const;
 
 export function useProfileImageEdit() {
