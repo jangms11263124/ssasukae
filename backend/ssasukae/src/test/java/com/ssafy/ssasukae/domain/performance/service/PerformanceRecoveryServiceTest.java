@@ -1,6 +1,7 @@
 package com.ssafy.ssasukae.domain.performance.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -13,7 +14,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
-import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,12 +35,15 @@ import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEvent
 import com.ssafy.ssasukae.domain.performance.websocket.PerformanceWebSocketEventType;
 import com.ssafy.ssasukae.domain.performance.websocket.payload.PerformanceStateChangedPayload;
 import com.ssafy.ssasukae.domain.room.entity.Room;
+import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.RoomMode;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
 import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.domain.user.type.OAuthProvider;
 import com.ssafy.ssasukae.domain.user.type.Role;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.performanceAnalysis.PerformanceAnalysisErrorCode;
 
 @ExtendWith(MockitoExtension.class)
 class PerformanceRecoveryServiceTest {
@@ -72,7 +75,8 @@ class PerformanceRecoveryServiceTest {
     PerformanceTransactionSupport transactionSupport =
         new PerformanceTransactionSupport(performanceStore, deadlineStore);
     PerformanceCancellationProcessor cancellationProcessor =
-        new PerformanceCancellationProcessor(transactionSupport, eventPublisher, cardService, roomParticipantRepository);
+        new PerformanceCancellationProcessor(
+            transactionSupport, eventPublisher, cardService, roomParticipantRepository);
     org.mockito.Mockito.lenient()
         .when(
             cardService.closeForPerformance(
@@ -156,13 +160,79 @@ class PerformanceRecoveryServiceTest {
   }
 
   @Test
+  @DisplayName("가창자가 분석 실패를 알리면 즉시 분석 실패로 종료한다")
+  void reportAnalysisFailureFailsAnalyzingPerformance() {
+    Room room = playingRoom();
+    PerformanceSnapShot analyzing = analyzingSnapshot();
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
+    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
+
+    beginTransaction();
+
+    service.reportAnalysisFailure(USER_ID, PERFORMANCE_ID);
+
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PREPARING);
+    verifyNoInteractions(eventPublisher);
+
+    commitTransaction();
+
+    verify(deadlineStore).delete(PERFORMANCE_ID);
+    verify(performanceStore).delete(analyzing);
+    verify(eventPublisher)
+        .publish(
+            ROOM_ID,
+            PerformanceWebSocketEventType.PERFORMANCE_STATE_CHANGED,
+            new PerformanceStateChangedPayload(
+                PERFORMANCE_ID, PerformanceStatus.ANALYZING, PerformanceStatus.ANALYSIS_FAILED));
+  }
+
+  @Test
+  @DisplayName("현재 가창자가 아닌 사용자는 분석 실패를 알릴 수 없다")
+  void reportAnalysisFailureRejectsNonPerformer() {
+    Room room = playingRoom();
+    PerformanceSnapShot analyzing = analyzingSnapshot();
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(analyzing));
+    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
+
+    assertThatThrownBy(() -> service.reportAnalysisFailure(999L, PERFORMANCE_ID))
+        .isInstanceOf(CustomException.class)
+        .satisfies(
+            exception ->
+                assertThat(((CustomException) exception).getErrorCode())
+                    .isEqualTo(PerformanceAnalysisErrorCode.PERFORMER_ONLY));
+
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
+    verifyNoInteractions(eventPublisher);
+    verify(performanceStore, never()).delete(analyzing);
+  }
+
+  @Test
+  @DisplayName("분석 중이 아닌 공연에는 클라이언트 실패를 반영하지 않는다")
+  void reportAnalysisFailureRejectsNonAnalyzingPerformance() {
+    Room room = playingRoom();
+    PerformanceSnapShot playing = playingSnapshot();
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(playing));
+    when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
+
+    assertThatThrownBy(() -> service.reportAnalysisFailure(USER_ID, PERFORMANCE_ID))
+        .isInstanceOf(CustomException.class)
+        .satisfies(
+            exception ->
+                assertThat(((CustomException) exception).getErrorCode())
+                    .isEqualTo(PerformanceAnalysisErrorCode.INVALID_PERFORMANCE_STATE));
+
+    assertThat(room.getStatus()).isEqualTo(RoomStatus.PLAYING);
+    verifyNoInteractions(eventPublisher);
+    verify(performanceStore, never()).delete(playing);
+  }
+
+  @Test
   @DisplayName("기존 버전의 SUSPENDED deadline은 공연을 취소하지 않고 정리한다")
   void recoverExpiredDeletesLegacySuspendedDeadline() {
     Room room = playingRoom();
     PerformanceSnapShot suspended =
         playingSnapshot().suspendForPerformerDisconnect(STARTED_AT.plusSeconds(30));
-    when(performanceStore.findByPerformanceId(PERFORMANCE_ID))
-        .thenReturn(Optional.of(suspended));
+    when(performanceStore.findByPerformanceId(PERFORMANCE_ID)).thenReturn(Optional.of(suspended));
     when(roomRepository.findByIdForUpdate(ROOM_ID)).thenReturn(Optional.of(room));
 
     service.recoverExpired(PERFORMANCE_ID, suspended.suspendedAt().toInstant().plusSeconds(15));

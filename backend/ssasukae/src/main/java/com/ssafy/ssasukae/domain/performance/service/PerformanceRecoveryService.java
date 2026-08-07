@@ -18,6 +18,8 @@ import com.ssafy.ssasukae.domain.performance.websocket.payload.PerformanceStateC
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
+import com.ssafy.ssasukae.global.exception.CustomException;
+import com.ssafy.ssasukae.global.exception.performanceAnalysis.PerformanceAnalysisErrorCode;
 
 import lombok.RequiredArgsConstructor;
 
@@ -33,9 +35,7 @@ public class PerformanceRecoveryService {
   private final PerformanceCancellationProcessor cancellationProcessor;
   private final PerformanceWebSocketEventPublisher eventPublisher;
 
-  /**
-   *  명시적으로 방을 나간 사용자가 현재 가창자라면 재생 전 또는 재생 중인 공연을 즉시 취소한다.
-   */
+  /** 명시적으로 방을 나간 사용자가 현재 가창자라면 재생 전 또는 재생 중인 공연을 즉시 취소한다. */
   @Transactional
   public void recoverPerformerExitCase(Long roomId, Long userId) {
     recoverPerformerExitCase(roomId, userId, PerformanceCancelReason.PERFORMER_DISCONNECTED);
@@ -76,9 +76,45 @@ public class PerformanceRecoveryService {
         cancelReason == null ? PerformanceCancelReason.SAFETY_TERMINATION : cancelReason);
   }
 
-  /**
-   * ANALYZING 상태에서 AI 응답 제한 시간이 실제로 지난 경우 분석 실패로 종료한다.
-   */
+  /** 가창자 클라이언트가 감지한 채점 실패를 방 전체에 즉시 반영한다. */
+  @Transactional
+  public void reportAnalysisFailure(Long userId, Long performanceId) {
+    if (!isPositive(userId) || !isPositive(performanceId)) {
+      throw new CustomException(PerformanceAnalysisErrorCode.INVALID_REQUEST);
+    }
+
+    PerformanceSnapShot initial =
+        performanceStore
+            .findByPerformanceId(performanceId)
+            .orElseThrow(
+                () -> new CustomException(PerformanceAnalysisErrorCode.RESOURCE_NOT_FOUND));
+    Room room =
+        lockRoom(initial.roomId())
+            .orElseThrow(
+                () -> new CustomException(PerformanceAnalysisErrorCode.RESOURCE_NOT_FOUND));
+
+    // 성공 콜백 또는 timeout 처리와 경합할 수 있으므로 방 잠금을 얻은 뒤 현재 상태를 다시 읽는다.
+    PerformanceSnapShot current = performanceStore.findByPerformanceId(performanceId).orElse(null);
+    if (current == null) {
+      return;
+    }
+    if (!current.belongsToRoom(room.getId())) {
+      throw new CustomException(PerformanceAnalysisErrorCode.RESOURCE_NOT_FOUND);
+    }
+    if (!current.performerUserId().equals(userId)) {
+      throw new CustomException(PerformanceAnalysisErrorCode.PERFORMER_ONLY);
+    }
+    if (current.status() != PerformanceStatus.ANALYZING) {
+      throw new CustomException(PerformanceAnalysisErrorCode.INVALID_PERFORMANCE_STATE);
+    }
+    if (room.getStatus() != RoomStatus.PLAYING) {
+      throw new CustomException(PerformanceAnalysisErrorCode.INVALID_ROOM_STATE);
+    }
+
+    failAnalysis(room, current);
+  }
+
+  /** ANALYZING 상태에서 AI 응답 제한 시간이 실제로 지난 경우 분석 실패로 종료한다. */
   @Transactional
   public void recoverExpired(Long performanceId, Instant now) {
     if (!isPositive(performanceId) || now == null) {
@@ -120,23 +156,21 @@ public class PerformanceRecoveryService {
     deadlineStore.delete(performanceId);
   }
 
-
   // 분석 실패 처리
   private void failAnalysis(Room room, PerformanceSnapShot analyzing) {
     room.recoverPerformance();
 
-    transactionSupport.afterCommit(() -> {
-      cleanup(analyzing);
-      eventPublisher.publish(
+    transactionSupport.afterCommit(
+        () -> {
+          cleanup(analyzing);
+          eventPublisher.publish(
               room.getId(),
               PerformanceWebSocketEventType.PERFORMANCE_STATE_CHANGED,
               new PerformanceStateChangedPayload(
-                      analyzing.performanceId(),
-                      PerformanceStatus.ANALYZING,
-                      PerformanceStatus.ANALYSIS_FAILED
-              )
-      );
-    });
+                  analyzing.performanceId(),
+                  PerformanceStatus.ANALYZING,
+                  PerformanceStatus.ANALYSIS_FAILED));
+        });
   }
 
   // 공연 정보와 복구 정보를 레디스에서 삭제
