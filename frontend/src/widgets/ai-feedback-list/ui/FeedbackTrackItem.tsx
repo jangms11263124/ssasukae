@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import Link from 'next/link';
 
-import type { FeedbackItem } from '@/entities/feedback';
+import { buildFeedbackDetailPath, formatTrackLabel, type FeedbackItem } from '@/entities/feedback';
 import { SongThumbnail } from '@/entities/song';
 import { cn } from '@/shared/lib/cn';
 import { getScoreGrade, GRADE_CLASS } from '@/shared/lib/scoreGrade';
@@ -55,7 +55,8 @@ export const FeedbackTrackItem = memo(function FeedbackTrackItem({
 
   return (
     <Link
-      href={`/ai-feedback/${item.feedbackId}`}
+      // 상세 헤더가 목록과 같은 TRACK_ 순번을 보여주도록 쿼리로 넘긴다
+      href={buildFeedbackDetailPath(item.feedbackId, index + 1)}
       className={cn(
         'group relative grid grid-cols-[auto_minmax(0,1.1fr)_8rem_minmax(0,1.4fr)_auto] items-center gap-8 overflow-hidden border border-white/[0.08] bg-[#121214] p-5 pl-6 transition-colors',
         'hover:border-cyan-300/40 hover:bg-[#15151a] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300',
@@ -68,7 +69,7 @@ export const FeedbackTrackItem = memo(function FeedbackTrackItem({
 
       <div className="min-w-0">
         <p className="font-mono text-[0.58rem] font-bold tracking-[0.24em] text-fuchsia-400">
-          TRACK_{String(index + 1).padStart(2, '0')}
+          {formatTrackLabel(index + 1)}
         </p>
         <p className="mt-1.5 truncate font-sans text-xl font-black tracking-tight text-white transition-colors group-hover:text-cyan-200">
           {item.title}

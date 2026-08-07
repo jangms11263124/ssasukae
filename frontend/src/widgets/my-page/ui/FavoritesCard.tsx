@@ -5,7 +5,7 @@ import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
 import { SettingsPanel } from '@/shared/ui/panel/SettingsPanel';
 
-import { MYPAGE_PREVIEW_COUNT } from '../config/preview';
+import { FAVORITES_PREVIEW_COUNT } from '../config/preview';
 import { formatCount } from '../lib/formatters';
 import { ChevronRightIcon, HeartIcon } from './icons';
 import { TrackThumbnail } from './TrackThumbnail';
@@ -16,7 +16,7 @@ interface FavoritesCardProps {
 }
 
 export function FavoritesCard({ count, items }: FavoritesCardProps) {
-  const previewItems = items.slice(0, MYPAGE_PREVIEW_COUNT);
+  const previewItems = items.slice(0, FAVORITES_PREVIEW_COUNT);
 
   return (
     <SettingsPanel title="FAVORITES" icon={<HeartIcon />}>
@@ -33,7 +33,7 @@ export function FavoritesCard({ count, items }: FavoritesCardProps) {
         <ChevronRightIcon />
       </Link>
 
-      {/* 목록은 최근 3개만 내려오므로, 전체 개수와 나란히 두어 미리보기임을 드러낸다. */}
+      {/* 목록은 최근 6개만 내려오므로, 전체 개수와 나란히 두어 미리보기임을 드러낸다. */}
       <div
         className={cn(
           jetBrainsMono.className,

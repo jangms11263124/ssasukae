@@ -55,7 +55,7 @@ export function SongSelectControls({ isPerformer }: SongSelectControlsProps) {
                 }
                 className="shrink-0 border border-white/25 bg-white/5 px-4 py-2 text-xs font-semibold text-zinc-200 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
               >
-                + 노래 부르기
+                노래 부르기
               </button>
             </>
           )}

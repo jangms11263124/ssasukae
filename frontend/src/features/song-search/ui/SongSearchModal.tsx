@@ -320,15 +320,13 @@ export function SongSearchModal({ onClose, renderSongAction }: SongSearchModalPr
           <li ref={sentinelRef} aria-hidden="true" className="h-px" />
         </ul>
 
-        <div className="mt-4 flex items-center justify-between bg-zinc-400/85 px-5 py-2 font-mono text-[10px] tracking-[0.2em] text-cyan-800">
-          <div className="flex items-center gap-6">
-            <span>{songs.length} TRACKS</span>
-            <span>FILTER_{activeTab}</span>
-            <span>{isError ? 'LIBRARY_OFFLINE' : 'LIBRARY_SYNCED'}</span>
-          </div>
-          <span aria-hidden="true" className="flex gap-0.5">
-            <span className="h-3 w-1 bg-cyan-600" />
-            <span className="h-3 w-1 bg-fuchsia-500" />
+        <div className="mt-4 flex items-center gap-6 border-t border-white/10 bg-black/40 px-5 py-2.5 font-mono text-[10px] tracking-[0.2em] text-zinc-500">
+          <span>
+            TRACKS: <span className="text-cyan-300">{songs.length}</span>
+          </span>
+          <span>TAB: {activeTab}</span>
+          <span className={isError ? 'text-red-400/80' : undefined}>
+            {isError ? 'LIBRARY_OFFLINE' : 'LIBRARY_SYNCED'}
           </span>
         </div>
       </div>

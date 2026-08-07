@@ -204,7 +204,7 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
             <button
               type="button"
               onClick={handleCancel}
-              className="absolute bottom-4 right-4 border border-white/30 bg-black/60 px-5 py-2 font-mono text-xs tracking-[0.18em] text-zinc-400 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
+              className="absolute bottom-4 right-4 rounded-md border border-white/30 bg-black/60 px-5 py-2 font-mono text-xs tracking-[0.18em] text-zinc-400 transition-colors hover:border-cyan-300/60 hover:text-cyan-200"
             >
               공연 취소
             </button>

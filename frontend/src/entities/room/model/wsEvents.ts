@@ -19,10 +19,8 @@ export interface WebSocketErrorEvent {
   };
 }
 
-/** /user/queue/pong 으로 오는 PING 응답 payload */
+/** /user/queue/pong 으로 오는 PING 응답 payload — 백엔드 PongPayload 레코드와 1:1 */
 export interface PongPayload {
-  requestId: string;
-  roomId: number;
   clientSentAt: string;
   serverReceivedAt: string;
 }
