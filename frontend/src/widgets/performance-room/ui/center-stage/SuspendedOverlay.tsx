@@ -15,6 +15,33 @@ interface SuspendedOverlayProps {
 }
 
 /**
+ * 재접속 유예 카운트다운. 유예가 시작될 때 새로 마운트돼야 useRemainingSeconds가
+ * 그 시점의 시계로 센다 (대기 중에도 살려 두면 첫 프레임에 낡은 값이 나온다).
+ */
+function ReconnectCountdown({
+  deadlineAt,
+  isPerformer,
+}: {
+  deadlineAt: string;
+  isPerformer: boolean;
+}) {
+  const remainingSeconds = useRemainingSeconds(deadlineAt);
+
+  return (
+    <div className="flex flex-col items-center gap-1" role="timer">
+      <span className="font-mono text-5xl tabular-nums text-amber-300">{remainingSeconds}</span>
+      <p className="text-xs text-zinc-400">
+        {remainingSeconds > 0
+          ? isPerformer
+            ? '초 안에 연결이 복구되지 않으면 공연이 종료됩니다.'
+            : '초 안에 가창자가 돌아오지 않으면 공연이 종료됩니다.'
+          : '공연 종료를 처리하는 중입니다.'}
+      </p>
+    </div>
+  );
+}
+
+/**
  * 가창자 연결 끊김으로 공연이 일시 중지된 동안 무대 위를 덮는다.
  * 가창자가 복귀해 재개 준비를 마치면 서버가 PERFORMANCE_RESUMED를 브로드캐스트한다.
  */
@@ -44,9 +71,6 @@ export function SuspendedOverlay({ isPerformer }: SuspendedOverlayProps) {
       : null;
   }, [suspendedAt]);
 
-  const showCountdown = isPerformerOffline && deadlineAt !== null;
-  const remainingSeconds = useRemainingSeconds(showCountdown ? deadlineAt : null);
-
   return (
     <div className="absolute inset-0 z-20 grid place-items-center bg-black/70 backdrop-blur-[2px]">
       <div className="flex flex-col items-center gap-4 px-6 text-center">
@@ -57,19 +81,8 @@ export function SuspendedOverlay({ isPerformer }: SuspendedOverlayProps) {
             : '가창자 연결이 끊겨 공연이 일시 중지되었습니다.'}
         </p>
 
-        {showCountdown ? (
-          <div className="flex flex-col items-center gap-1" role="timer">
-            <span className="font-mono text-5xl tabular-nums text-amber-300">
-              {remainingSeconds}
-            </span>
-            <p className="text-xs text-zinc-400">
-              {remainingSeconds > 0
-                ? isPerformer
-                  ? '초 안에 연결이 복구되지 않으면 공연이 종료됩니다.'
-                  : '초 안에 가창자가 돌아오지 않으면 공연이 종료됩니다.'
-                : '공연 종료를 처리하는 중입니다.'}
-            </p>
-          </div>
+        {isPerformerOffline && deadlineAt !== null ? (
+          <ReconnectCountdown deadlineAt={deadlineAt} isPerformer={isPerformer} />
         ) : null}
 
         {isPerformer ? (
