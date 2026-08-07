@@ -8,6 +8,11 @@ export const CARD_ASPECT = 0.718;
 export const CARD_RADIUS = '4.55% / 3.5%';
 
 interface CardEffectVisual {
+  /**
+   * 발동 연출(컷인·배너·무대 테두리)의 효과별 포인트 색.
+   * 화면만 보고도 어떤 공격인지 구분되도록 효과마다 다른 색조를 쓴다.
+   */
+  accent: string;
   /** 상단 우측 카테고리 라벨 */
   categoryLabel: string;
   /** 서버 description이 없을 때 쓰는 기본 효과 설명 */
@@ -18,21 +23,25 @@ interface CardEffectVisual {
 
 export const CARD_EFFECT_VISUALS: Record<CardEffectType, CardEffectVisual> = {
   MR_KEY_CHANGE: {
+    accent: '#22d3ee',
     categoryLabel: 'PITCH CHANGE',
     fallbackDescription: '가창자의 음정을 강제로 변경합니다.',
     title: 'PITCH HACKING',
   },
   MR_TEMPO_CHANGE: {
+    accent: '#a855f7',
     categoryLabel: 'TEMPO CHANGE',
     fallbackDescription: '가창자의 템포를 강제로 변경합니다.',
     title: 'TEMPO HACKING',
   },
   MIC_OPEN: {
+    accent: '#ff2d95',
     categoryLabel: 'STEEL MIC',
     fallbackDescription: '마이크를 개방하여 가창 중인 무대에 난입합니다.',
     title: 'MIC HIJACKING',
   },
   LYRICS_HIDE: {
+    accent: '#f59e0b',
     categoryLabel: 'LYRICS HIDING',
     fallbackDescription: '가창자의 시선에서 가사가 가려집니다.',
     title: 'LYRICS BLACKOUT',
