@@ -5,6 +5,7 @@ import { jetBrainsMono } from '@/shared/config/fonts';
 import { cn } from '@/shared/lib/cn';
 
 import { LANDING_STAGE_COPY } from '../config/landingStage';
+import { LatencyReadout } from './LatencyReadout';
 
 interface LandingStagePanelProps {
   className?: string;
@@ -44,7 +45,7 @@ export function LandingStagePanel({ className }: LandingStagePanelProps) {
           <span className="h-1.5 w-1.5 bg-neon-cyan" aria-hidden="true" />
           {LANDING_STAGE_COPY.protocol}
         </p>
-        <p>{LANDING_STAGE_COPY.latency}</p>
+        <LatencyReadout />
       </div>
 
       <div className="absolute bottom-8 left-6 right-6 sm:bottom-10 sm:left-9 sm:right-9">
