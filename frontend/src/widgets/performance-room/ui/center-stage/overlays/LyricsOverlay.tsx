@@ -83,6 +83,11 @@ function fillStyle(syllable: SyllableTiming, sungTimeMs: number): CSSProperties 
     WebkitBackgroundClip: 'text',
     backgroundClip: 'text',
     color: 'transparent',
+    // clip: text는 배경이 칠해진 영역만 글자를 보여주는데, 인라인 배경 높이는 1순위
+    // 폰트(Anybody, 라틴 전용) 메트릭을 따라서 폴백 폰트의 한글 윗부분이 잘린다.
+    // 인라인 요소의 세로 padding은 레이아웃(줄 높이)에 영향 없이 칠 영역만 넓힌다.
+    // 가로는 0이어야 한다 — 값을 주면 음절 사이가 벌어진다.
+    padding: '0.2em 0',
     animation: `syllable-fill ${durationMs}ms linear ${-elapsedMs}ms forwards`,
   };
 }
