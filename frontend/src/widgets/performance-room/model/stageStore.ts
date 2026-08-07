@@ -135,7 +135,14 @@ export const useStageStore = create<StageStore>((set) => ({
   confirmSinger: (participantId) =>
     set({ performerParticipantId: participantId, phase: 'SONG_SELECT' }),
   confirmSong: (song) => set({ phase: 'READY', selectedSong: song }),
-  changeSong: () => set({ phase: 'SONG_SELECT', selectedSong: null, mrLoadRequested: false }),
+  changeSong: () =>
+    set({
+      phase: 'SONG_SELECT',
+      selectedSong: null,
+      mrLoadRequested: false,
+      // cancel 이벤트 전에 다시 시작하기를 눌러도 stale prepare를 스킵하지 않게 한다.
+      performanceId: null,
+    }),
   requestMrLoad: () => set({ mrLoadRequested: true }),
   startPerformance: () => set({ phase: 'PERFORMING', dspPanelOpen: false }),
   finishPerformance: (score) => set({ phase: 'SCORE', score }),

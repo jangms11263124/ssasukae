@@ -11,7 +11,9 @@ import com.ssafy.ssasukae.domain.performance.websocket.payload.PerformanceCancel
 import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.stereotype.Component;
 
 @Component
@@ -26,8 +28,16 @@ public class PerformanceCancellationProcessor {
   public void cancel(Room room, PerformanceSnapShot active, PerformanceCancelReason reason) {
     PerformanceSnapShot restored = cardService.closeForPerformance(active, CardEffectEndReason.PERFORMANCE_CANCELLED);
 
+    // 시작 전(노래 바꾸기) cancel은 공연 세션만 폐기하고 가창자 역할은 유지한다.
+    // 공연 중 취소·연결 끊김 등은 역할을 내려 다음 라운드를 처음부터 고른다.
+    boolean keepPerformer =
+        active.status() == PerformanceStatus.PREPARING
+            && reason == PerformanceCancelReason.PERFORMER_REQUEST;
+
     room.recoverPerformance();
-    clearPerformer(room.getId(), restored.performerParticipantId());
+    if (!keepPerformer) {
+      clearPerformer(room.getId(), restored.performerParticipantId());
+    }
     transactionSupport.afterCommit(
         () -> {
           transactionSupport.deletePerformance(restored);
@@ -47,10 +57,11 @@ public class PerformanceCancellationProcessor {
                       reason));
         });
   }
-    private void clearPerformer(Long roomId, Long performerParticipantId) {
-        roomParticipantRepository.findById(performerParticipantId)
-                .filter(participant -> participant.getRoom().getId().equals(roomId))
-                .filter(RoomParticipant::isActive)
-                .ifPresent(RoomParticipant::demoteToParticipant);
-    }
+
+  private void clearPerformer(Long roomId, Long performerParticipantId) {
+    roomParticipantRepository.findById(performerParticipantId)
+        .filter(participant -> participant.getRoom().getId().equals(roomId))
+        .filter(RoomParticipant::isActive)
+        .ifPresent(RoomParticipant::demoteToParticipant);
+  }
 }
