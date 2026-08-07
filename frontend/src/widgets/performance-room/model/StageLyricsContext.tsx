@@ -8,9 +8,11 @@ import { useSyncedLyrics, type SyncedLyricsState } from './useSyncedLyrics';
 const FALLBACK_LYRICS: SyncedLyricsState = {
   status: 'IDLE',
   currentLine: '',
+  currentSyllables: null,
   nextLine: '',
   message: null,
   countdown: null,
+  getHighlightTimeMs: () => 0,
 };
 
 const StageLyricsContext = createContext<SyncedLyricsState>(FALLBACK_LYRICS);

@@ -1,4 +1,4 @@
-export { fetchLyricsCandidates, fetchPlainLyrics } from './api/lyricsApi';
+export { fetchLyricsCandidates, fetchMidiJson, fetchPlainLyrics } from './api/lyricsApi';
 export type { LyricsLookupParams } from './api/lyricsApi';
 export {
   DURATION_TOLERANCE_SEC,
@@ -13,8 +13,11 @@ export {
   MAX_CANDIDATES,
   SEARCH_DELAY_MS,
   SONG_DURATION_WAIT_MS,
+  SYLLABLE_LINE_CLEAR_GAP_MS,
+  SYLLABLE_TICK_INTERVAL_MS,
 } from './config/lyricsSyncConfig';
 export { findLineIndexAt, findNextTextIndex, parseLrc } from './lib/parseLrc';
+export { parseSyllableHighlights } from './lib/parseSyllableHighlights';
 export { lyricsOverlapRatio, selectLyrics } from './lib/verifyLyrics';
 export type {
   LyricsCandidate,
@@ -22,4 +25,5 @@ export type {
   LyricsLookupResponse,
   LyricsMissReason,
   ResolvedLyrics,
+  SyllableTiming,
 } from './model/types';
