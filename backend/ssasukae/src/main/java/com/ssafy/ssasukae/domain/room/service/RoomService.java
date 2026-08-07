@@ -309,20 +309,32 @@ public class RoomService {
     }
 
     private void disconnectStaleMediaConnection(Room room, RoomParticipant participant) {
-        String connectionId = participant.getConnectionId();
-        if (connectionId == null || connectionId.isBlank()) {
-            return;
-        }
-
         if (participant.getConnectionStatus() != ConnectionStatus.CONNECTED
                 && participant.getConnectionStatus() != ConnectionStatus.DISCONNECTED) {
             return;
         }
 
+        // OpenVidu에 connection 이 이미 없으면 무시하고 새 토큰을 발급한다.
+        releaseMediaConnection(room.getOpenViduSessionId(), participant.getConnectionId());
+    }
+
+    /**
+     * OpenVidu 커넥션을 해제한다. 커넥션이 없거나 이미 정리된 경우는 정상 상황으로 보고 넘어간다.
+     *
+     * <p>LOW_LATENCY 방은 네이티브 앱이 프레즌스 연결을 대신하므로 참가자가 CONNECTED 이면서도
+     * connectionId 가 null 이다({@code LowLatencyAppService#createAppSession}). 이 메서드는
+     * afterCommit 콜백에서 호출되기 때문에, 여기서 예외가 나가면 트랜잭션은 이미 커밋된 채로
+     * 요청이 500 이 되고 뒤따르는 WebSocket 이벤트 발행까지 건너뛰게 된다. 그래서 미디어 해제
+     * 실패가 퇴장/강퇴 브로드캐스트를 막지 않도록 여기서 삼킨다.
+     */
+    private void releaseMediaConnection(String openViduSessionId, String connectionId) {
+        if (connectionId == null || connectionId.isBlank()) {
+            return;
+        }
+
         try {
-            mediaSessionGateway.disconnect(room.getOpenViduSessionId(), connectionId);
+            mediaSessionGateway.disconnect(openViduSessionId, connectionId);
         } catch (CustomException ignored) {
-            // OpenVidu에 connection 이 이미 없으면 무시하고 새 토큰을 발급한다.
         }
     }
 
@@ -432,7 +444,7 @@ public class RoomService {
 
         RoomParticipant changedHost = newHost;
         afterCommit(() -> {
-            if (online) mediaSessionGateway.disconnect(currentRoom.getOpenViduSessionId(), connectionId);
+            if (online) releaseMediaConnection(currentRoom.getOpenViduSessionId(), connectionId);
             if(changedHost != null) webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(ROOM_HOST_CHANGED, roomId, new RoomHostChangedPayload(changedHost.getId())));
             webSocketEventPublisher.publishToRoom(roomId, WebSocketEvent.roomEvent(PARTICIPANT_LEFT, roomId, new ParticipantLeftPayload(participant.getId())));
         });
@@ -529,7 +541,7 @@ public class RoomService {
                 receiver.getUser().getId(),
                 PerformanceCancelReason.SAFETY_TERMINATION);
         afterCommit(() -> {
-            if (online) mediaSessionGateway.disconnect(room.getOpenViduSessionId(), connectionId);
+            if (online) releaseMediaConnection(room.getOpenViduSessionId(), connectionId);
             webSocketEventPublisher.publishToRoom(room.getId(), WebSocketEvent.roomEvent(PARTICIPANT_KICKED, room.getId(), new ParticipantKickedPayload(participantId)));
         });
     }

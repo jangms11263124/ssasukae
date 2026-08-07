@@ -81,6 +81,17 @@ pub enum BackendEvent {
     PlaybackEnded {
         performance_id: u64,
         cancelled: bool,
+        /// 서버가 알려준 종료 사유. 퇴장·연결 끊김·직접 취소를 구분해 안내하는 데 쓴다.
+        reason: Option<String>,
+    },
+    /// 가창자 연결이 끊겨 공연이 일시 중지됐다. 일반 모드는 이때 무대를 덮고
+    /// 유예 시간을 센다(`PERFORMER_RECONNECT_GRACE_SECONDS` = 15초).
+    PerformanceSuspended {
+        performance_id: u64,
+    },
+    /// 가창자가 돌아와 공연이 재개됐다.
+    PerformanceResumed {
+        performance_id: u64,
     },
     RoomTerminated,
     RoomLeaveFinished {
@@ -178,11 +189,7 @@ pub fn create_low_latency_app_session(
 /// app-session 요청 단계에서 실패하면 워커가 없어 `BackendCommand::LeaveRoom`을 보낼 수
 /// 없다. 그대로 앱을 닫으면 웹이 만들어 둔 참가자가 방에 남으므로, 실행 정보만으로
 /// 퇴장 요청을 직접 보낸다.
-pub fn leave_room_directly(
-    base_url: &str,
-    room_id: u64,
-    access_token: &str,
-) -> Result<(), String> {
+pub fn leave_room_directly(base_url: &str, room_id: u64, access_token: &str) -> Result<(), String> {
     let client = Client::builder()
         .timeout(HTTP_TIMEOUT)
         .build()
@@ -1029,6 +1036,19 @@ fn decode_backend_event(body: &str) -> Option<BackendEvent> {
             Some(BackendEvent::PlaybackEnded {
                 performance_id: payload.performance_id,
                 cancelled,
+                reason: payload.cancel_reason,
+            })
+        }
+        "PERFORMANCE_SUSPENDED" => {
+            let payload: PlaybackPayload = serde_json::from_value(envelope.payload).ok()?;
+            Some(BackendEvent::PerformanceSuspended {
+                performance_id: payload.performance_id,
+            })
+        }
+        "PERFORMANCE_RESUMED" => {
+            let payload: PlaybackPayload = serde_json::from_value(envelope.payload).ok()?;
+            Some(BackendEvent::PerformanceResumed {
+                performance_id: payload.performance_id,
             })
         }
         "ROOM_TERMINATED" => Some(BackendEvent::RoomTerminated),
@@ -1088,6 +1108,10 @@ struct PreparationPayload {
 #[serde(rename_all = "camelCase")]
 struct PlaybackPayload {
     performance_id: u64,
+    /// PERFORMANCE_CANCELLED 에만 실린다. PERFORMER_REQUEST / PERFORMER_DISCONNECTED /
+    /// SAFETY_TERMINATION 중 하나이며, 사용자에게 왜 끝났는지 알리는 데 쓴다.
+    #[serde(default)]
+    cancel_reason: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1145,12 +1169,32 @@ mod tests {
     #[test]
     fn cancellation_event_is_marked_as_cancelled() {
         let body = r#"{"eventType":"PERFORMANCE_CANCELLED","roomId":12,"occurredAt":"2026-08-01T12:01:00+09:00","payload":{"performanceId":91,"performerParticipantId":4,"cancelReason":"PERFORMER_REQUEST"}}"#;
+        let Some(BackendEvent::PlaybackEnded {
+            performance_id,
+            cancelled,
+            reason,
+        }) = decode_backend_event(body)
+        else {
+            panic!("취소 이벤트를 해석하지 못했다");
+        };
+        assert_eq!(performance_id, 91);
+        assert!(cancelled);
+        // 사유가 있어야 퇴장·연결 끊김과 직접 중지를 구분해 안내할 수 있다.
+        assert_eq!(reason.as_deref(), Some("PERFORMER_REQUEST"));
+    }
+
+    #[test]
+    fn suspend_and_resume_events_are_decoded() {
+        let suspended = r#"{"eventType":"PERFORMANCE_SUSPENDED","roomId":12,"occurredAt":"2026-08-01T12:01:00+09:00","payload":{"performanceId":91,"performerParticipantId":4,"previousStatus":"PLAYING","currentStatus":"SUSPENDED","suspendedAt":"2026-08-01T12:01:00+09:00","playbackPositionMs":12000}}"#;
         assert!(matches!(
-            decode_backend_event(body),
-            Some(BackendEvent::PlaybackEnded {
-                performance_id: 91,
-                cancelled: true
-            })
+            decode_backend_event(suspended),
+            Some(BackendEvent::PerformanceSuspended { performance_id: 91 })
+        ));
+
+        let resumed = r#"{"eventType":"PERFORMANCE_RESUMED","roomId":12,"occurredAt":"2026-08-01T12:01:20+09:00","payload":{"performanceId":91,"performerParticipantId":4,"previousStatus":"SUSPENDED","currentStatus":"PLAYING","resumeAt":"2026-08-01T12:01:21+09:00","resumePositionMs":12000,"settings":null}}"#;
+        assert!(matches!(
+            decode_backend_event(resumed),
+            Some(BackendEvent::PerformanceResumed { performance_id: 91 })
         ));
     }
 
@@ -1504,7 +1548,8 @@ mod tests {
             handle.event_rx.recv_timeout(Duration::from_secs(3)),
             Ok(BackendEvent::PlaybackEnded {
                 performance_id: 9001,
-                cancelled: false
+                cancelled: false,
+                ..
             })
         ));
         let _ = handle.command_tx.send(BackendCommand::Stop);
