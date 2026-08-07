@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
@@ -73,15 +72,15 @@ public class CardService {
 
   @Autowired
   public CardService(
-      RoomRepository roomRepository,
-      RoomParticipantRepository participantRepository,
-      CardRepository cardRepository,
-      PerformanceStore performanceStore,
-      CardStateStore cardStateStore,
-      CardWebSocketEventPublisher eventPublisher,
-      @Qualifier("cardTaskScheduler") TaskScheduler taskScheduler,
-      Clock clock,
-      PlatformTransactionManager transactionManager) {
+          RoomRepository roomRepository,
+          RoomParticipantRepository participantRepository,
+          CardRepository cardRepository,
+          PerformanceStore performanceStore,
+          CardStateStore cardStateStore,
+          CardWebSocketEventPublisher eventPublisher,
+          @Qualifier("cardTaskScheduler") TaskScheduler taskScheduler,
+          Clock clock,
+          PlatformTransactionManager transactionManager) {
     this.roomRepository = roomRepository;
     this.participantRepository = participantRepository;
     this.cardRepository = cardRepository;
@@ -95,14 +94,14 @@ public class CardService {
 
   /** 단위 테스트 및 순수 객체 테스트에서 사용하는 호환 생성자다. */
   public CardService(
-      RoomRepository roomRepository,
-      RoomParticipantRepository participantRepository,
-      CardRepository cardRepository,
-      PerformanceStore performanceStore,
-      CardStateStore cardStateStore,
-      CardWebSocketEventPublisher eventPublisher,
-      TaskScheduler taskScheduler,
-      Clock clock) {
+          RoomRepository roomRepository,
+          RoomParticipantRepository participantRepository,
+          CardRepository cardRepository,
+          PerformanceStore performanceStore,
+          CardStateStore cardStateStore,
+          CardWebSocketEventPublisher eventPublisher,
+          TaskScheduler taskScheduler,
+          Clock clock) {
     this.roomRepository = roomRepository;
     this.participantRepository = participantRepository;
     this.cardRepository = cardRepository;
@@ -120,31 +119,28 @@ public class CardService {
     try {
       Room room = roomRepository.findByIdForUpdate(performance.roomId()).orElse(null);
       if (room == null
-          || room.getMode() != RoomMode.BATTLE
-          || room.getStatus() != RoomStatus.PLAYING
-          || performance.status() != PerformanceStatus.PLAYING) {
+              || room.getMode() != RoomMode.BATTLE
+              || room.getStatus() != RoomStatus.PLAYING
+              || performance.status() != PerformanceStatus.PLAYING) {
         return;
       }
 
       List<RoomParticipant> recipients =
-          participantRepository
-              .findAllByRoomIdAndConnectionStatusIn(
-                  room.getId(), List.of(ConnectionStatus.CONNECTED))
-              .stream()
-              .filter(participant -> !performance.isPerformedBy(participant.getId()))
-              .toList();
+              participantRepository
+                      .findAllByRoomIdAndConnectionStatusIn(
+                              room.getId(), List.of(ConnectionStatus.CONNECTED))
+                      .stream()
+                      .filter(participant -> !performance.isPerformedBy(participant.getId()))
+                      .toList();
       if (recipients.isEmpty()) {
         return;
       }
 
       List<Card> drawableCards =
-              cardRepository.findAll().stream()
-                      .filter(Card::isDrawable)
-                      .filter(card -> card.getEffectType() == CardEffectType.MIC_OPEN)
-                      .toList();
+          cardRepository.findAll().stream().filter(Card::isDrawable).toList();
       if (drawableCards.isEmpty()) {
         log.warn(
-            "뽑을 카드 없음 (roomId={}, performanceId={})", room.getId(), performance.performanceId());
+                "뽑을 카드 없음 (roomId={}, performanceId={})", room.getId(), performance.performanceId());
         return;
       }
 
@@ -153,17 +149,17 @@ public class CardService {
       for (RoomParticipant recipient : recipients) {
         Card card = draw(drawableCards);
         CardAssignmentSnapshot cardAssignmentSnapshot =
-            toAssignment(room.getId(), performance, recipient, card, assignedAt);
+                toAssignment(room.getId(), performance, recipient, card, assignedAt);
         cardStateStore.saveAssignment(cardAssignmentSnapshot);
         assignments.add(cardAssignmentSnapshot);
       }
       assignments.forEach(this::publishAssigned);
     } catch (RuntimeException exception) {
       log.error(
-          "카드 배정 실패 (roomId={}, performanceId={})",
-          performance.roomId(),
-          performance.performanceId(),
-          exception);
+              "카드 배정 실패 (roomId={}, performanceId={})",
+              performance.roomId(),
+              performance.performanceId(),
+              exception);
     }
   }
 
@@ -176,9 +172,9 @@ public class CardService {
 
     // 존재하는 방인가
     Room room =
-        roomRepository
-            .findByIdForUpdate(roomId)
-            .orElseThrow(() -> business(WebSocketErrorCode.RESOURCE_NOT_FOUND));
+            roomRepository
+                    .findByIdForUpdate(roomId)
+                    .orElseThrow(() -> business(WebSocketErrorCode.RESOURCE_NOT_FOUND));
     // 배틀방인가
     if (room.getMode() != RoomMode.BATTLE) {
       throw business(WebSocketErrorCode.INVALID_ROOM_MODE);
@@ -190,17 +186,17 @@ public class CardService {
 
     // 올바른 참가자인가
     RoomParticipant participant =
-        participantRepository
-            .findByRoomIdAndUserId(roomId, userId)
-            .orElseThrow(() -> business(WebSocketErrorCode.ROOM_ACCESS_DENIED));
+            participantRepository
+                    .findByRoomIdAndUserId(roomId, userId)
+                    .orElseThrow(() -> business(WebSocketErrorCode.ROOM_ACCESS_DENIED));
     if (!participant.isOnline()) {
       throw business(WebSocketErrorCode.PARTICIPANT_OFFLINE);
     }
     // 공연 정보가 스냅샷에 있나
     PerformanceSnapShot performance =
-        performanceStore
-            .findActiveByRoomId(roomId)
-            .orElseThrow(() -> business(WebSocketErrorCode.NO_ACTIVE_PERFORMANCE));
+            performanceStore
+                    .findActiveByRoomId(roomId)
+                    .orElseThrow(() -> business(WebSocketErrorCode.NO_ACTIVE_PERFORMANCE));
     if (!performance.performanceId().equals(performanceId)) {
       throw business(WebSocketErrorCode.PERFORMANCE_MISMATCH);
     }
@@ -219,17 +215,17 @@ public class CardService {
 
     // 그 외의 경우에 대해서는 정상 요청으로 간주 -> 카드 발행
     CardAssignmentSnapshot assignment =
-        cardStateStore
-            .findAssignment(roomId, performanceId, participant.getId())
-            .orElseThrow(() -> business(WebSocketErrorCode.CARD_ASSIGNMENT_NOT_FOUND));
+            cardStateStore
+                    .findAssignment(roomId, performanceId, participant.getId())
+                    .orElseThrow(() -> business(WebSocketErrorCode.CARD_ASSIGNMENT_NOT_FOUND));
     validateAssignment(assignment);
 
     // 마이크 난입이면, 효과를 카드 사용자 본인한테 적용시켜야함
     Long targetParticipantId =
-        assignment.targetType()
-                == com.ssafy.ssasukae.domain.card.websocket.type.CardEffectTargetType.CARD_OWNER
-            ? participant.getId()
-            : performance.performerParticipantId();
+            assignment.targetType()
+                    == com.ssafy.ssasukae.domain.card.websocket.type.CardEffectTargetType.CARD_OWNER
+                    ? participant.getId()
+                    : performance.performerParticipantId();
     if (targetParticipantId == null) {
       throw business(WebSocketErrorCode.INVALID_CARD_TARGET);
     }
@@ -239,52 +235,52 @@ public class CardService {
     // 프론트가 타이머 설정하기 위해서 3초 뒤의 시간을 넘겨줌
     OffsetDateTime activateAt = approvedAt.plusSeconds(ACTIVATION_COUNTDOWN_SECONDS);
     RoomCardSnapshot pendingRoomCard =
-        new RoomCardSnapshot(
-            roomId,
-            performanceId,
-            RoomCardStatus.PENDING,
-            participant.getId(),
-            targetParticipantId,
-            assignment.cardId(),
-            assignment.cardCode(),
-            assignment.cardName(),
-            assignment.description(),
-            assignment.effectType(),
-            assignment.targetType(),
-            assignment.effectValue(),
-            assignment.durationSeconds(),
-            null,
-            approvedAt,
-            activateAt,
-            null,
-            null);
+            new RoomCardSnapshot(
+                    roomId,
+                    performanceId,
+                    RoomCardStatus.PENDING,
+                    participant.getId(),
+                    targetParticipantId,
+                    assignment.cardId(),
+                    assignment.cardCode(),
+                    assignment.cardName(),
+                    assignment.description(),
+                    assignment.effectType(),
+                    assignment.targetType(),
+                    assignment.effectValue(),
+                    assignment.durationSeconds(),
+                    null,
+                    approvedAt,
+                    activateAt,
+                    null,
+                    null);
 
     cardStateStore.saveRoomCard(pendingRoomCard);
 
     // 카드 사용 예정 이벤트 발행 및 activatedAt 시각에 startEffect 메서드 실행
     afterCommit(
-        () -> {
-          eventPublisher.publishToRoom(
-              roomId,
-              CardWebSocketEventType.CARD_ACTIVATION_SCHEDULED,
-              scheduledPayload(pendingRoomCard, approvedAt));
-          taskScheduler.schedule(
-              () -> startEffect(roomId, performanceId, participant.getId()),
-              activateAt.toInstant());
-        });
+            () -> {
+              eventPublisher.publishToRoom(
+                      roomId,
+                      CardWebSocketEventType.CARD_ACTIVATION_SCHEDULED,
+                      scheduledPayload(pendingRoomCard, approvedAt));
+              taskScheduler.schedule(
+                      () -> startEffect(roomId, performanceId, participant.getId()),
+                      activateAt.toInstant());
+            });
   }
 
   public PerformanceSnapShot closeForPerformance(
-      PerformanceSnapShot performance, CardEffectEndReason reason) {
+          PerformanceSnapShot performance, CardEffectEndReason reason) {
     return doCloseForPerformance(performance, reason);
   }
 
   /** 가창자 재접속을 기다리는 동안 현재 예약/활성 카드만 종료한다. 공연을 재개해야 하므로 아직 사용하지 않은 개인 카드 배정은 유지한다. */
   public PerformanceSnapShot suspendForPerformance(
-      PerformanceSnapShot performance, CardEffectEndReason reason) {
+          PerformanceSnapShot performance, CardEffectEndReason reason) {
     Optional<RoomCardSnapshot> roomCardOptional = cardStateStore.findRoomCard(performance.roomId());
     if (roomCardOptional.isEmpty()
-        || !performance.performanceId().equals(roomCardOptional.get().performanceId())) {
+            || !performance.performanceId().equals(roomCardOptional.get().performanceId())) {
       return performance;
     }
 
@@ -301,10 +297,10 @@ public class CardService {
   }
 
   private PerformanceSnapShot doCloseForPerformance(
-      PerformanceSnapShot performance, CardEffectEndReason reason) {
+          PerformanceSnapShot performance, CardEffectEndReason reason) {
     Optional<RoomCardSnapshot> roomCardOptional = cardStateStore.findRoomCard(performance.roomId());
     if (roomCardOptional.isPresent()
-        && performance.performanceId().equals(roomCardOptional.get().performanceId())) {
+            && performance.performanceId().equals(roomCardOptional.get().performanceId())) {
       RoomCardSnapshot roomCard = roomCardOptional.get();
       if (roomCard.status() == RoomCardStatus.PENDING) {
         cardStateStore.deleteRoomCard(roomCard.roomId());
@@ -320,13 +316,13 @@ public class CardService {
 
   public void closeRoom(Long roomId) {
     performanceStore
-        .findActiveByRoomId(roomId)
-        .ifPresent(
-            performance -> closeForPerformance(performance, CardEffectEndReason.ROOM_TERMINATED));
+            .findActiveByRoomId(roomId)
+            .ifPresent(
+                    performance -> closeForPerformance(performance, CardEffectEndReason.ROOM_TERMINATED));
   }
 
   public Optional<CardAssignmentSnapshot> findAssignment(
-      Long roomId, Long performanceId, Long participantId) {
+          Long roomId, Long performanceId, Long participantId) {
     return cardStateStore.findAssignment(roomId, performanceId, participantId);
   }
 
@@ -345,14 +341,14 @@ public class CardService {
   private void doStartEffect(Long roomId, Long performanceId, Long participantId) {
     RoomCardSnapshot pending = cardStateStore.findRoomCard(roomId).orElse(null);
     if (pending == null
-        || pending.status() != RoomCardStatus.PENDING
-        || !pending.performanceId().equals(performanceId)
-        || !pending.sourceParticipantId().equals(participantId)) {
+            || pending.status() != RoomCardStatus.PENDING
+            || !pending.performanceId().equals(performanceId)
+            || !pending.sourceParticipantId().equals(participantId)) {
       return;
     }
 
     Optional<CardAssignmentSnapshot> assignmentOptional =
-        cardStateStore.findAssignment(roomId, performanceId, participantId);
+            cardStateStore.findAssignment(roomId, performanceId, participantId);
     Optional<PerformanceSnapShot> performanceOptional = performanceStore.findActiveByRoomId(roomId);
     if (assignmentOptional.isEmpty() || performanceOptional.isEmpty()) {
       cancelScheduled(pending, CardEffectEndReason.SYSTEM_CANCELLED);
@@ -362,8 +358,8 @@ public class CardService {
     PerformanceSnapShot performance = performanceOptional.get();
     CardAssignmentSnapshot assignment = assignmentOptional.get();
     if (assignment.status() != CardAssignmentStatus.ASSIGNED
-        || performance.status() != PerformanceStatus.PLAYING
-        || !performance.performanceId().equals(performanceId)) {
+            || performance.status() != PerformanceStatus.PLAYING
+            || !performance.performanceId().equals(performanceId)) {
       cancelScheduled(pending, CardEffectEndReason.SYSTEM_CANCELLED);
       return;
     }
@@ -377,27 +373,27 @@ public class CardService {
 
     // 카드 사용 시작 처리
     afterCommit(
-        () -> {
-          eventPublisher.publishToRoom(
-              roomId,
-              CardWebSocketEventType.CARD_EFFECT_STARTED,
-              new CardEffectStartedPayload(
-                  active.performanceId(),
-                  active.sourceParticipantId(),
-                  active.targetParticipantId(),
-                  active.targetType(),
-                  active.cardId(),
-                  active.cardCode(),
-                  active.cardName(),
-                  active.description(),
-                  active.effectType(),
-                  active.effectValue(),
-                  active.durationSeconds(),
-                  active.startedAt(),
-                  active.endsAt()));
-          taskScheduler.schedule(
-              () -> finishEffect(roomId, performanceId, participantId), endsAt.toInstant());
-        });
+            () -> {
+              eventPublisher.publishToRoom(
+                      roomId,
+                      CardWebSocketEventType.CARD_EFFECT_STARTED,
+                      new CardEffectStartedPayload(
+                              active.performanceId(),
+                              active.sourceParticipantId(),
+                              active.targetParticipantId(),
+                              active.targetType(),
+                              active.cardId(),
+                              active.cardCode(),
+                              active.cardName(),
+                              active.description(),
+                              active.effectType(),
+                              active.effectValue(),
+                              active.durationSeconds(),
+                              active.startedAt(),
+                              active.endsAt()));
+              taskScheduler.schedule(
+                      () -> finishEffect(roomId, performanceId, participantId), endsAt.toInstant());
+            });
   }
 
   private void finishEffect(Long roomId, Long performanceId, Long sourceParticipantId) {
@@ -407,9 +403,9 @@ public class CardService {
   private void doFinishEffect(Long roomId, Long performanceId, Long sourceParticipantId) {
     RoomCardSnapshot roomCard = cardStateStore.findRoomCard(roomId).orElse(null);
     if (roomCard == null
-        || roomCard.status() != RoomCardStatus.ACTIVE
-        || !roomCard.performanceId().equals(performanceId)
-        || !roomCard.sourceParticipantId().equals(sourceParticipantId)) {
+            || roomCard.status() != RoomCardStatus.ACTIVE
+            || !roomCard.performanceId().equals(performanceId)
+            || !roomCard.sourceParticipantId().equals(sourceParticipantId)) {
       return;
     }
     cardStateStore.deleteRoomCard(roomId);
@@ -422,9 +418,9 @@ public class CardService {
     }
     RoomCardSnapshot current = cardStateStore.findRoomCard(roomCard.roomId()).orElse(null);
     if (current == null
-        || current.status() != RoomCardStatus.PENDING
-        || !current.performanceId().equals(roomCard.performanceId())
-        || !current.sourceParticipantId().equals(roomCard.sourceParticipantId())) {
+            || current.status() != RoomCardStatus.PENDING
+            || !current.performanceId().equals(roomCard.performanceId())
+            || !current.sourceParticipantId().equals(roomCard.sourceParticipantId())) {
       return;
     }
     cardStateStore.deleteRoomCard(roomCard.roomId());
@@ -457,95 +453,95 @@ public class CardService {
   }
 
   private CardAssignmentSnapshot toAssignment(
-      Long roomId,
-      PerformanceSnapShot performance,
-      RoomParticipant participant,
-      Card card,
-      OffsetDateTime assignedAt) {
+          Long roomId,
+          PerformanceSnapShot performance,
+          RoomParticipant participant,
+          Card card,
+          OffsetDateTime assignedAt) {
     return new CardAssignmentSnapshot(
-        roomId,
-        performance.performanceId(),
-        participant.getId(),
-        participant.getUser().getId(),
-        card.getId(),
-        card.getCode(),
-        card.getName(),
-        card.getDescription(),
-        card.getEffectType(),
-        card.getTargetType(),
-        card.getEffectValue(),
-        card.getDurationSeconds(),
-        card.getTier(),
-        CardAssignmentStatus.ASSIGNED,
-        assignedAt,
-        null);
+            roomId,
+            performance.performanceId(),
+            participant.getId(),
+            participant.getUser().getId(),
+            card.getId(),
+            card.getCode(),
+            card.getName(),
+            card.getDescription(),
+            card.getEffectType(),
+            card.getTargetType(),
+            card.getEffectValue(),
+            card.getDurationSeconds(),
+            card.getTier(),
+            CardAssignmentStatus.ASSIGNED,
+            assignedAt,
+            null);
   }
 
   private void publishAssigned(CardAssignmentSnapshot assignment) {
     afterCommit(
-        () ->
-            eventPublisher.publishToUser(
-                assignment.userId(),
-                assignment.roomId(),
-                CardWebSocketEventType.CARD_ASSIGNED,
-                new CardAssignedPayload(
-                    assignment.performanceId(),
-                    assignment.participantId(),
-                    assignment.cardId(),
-                    assignment.cardCode(),
-                    assignment.cardName(),
-                    assignment.description(),
-                    assignment.effectType(),
-                    assignment.targetType(),
-                    assignment.effectValue(),
-                    assignment.durationSeconds(),
-                    assignment.tier())));
+            () ->
+                    eventPublisher.publishToUser(
+                            assignment.userId(),
+                            assignment.roomId(),
+                            CardWebSocketEventType.CARD_ASSIGNED,
+                            new CardAssignedPayload(
+                                    assignment.performanceId(),
+                                    assignment.participantId(),
+                                    assignment.cardId(),
+                                    assignment.cardCode(),
+                                    assignment.cardName(),
+                                    assignment.description(),
+                                    assignment.effectType(),
+                                    assignment.targetType(),
+                                    assignment.effectValue(),
+                                    assignment.durationSeconds(),
+                                    assignment.tier())));
   }
 
   private CardActivationScheduledPayload scheduledPayload(
-      RoomCardSnapshot roomCard, OffsetDateTime serverNow) {
+          RoomCardSnapshot roomCard, OffsetDateTime serverNow) {
     return new CardActivationScheduledPayload(
-        roomCard.performanceId(),
-        roomCard.sourceParticipantId(),
-        serverNow,
-        ACTIVATION_COUNTDOWN_SECONDS,
-        roomCard.approvedAt(),
-        roomCard.activateAt());
+            roomCard.performanceId(),
+            roomCard.sourceParticipantId(),
+            serverNow,
+            ACTIVATION_COUNTDOWN_SECONDS,
+            roomCard.approvedAt(),
+            roomCard.activateAt());
   }
 
   private void publishCancelled(RoomCardSnapshot roomCard, CardEffectEndReason reason) {
     afterCommit(
-        () ->
-            eventPublisher.publishToRoom(
-                roomCard.roomId(),
-                CardWebSocketEventType.CARD_ACTIVATION_CANCELLED,
-                new CardActivationCancelledPayload(
-                    roomCard.performanceId(), roomCard.sourceParticipantId(), reason, now())));
+            () ->
+                    eventPublisher.publishToRoom(
+                            roomCard.roomId(),
+                            CardWebSocketEventType.CARD_ACTIVATION_CANCELLED,
+                            new CardActivationCancelledPayload(
+                                    roomCard.performanceId(), roomCard.sourceParticipantId(), reason, now())));
   }
 
   private void publishEnded(
-      RoomCardSnapshot roomCard, CardEffectEndReason reason, OffsetDateTime endedAt) {
+          RoomCardSnapshot roomCard, CardEffectEndReason reason, OffsetDateTime endedAt) {
     afterCommit(
-        () ->
-            eventPublisher.publishToRoom(
-                roomCard.roomId(),
-                CardWebSocketEventType.CARD_EFFECT_ENDED,
-                new CardEffectEndedPayload(
-                    roomCard.performanceId(),
-                    roomCard.sourceParticipantId(),
-                    roomCard.targetParticipantId(),
-                    roomCard.targetType(),
-                    roomCard.cardId(),
-                    roomCard.cardCode(),
-                    roomCard.cardName(),
-                    roomCard.description(),
-                    roomCard.effectType(),
-                    roomCard.effectValue(),
-                    roomCard.previousValue(),
-                    roomCard.durationSeconds(),
-                    roomCard.startedAt(),
-                    endedAt,
-                    reason)));
+            () ->
+                    eventPublisher.publishToRoom(
+                            roomCard.roomId(),
+                            CardWebSocketEventType.CARD_EFFECT_ENDED,
+                            new CardEffectEndedPayload(
+                                    roomCard.performanceId(),
+                                    roomCard.sourceParticipantId(),
+                                    roomCard.targetParticipantId(),
+                                    roomCard.targetType(),
+                                    roomCard.cardId(),
+                                    roomCard.cardCode(),
+                                    roomCard.cardName(),
+                                    roomCard.description(),
+                                    roomCard.effectType(),
+                                    roomCard.effectValue(),
+                                    roomCard.previousValue(),
+                                    roomCard.durationSeconds(),
+                                    roomCard.startedAt(),
+                                    endedAt,
+                                    reason)));
   }
 
   private void executeWithRoomLock(Long roomId, Runnable action) {
@@ -554,7 +550,7 @@ public class CardService {
       return;
     }
     transactionTemplate.executeWithoutResult(
-        ignored -> roomRepository.findByIdForUpdate(roomId).ifPresent(room -> action.run()));
+            ignored -> roomRepository.findByIdForUpdate(roomId).ifPresent(room -> action.run()));
   }
 
   private void afterCommit(Runnable action) {
@@ -563,12 +559,12 @@ public class CardService {
       return;
     }
     TransactionSynchronizationManager.registerSynchronization(
-        new TransactionSynchronization() {
-          @Override
-          public void afterCommit() {
-            action.run();
-          }
-        });
+            new TransactionSynchronization() {
+              @Override
+              public void afterCommit() {
+                action.run();
+              }
+            });
   }
 
   private void validateAssignment(CardAssignmentSnapshot assignment) {
@@ -582,14 +578,14 @@ public class CardService {
 
   private void validateNoRoomCard(Long roomId) {
     cardStateStore
-        .findRoomCard(roomId)
-        .ifPresent(
-            roomCard -> {
-              if (roomCard.status() == RoomCardStatus.PENDING) {
-                throw business(WebSocketErrorCode.CARD_ACTIVATION_PENDING);
-              }
-              throw business(WebSocketErrorCode.CARD_EFFECT_ALREADY_ACTIVE);
-            });
+            .findRoomCard(roomId)
+            .ifPresent(
+                    roomCard -> {
+                      if (roomCard.status() == RoomCardStatus.PENDING) {
+                        throw business(WebSocketErrorCode.CARD_ACTIVATION_PENDING);
+                      }
+                      throw business(WebSocketErrorCode.CARD_EFFECT_ALREADY_ACTIVE);
+                    });
   }
 
   private OffsetDateTime now() {
@@ -599,7 +595,7 @@ public class CardService {
   private void validatePositive(Long value, String fieldName) {
     if (value == null || value <= 0) {
       throw new WebSocketBusinessException(
-          WebSocketErrorCode.INVALID_REQUEST, fieldName + "은 양의 정수여야 합니다.");
+              WebSocketErrorCode.INVALID_REQUEST, fieldName + "은 양의 정수여야 합니다.");
     }
   }
 
