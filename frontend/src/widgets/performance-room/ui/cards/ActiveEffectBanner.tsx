@@ -2,7 +2,7 @@
 
 import { CARD_EFFECT_VISUALS, formatCardEffectValue } from '@/entities/card';
 
-import { useCardStore } from '../../model/cardStore';
+import { useCardStore, type ActiveCardEffect } from '../../model/cardStore';
 import { useNicknameOf } from '../../model/useNicknameOf';
 import { useRemainingSeconds } from '../../model/useRemainingSeconds';
 
@@ -20,12 +20,18 @@ function formatRemaining(seconds: number): string {
  */
 export function ActiveEffectBanner() {
   const activeEffect = useCardStore((state) => state.activeEffect);
-  const nicknameOf = useNicknameOf();
-  const remainingSeconds = useRemainingSeconds(activeEffect?.endsAt ?? null);
 
+  // 효과가 시작될 때 배너를 새로 마운트해야 useRemainingSeconds가 그 시점의 시계로 센다.
   if (activeEffect === null) {
     return null;
   }
+
+  return <EffectBanner activeEffect={activeEffect} />;
+}
+
+function EffectBanner({ activeEffect }: { activeEffect: ActiveCardEffect }) {
+  const nicknameOf = useNicknameOf();
+  const remainingSeconds = useRemainingSeconds(activeEffect.endsAt);
 
   const visual = CARD_EFFECT_VISUALS[activeEffect.effectType];
   const cardTitle = activeEffect.cardName ?? visual.title;
