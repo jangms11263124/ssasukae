@@ -65,5 +65,9 @@ export interface RoomTerminatedPayload {
 
 export interface ParticipantConnectionStatusChangedPayload {
   participantId: number;
-  status: ParticipantConnectionStatus;
+  /**
+   * 서버 WS 이벤트는 스냅샷 API와 다른 enum(ParticipantStatus)을 써서
+   * 재접속 시 CONNECTED 대신 ONLINE이 온다. 스토어 반영 전에 CONNECTED로 정규화한다.
+   */
+  status: ParticipantConnectionStatus | 'ONLINE';
 }
