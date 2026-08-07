@@ -29,6 +29,46 @@
   --animate-mini-card-sheen: mini-card-sheen 3.2s ease-in-out infinite;
   --animate-skeleton-shimmer: skeleton-shimmer 1.4s ease-in-out infinite;
   --animate-skeleton-fade-in: skeleton-fade-in 0.45s ease-out both;
+  --animate-card-cut-in: card-cut-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-card-cut-in-flash: card-cut-in-flash 0.9s ease-out both;
+  --animate-card-effect-pulse: card-effect-pulse 2s ease-in-out infinite;
+}
+
+/*
+ * 카드 발동 컷인. 마지막 프레임이 "보이는 상태"여야 한다 — prefers-reduced-motion에서는
+ * 재생 시간이 0으로 눌려 종료 프레임만 남으므로, 퇴장까지 여기서 처리하면 배너가 아예 안 보인다.
+ * 퇴장은 컴포넌트가 opacity 트랜지션으로 따로 처리한다.
+ */
+@keyframes card-cut-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scaleY(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 발동 순간 무대 가장자리에서 번지는 효과색 섬광 */
+@keyframes card-cut-in-flash {
+  from {
+    opacity: 0.42;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* 효과 지속 동안 무대 테두리가 숨쉬듯 밝아진다 */
+@keyframes card-effect-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 @keyframes holo-shift {
