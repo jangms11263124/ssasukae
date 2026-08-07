@@ -25,7 +25,7 @@ export function SocialLoginButton({
       disabled={disabled}
       className={cn(
         jetBrainsMono.className,
-        'group relative flex h-[64px] w-full items-center justify-between bg-[#292929] px-5 text-left text-base tracking-[0.08em] text-zinc-100 transition-colors duration-200',
+        'group relative flex h-[54px] w-full items-center justify-between bg-[#292929] px-5 text-left text-sm tracking-[0.08em] text-zinc-100 transition-colors duration-200',
         'hover:bg-[#343434] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neon-pink focus-visible:ring-offset-2 focus-visible:ring-offset-[#111111]',
         disabled && 'cursor-not-allowed hover:bg-[#292929]',
       )}
@@ -40,8 +40,8 @@ export function SocialLoginButton({
         )}
       />
       <span>{label}</span>
-      <span className="relative h-7 w-7 shrink-0 overflow-hidden" aria-hidden="true">
-        <Image src={iconSrc} alt="" fill sizes="28px" className="object-contain" />
+      <span className="relative h-6 w-6 shrink-0 overflow-hidden" aria-hidden="true">
+        <Image src={iconSrc} alt="" fill sizes="24px" className="object-contain" />
       </span>
     </button>
   );
