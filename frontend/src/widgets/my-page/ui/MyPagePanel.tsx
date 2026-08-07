@@ -72,7 +72,8 @@ export function MyPagePanel() {
         onLogout={() => void handleLogout()}
       />
 
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(20rem,1fr)_minmax(0,2fr)]">
+      {/* items-stretch(기본): 좌우 카드 하단이 같은 줄에서 끝나도록 짧은 쪽이 늘어난다 */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(20rem,1fr)_minmax(0,2fr)]">
         <FavoritesCard count={profile.favorites.count} items={profile.favorites.items} />
 
         <div className="flex flex-col gap-4">
