@@ -276,13 +276,12 @@ export function useRoomSocket(roomId: number | null): RoomSocketApi {
           }
           break;
         }
+        // 중지·재개 안내는 무대를 덮는 SuspendedOverlay가 담당한다 — 토스트로 중복 안내하지 않는다.
         case 'PERFORMANCE_SUSPENDED':
           stageStore.applyPerformanceSuspended(event.payload as PerformanceSuspendedPayload);
-          showToast('가창자 연결이 끊겨 공연을 잠시 멈췄어요.', 'info');
           break;
         case 'PERFORMANCE_RESUMED':
           stageStore.applyPerformanceResumed(event.payload as PerformanceResumedPayload);
-          showToast('공연을 다시 시작했어요.', 'info');
           break;
         default:
           break;
