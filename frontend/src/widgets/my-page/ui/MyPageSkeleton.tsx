@@ -86,7 +86,7 @@ export function MyPageSkeleton() {
 
       <ProfileCardSkeleton />
 
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(20rem,1fr)_minmax(0,2fr)]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(20rem,1fr)_minmax(0,2fr)]">
         <SettingsPanel title="FAVORITES" icon={<HeartIcon />}>
           <div className="mt-7 flex items-baseline justify-between gap-3 border-b border-white/[0.07] pb-3">
             <Skeleton className="h-2 w-24" />
@@ -111,7 +111,7 @@ export function MyPageSkeleton() {
             </div>
           </SettingsPanel>
 
-          <SettingsPanel title="RECENT ACTIVITY" icon={<HistoryIcon />}>
+          <SettingsPanel title="RECENT ACTIVITY" icon={<HistoryIcon />} className="flex-1">
             <div className="mt-7 grid grid-cols-[1fr_5rem_4rem] items-center gap-3 border-b border-white/[0.07] pb-3">
               <Skeleton className="h-2 w-24" />
               <Skeleton className="h-2 w-10 justify-self-end" />
