@@ -22,7 +22,7 @@ export function SocialLoginPanel({ className }: SocialLoginPanelProps) {
 
   return (
     <section
-      className={cn(jetBrainsMono.className, 'mx-auto w-full max-w-[360px]', className)}
+      className={cn(jetBrainsMono.className, 'mx-auto w-full max-w-[380px]', className)}
       aria-labelledby="login-title"
     >
       <header className="space-y-2 text-left">
