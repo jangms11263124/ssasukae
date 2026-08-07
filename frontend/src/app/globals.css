@@ -95,6 +95,17 @@
   }
 }
 
+/* 음절 하이라이트가 글자 왼쪽부터 차오른다. duration·delay는 음절 타이밍에 맞춰 인라인으로 준다 */
+@keyframes syllable-fill {
+  from {
+    background-position-x: 100%;
+  }
+
+  to {
+    background-position-x: 0%;
+  }
+}
+
 /* 카운트다운 숫자가 바뀔 때마다 한 번 튀어나온다 */
 @keyframes countdown-pop {
   0% {
