@@ -456,15 +456,21 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
 
   applyDsp(values: VocalDspValues): void {
     const safe = sanitizeDspValues(values, this.lastDsp);
-    this.lastDsp = safe;
     // 정리와 설정 반영이 같은 렌더에 겹치면 파기된 노드의 램프 호출로 죽을 수 있다
-    if (this.disposed) return;
+    if (this.disposed) {
+      this.lastDsp = safe;
+      return;
+    }
 
+    // 재앵커는 lastDsp 갱신보다 먼저다 — mrPlaybackRate()·mrPositionSeconds()가 옛 배속으로
+    // 지금까지의 진행을 확정해야 한다. 갱신 뒤에 비교하면 새 배속끼리라 절대 발동하지 않고,
+    // 옛 배속 구간에 새 배속이 소급 적용돼 가사·채점 위치가 점프한다.
     const speedMultiplier = safe.tempoPercent / 100;
     if (this.mrPlaying && this.mrPlaybackRate() !== speedMultiplier) {
       this.mrAnchorSeconds = this.mrPositionSeconds();
       this.mrAnchorContextTime = this.context.currentTime;
     }
+    this.lastDsp = safe;
     this.applyMrTempoRouting(safe.tempoPercent);
     this.updateSyncDelays(safe.tempoPercent);
 
