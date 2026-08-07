@@ -1,8 +1,18 @@
-/** LRC 한 줄. 간주 구간을 표시하는 빈 text도 그대로 보존한다 */
+/** 음절 하나의 표시 텍스트와 발성 구간. midi.json의 syllable_highlights에서 온다 */
+export interface SyllableTiming {
+  /** 가사 원문 정렬로 붙인 공백·문장부호까지 포함한 표시 텍스트 */
+  text: string;
+  startMs: number;
+  endMs: number;
+}
+
+/** 가사 한 줄. 간주 구간을 표시하는 빈 text도 그대로 보존한다 */
 export interface LyricsLine {
   /** 원곡 시간축 기준 시작 시각(ms) */
   timeMs: number;
   text: string;
+  /** 음절별 하이라이트 타이밍. midi.json에서 온 소절에만 있다 (LRC 소절은 없음) */
+  syllables?: SyllableTiming[];
 }
 
 /** LRCLIB 레코드에서 우리가 쓰는 필드만 추린 것 */
