@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.ssafy.ssasukae.domain.card.websocket.type.CardEffectType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.TaskScheduler;
@@ -137,7 +138,10 @@ public class CardService {
       }
 
       List<Card> drawableCards =
-          cardRepository.findAll().stream().filter(Card::isDrawable).toList();
+              cardRepository.findAll().stream()
+                      .filter(Card::isDrawable)
+                      .filter(card -> card.getEffectType() == CardEffectType.MIC_OPEN)
+                      .toList();
       if (drawableCards.isEmpty()) {
         log.warn(
             "뽑을 카드 없음 (roomId={}, performanceId={})", room.getId(), performance.performanceId());
