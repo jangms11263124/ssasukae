@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { reportAnalysisFailure } from '@/entities/performance';
 import { useAuth } from '@/entities/user';
 import type { ScoringSession } from '@/features/performance-scoring';
 import type { VocalAudioEngine } from '@/features/vocal-audio-engine';
@@ -122,9 +123,15 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
     } = useStageStore.getState();
 
     const failScoring = (message: string) => {
-      // 서버 쪽 공연 상태는 ANALYZING으로 남는다. 화면만이라도 실패로 풀어 준다.
+      // 내 화면은 즉시 풀고, 서버에도 알려 다른 참가자의 "채점 중..."도 함께 풀어 준다
+      // (서버가 ANALYSIS_FAILED로 전이하고 PERFORMANCE_STATE_CHANGED를 브로드캐스트한다).
       applyScoringFailed();
       showToast(message, 'error');
+      // 성공 콜백·타임아웃 처리와 경합해 이미 끝난 공연이면 서버가 거절한다 — 그대로 둬도
+      // 방 전체 상태는 서버 쪽 결과를 따라가므로 실패를 다시 알리지 않는다.
+      if (performanceId !== null) {
+        reportAnalysisFailure(performanceId).catch(() => {});
+      }
     };
 
     if (
