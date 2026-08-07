@@ -52,7 +52,7 @@ public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
 
     int countByUser(User user);
 
-    @Query("SELECT f FROM Favorite f WHERE f.user = :user ORDER BY f.createdAt DESC LIMIT 3")
+    @Query("SELECT f FROM Favorite f WHERE f.user = :user ORDER BY f.createdAt DESC LIMIT 6")
     List<Favorite> findRecentFavor(User user);
 
     @Query("SELECT f.song.id FROM Favorite f WHERE f.user = :user")
