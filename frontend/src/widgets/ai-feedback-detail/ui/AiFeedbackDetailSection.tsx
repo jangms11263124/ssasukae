@@ -158,7 +158,7 @@ export function AiFeedbackDetailSection({ performanceId, trackNo }: AiFeedbackDe
           <div className="mt-6">
             <MetricRadarChart scores={data.scores} />
           </div>
-          <p className="mt-5 border-t border-white/[0.06] pt-4 font-mono text-[0.52rem] leading-relaxed tracking-[0.12em] text-zinc-600">
+          <p className="mt-5 border-t border-white/[0.06] pt-4 font-mono text-[0.62rem] leading-relaxed tracking-[0.12em] text-zinc-500">
             [NOTICE] 분석 결과는 AI 추정치로, 실제 가창 평가와 다를 수 있습니다. 참고용으로
             활용해 주세요.
           </p>
