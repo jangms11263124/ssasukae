@@ -118,10 +118,10 @@ class FeedbackServiceTest {
             performance(70L, 91, LocalDateTime.now().minusMinutes(1)),
             performance(69L, 90, LocalDateTime.now().minusMinutes(2)));
 
-    when(performanceResultRepository.countCriteria(user, null, 90, 94)).thenReturn(3L);
+    when(performanceResultRepository.countCriteria(user, null, 80, 94)).thenReturn(3L);
     when(performanceResultRepository.findById(77L)).thenReturn(Optional.of(cursor));
     when(performanceResultRepository.findAllByCriteriaOrderByScore(
-            user, null, 90, 94, 77L, 92))
+            user, null, 80, 94, 77L, 92))
         .thenReturn(fetched);
 
     FeedbackResponseDTO.FeedbackListDTO response =
@@ -132,20 +132,20 @@ class FeedbackServiceTest {
     assertThat(response.isHasNext()).isFalse();
     assertThat(response.getTotal()).isEqualTo(3L);
     verify(performanceResultRepository)
-        .findAllByCriteriaOrderByScore(user, null, 90, 94, 77L, 92);
+        .findAllByCriteriaOrderByScore(user, null, 80, 94, 77L, 92);
   }
 
   @Test
   @DisplayName("F 등급과 7일 조건을 Repository 조회와 개수 계산에 전달한다")
   void getListPassesPeriodAndFGradeCriteria() {
     when(performanceResultRepository.countCriteria(
-            eq(user), any(LocalDateTime.class), eq(0), eq(40)))
+            eq(user), any(LocalDateTime.class), eq(0), eq(34)))
         .thenReturn(0L);
     when(performanceResultRepository.findAllByCriteriaOrderByCreatedAt(
             eq(user),
             any(LocalDateTime.class),
             eq(0),
-            eq(40),
+            eq(34),
             isNull(),
             isNull()))
         .thenReturn(List.of());
