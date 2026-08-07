@@ -12,6 +12,12 @@ import { StageBackdrop } from './StageBackdrop';
 /** 점수(또는 실패 안내)를 보여준 뒤 자동으로 다음 단계로 넘어가기까지의 시간 */
 const SCORE_DISPLAY_MS = 5000;
 
+/**
+ * 채점 결과를 기다리는 최대 시간. 서버도 analysis-timeout(1분) 뒤 실패를 브로드캐스트하지만,
+ * 그 이벤트를 놓치면(소켓 재연결 틈 등) 영영 "채점 중..."에 갇히므로 여유를 더해 로컬에서도 푼다.
+ */
+const SCORING_TIMEOUT_MS = 90_000;
+
 /** WaitingControls의 시작 최소 인원과 같은 기준 — 그 아래로 줄면 대기 화면으로 돌아간다 */
 const MIN_PARTICIPANTS_TO_START = 2;
 
@@ -30,12 +36,24 @@ export function ScoreStage() {
   const score = useStageStore((state) => state.score);
   const scoringFailed = useStageStore((state) => state.scoringFailed);
   const advanceToSingerSelect = useStageStore((state) => state.advanceToSingerSelect);
+  const applyScoringFailed = useStageStore((state) => state.applyScoringFailed);
   const endStage = useStageStore((state) => state.endStage);
   const participants = useRoomStore((state) => state.participants);
   const participantCount = participants.length;
 
   const isScoring = score === null && !scoringFailed;
   const canContinue = participantCount >= MIN_PARTICIPANTS_TO_START;
+
+  // 안전망 — 서버의 실패 브로드캐스트까지 놓친 경우에도 여기서 갇히지 않게 로컬에서 푼다.
+  useEffect(() => {
+    if (!isScoring) {
+      return;
+    }
+
+    const timer = setTimeout(applyScoringFailed, SCORING_TIMEOUT_MS);
+
+    return () => clearTimeout(timer);
+  }, [isScoring, applyScoringFailed]);
 
   // 채점이 끝나면 점수를 잠깐 보여준 뒤 다음 가창자 선택으로 자동 전이한다.
   // 전용 브로드캐스트가 없어 각자 같은 채점 이벤트 수신 시점 기준으로 타이머를 돌린다.
