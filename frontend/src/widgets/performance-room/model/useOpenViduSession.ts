@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { Connection, Publisher, Session, StreamManager } from 'openvidu-browser';
+import type { Connection, Device, Publisher, Session, StreamManager } from 'openvidu-browser';
 
+import { useDeviceSettingsStore } from '@/entities/media-device';
 import { useRoomStore } from '@/entities/room';
 import { showToast } from '@/shared/model/toastStore';
 
@@ -78,13 +79,51 @@ function stopPublisher(publisher: Publisher | null) {
   publisher?.stream.getMediaStream()?.getTracks().forEach((track) => track.stop());
 }
 
-async function acquireMicrophoneTrack(): Promise<MediaStreamTrack | null> {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    return stream.getAudioTracks()[0] ?? null;
-  } catch {
-    return null;
+/** 방 진입 경로에 따라 설정 페이지를 안 거쳤을 수 있어 읽기 전에 hydrate를 보장한다 */
+function readDeviceSettings() {
+  const store = useDeviceSettingsStore.getState();
+  if (!store.isHydrated) {
+    store.hydrate();
   }
+
+  return useDeviceSettingsStore.getState().settings;
+}
+
+/**
+ * 저장된 장치가 현재 목록에 있을 때만 지정하고, 아니면 기본 장치(undefined)로 폴백한다.
+ * OpenVidu는 문자열 source를 `deviceId: { exact }` 제약으로 바꾸므로 뽑힌 기기의
+ * stale id를 그대로 넘기면 입장 자체가 깨진다.
+ */
+function resolveDeviceSource(
+  devices: Device[],
+  kind: 'audioinput' | 'videoinput',
+  savedId: string,
+): string | undefined {
+  const exists =
+    savedId !== '' && devices.some((device) => device.kind === kind && device.deviceId === savedId);
+
+  return exists ? savedId : undefined;
+}
+
+/** 믹스 해제 후 재획득도 설정에서 고른 마이크를 따른다. 그 기기가 사라졌으면 기본 기기로 폴백한다. */
+async function acquireMicrophoneTrack(): Promise<MediaStreamTrack | null> {
+  const { microphoneId } = readDeviceSettings();
+  const attempts: MediaStreamConstraints[] =
+    microphoneId !== ''
+      ? [{ audio: { deviceId: { exact: microphoneId } } }, { audio: true }]
+      : [{ audio: true }];
+
+  for (const constraints of attempts) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const track = stream.getAudioTracks()[0];
+      if (track !== undefined) return track;
+    } catch {
+      // 다음 후보(기본 장치)로 폴백
+    }
+  }
+
+  return null;
 }
 
 type OpenViduSessionHandlers = Session & {
@@ -391,12 +430,42 @@ export function useOpenViduSession(): OpenViduSessionApi {
       setIsConnected(true);
 
       try {
-        const publisher = await openVidu.initPublisherAsync(undefined, {
-          // 공연 도중 입장·재접속이면 처음부터 막힌 채로 시작한다
-          publishAudio: useStageStore.getState().micOn && !readMicBlocked(),
-          publishVideo: useStageStore.getState().camOn,
-          mirror: false,
-        });
+        // 없는 장치는 캡처 요청에서 뺀다 — 웹캠 없는 PC도 마이크만으로 입장할 수 있어야 한다
+        const devices = await openVidu.getDevices();
+        const hasVideoInput = devices.some((device) => device.kind === 'videoinput');
+        const hasAudioInput = devices.some((device) => device.kind === 'audioinput');
+        if (!hasVideoInput && !hasAudioInput) {
+          throw new Error('no capture devices');
+        }
+        if (!hasVideoInput && useStageStore.getState().camOn) {
+          // 카메라가 없으면 캠 상태도 꺼서 검은 화면 대신 프로필이 보이게 한다
+          useStageStore.getState().toggleCam();
+        }
+
+        // 설정에서 고른 장치를 송출 캡처에도 반영한다 — 레벨 미터·엔진과 같은 마이크를 쓰게 된다
+        const deviceSettings = readDeviceSettings();
+        const initPublisher = (withVideo: boolean) =>
+          openVidu.initPublisherAsync(undefined, {
+            audioSource: hasAudioInput
+              ? resolveDeviceSource(devices, 'audioinput', deviceSettings.microphoneId)
+              : false,
+            videoSource: withVideo
+              ? resolveDeviceSource(devices, 'videoinput', deviceSettings.cameraId)
+              : false,
+            // 공연 도중 입장·재접속이면 처음부터 막힌 채로 시작한다
+            publishAudio: hasAudioInput && useStageStore.getState().micOn && !readMicBlocked(),
+            publishVideo: withVideo && useStageStore.getState().camOn,
+            mirror: false,
+          });
+
+        let publisher: Publisher;
+        try {
+          publisher = await initPublisher(hasVideoInput);
+        } catch (error) {
+          // 캠이 목록에 있어도 다른 앱 점유·고장으로 안 열릴 수 있다 — 마이크만으로 한 번 더
+          if (!hasVideoInput || !hasAudioInput || isStale()) throw error;
+          publisher = await initPublisher(false);
+        }
 
         if (isStale()) {
           stopPublisher(publisher);
