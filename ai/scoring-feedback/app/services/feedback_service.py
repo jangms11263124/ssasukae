@@ -4,10 +4,10 @@ import os
 import re
 from typing import Any
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
 from app.schemas.feedback import FeedbackRequest, FeedbackResponse, NoteEvent
+from app.settings import load_environment
 from app.services.feedback_analysis import (
     analyze_issues,
     midi_to_note_name,
@@ -19,7 +19,7 @@ from app.services.score_service import parse_midi_notes
 
 logger = logging.getLogger(__name__)
 
-load_dotenv()
+load_environment()
 
 GMS_BASE_URL = os.getenv(
     "GMS_BASE_URL",
