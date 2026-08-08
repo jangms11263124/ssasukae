@@ -1,0 +1,210 @@
+{
+  "version": "vocal-melody-analysis-v1",
+  "source_file": "lead_vocal.wav",
+  "duration_ms": 6000,
+  "sample_rate": 16000,
+  "hop_ms": 10,
+  "notes": [
+    {
+      "note_id": 1,
+      "start_ms": 1000,
+      "end_ms": 1600,
+      "duration_ms": 600,
+      "pitch_midi": 60.0832,
+      "target_midi": 60,
+      "target_note": "C4",
+      "boundary_type": "onset",
+      "confidence": 0.9341
+    },
+    {
+      "note_id": 2,
+      "start_ms": 1600,
+      "end_ms": 2100,
+      "duration_ms": 500,
+      "pitch_midi": 62.0174,
+      "target_midi": 62,
+      "target_note": "D4",
+      "boundary_type": "pitch_change",
+      "confidence": 0.9187
+    },
+    {
+      "note_id": 3,
+      "start_ms": 3000,
+      "end_ms": 3800,
+      "duration_ms": 800,
+      "pitch_midi": 64.0411,
+      "target_midi": 64,
+      "target_note": "E4",
+      "boundary_type": "onset",
+      "confidence": 0.9012
+    },
+    {
+      "note_id": 4,
+      "start_ms": 3800,
+      "end_ms": 4800,
+      "duration_ms": 1000,
+      "pitch_midi": 65.0268,
+      "target_midi": 65,
+      "target_note": "F4",
+      "boundary_type": "pitch_change",
+      "confidence": 0.8875
+    }
+  ],
+  "pitch_frames": [
+    {
+      "t": 1000,
+      "m": 60.0712,
+      "c": 0.941
+    },
+    {
+      "t": 1250,
+      "m": 60.0895,
+      "c": 0.936
+    },
+    {
+      "t": 1600,
+      "m": 62.0118,
+      "c": 0.925
+    },
+    {
+      "t": 2000,
+      "m": 62.0231,
+      "c": 0.912
+    },
+    {
+      "t": 3000,
+      "m": 64.0387,
+      "c": 0.908
+    },
+    {
+      "t": 3500,
+      "m": 64.0435,
+      "c": 0.897
+    },
+    {
+      "t": 3800,
+      "m": 65.0192,
+      "c": 0.891
+    },
+    {
+      "t": 4500,
+      "m": 65.0344,
+      "c": 0.884
+    }
+  ],
+  "config": {
+    "sample_rate": 16000,
+    "hop_ms": 10,
+    "frame_length": 1536,
+    "fmin_note": "C2",
+    "fmax_note": "C6",
+    "min_voiced_probability": 0.58,
+    "weak_voiced_probability": 0.22,
+    "rms_margin_db": 13.0,
+    "weak_rms_margin_db": 7.0,
+    "voiced_pre_roll_ms": 25,
+    "voiced_post_roll_ms": 70,
+    "max_interpolation_gap_ms": 140,
+    "max_candidate_recovery_gap_ms": 1100,
+    "long_candidate_recovery_ms": 500,
+    "long_candidate_min_voiced_ratio": 0.7,
+    "unconditional_gap_fill_ms": 45,
+    "max_bridge_pitch_jump_cents": 280.0,
+    "max_candidate_boundary_cents": 300.0,
+    "voiced_release_ms": 120,
+    "median_filter_ms": 35,
+    "min_note_rms_db": -55.0,
+    "min_note_ms": 90,
+    "preferred_min_note_ms": 130,
+    "max_note_gap_ms": 70,
+    "note_change_cents": 110.0,
+    "pitch_change_hold_ms": 80,
+    "onset_delta": 0.12,
+    "onset_wait_ms": 90,
+    "onset_backtrack_ms": 30,
+    "min_onset_strength": 0.18,
+    "energy_rise_db": 3.0,
+    "same_pitch_onset_min_gap_ms": 150,
+    "soft_onset_local_window_ms": 1500,
+    "soft_onset_min_strength": 0.06,
+    "soft_onset_ratio": 0.4,
+    "soft_onset_prominence": 0.2,
+    "soft_onset_long_segment_ms": 700,
+    "soft_onset_edge_gap_ms": 150,
+    "short_note_merge_ms": 110,
+    "merge_pitch_cents": 90.0
+  },
+  "syllable_highlights": {
+    "version": "korean-syllable-alignment-v1",
+    "source_file": "lead_vocal.wav",
+    "duration_ms": 6000,
+    "time_unit": "ms",
+    "method": "uploaded-lrc-anchor+ctc+heldnote",
+    "line_count": 2,
+    "syllables": [
+      {
+        "syllable": "오",
+        "start_ms": 1000,
+        "end_ms": 1250,
+        "duration_ms": 250,
+        "line": 0,
+        "phrase": 0,
+        "score": 0.938
+      },
+      {
+        "syllable": "늘",
+        "start_ms": 1250,
+        "end_ms": 1600,
+        "duration_ms": 350,
+        "line": 0,
+        "phrase": 0,
+        "score": 0.912
+      },
+      {
+        "syllable": "도",
+        "start_ms": 1600,
+        "end_ms": 2100,
+        "duration_ms": 500,
+        "line": 0,
+        "phrase": 0,
+        "score": 0.895
+      },
+      {
+        "syllable": "너",
+        "start_ms": 3000,
+        "end_ms": 3350,
+        "duration_ms": 350,
+        "line": 1,
+        "phrase": 1,
+        "score": 0.921
+      },
+      {
+        "syllable": "를",
+        "start_ms": 3350,
+        "end_ms": 3800,
+        "duration_ms": 450,
+        "line": 1,
+        "phrase": 1,
+        "score": 0.903
+      },
+      {
+        "syllable": "불",
+        "start_ms": 3800,
+        "end_ms": 4200,
+        "duration_ms": 400,
+        "line": 1,
+        "phrase": 1,
+        "score": null
+      },
+      {
+        "syllable": "러",
+        "start_ms": 4200,
+        "end_ms": 4800,
+        "duration_ms": 600,
+        "line": 1,
+        "phrase": 1,
+        "score": 0.881
+      }
+    ]
+  }
+}

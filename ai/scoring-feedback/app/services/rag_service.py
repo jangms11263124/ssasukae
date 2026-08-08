@@ -2,13 +2,13 @@ import os
 from collections import Counter
 
 import psycopg
-from dotenv import load_dotenv
 from openai import OpenAI
 
+from app.settings import load_environment
 from app.services.rag_queries import build_rag_query
 
 
-load_dotenv()
+load_environment()
 
 RAG_DATABASE_URL = os.getenv("RAG_DATABASE_URL")
 RAG_COLLECTION_NAME = os.getenv(

@@ -2,10 +2,11 @@ import os
 from typing import Any
 
 import httpx
-from dotenv import load_dotenv
+
+from app.settings import load_environment
 
 
-load_dotenv()
+load_environment()
 
 
 class SpringApiError(RuntimeError):

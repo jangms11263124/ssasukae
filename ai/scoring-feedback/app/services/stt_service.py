@@ -1,11 +1,12 @@
 ﻿import os
 
 import httpx
-from dotenv import load_dotenv
+
+from app.settings import load_environment
 
 
-# scoring/ai/.env에 있는 GMS 또는 Whisper 설정을 환경 변수로 불러옵니다.
-load_dotenv()
+# 서비스 루트의 .env에 있는 GMS 또는 Whisper 설정을 환경 변수로 불러옵니다.
+load_environment()
 
 # GMS에서 제공하는 OpenAI 호환 Whisper transcription endpoint 기본값입니다.
 DEFAULT_WHISPER_API_URL = (
