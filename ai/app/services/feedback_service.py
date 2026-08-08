@@ -31,8 +31,6 @@ GMS_REASONING_EFFORT = os.getenv(
     "minimal",
 )
 MAX_NOTES_FOR_PROMPT = 120
-MAX_FEEDBACK_LINE_CHARS = 50
-MAX_PRACTICE_LINE_CHARS = 90
 DETAIL_FEEDBACK_LINES = 3
 MAX_PRACTICE_TIP_LINES = 6
 CITATION_PATTERN = re.compile(
@@ -89,6 +87,10 @@ DEVELOPER_PROMPT = (
     "diagnoses, vocal habits, techniques, times, or notes. Summarize research "
     "briefly instead of copying it. "
     "Use friendly Korean haeyo-che with one clear message per sentence. "
+    "Write all natural-language JSON values in modern Korean Hangul. "
+    "Do not use Hanja, Chinese characters, Japanese kanji, hiragana, "
+    "katakana, or mixed-script words. The schema's JSON keys are the only "
+    "exception. "
     "Lead with an observed fact and describe weaknesses without scolding. "
     "Use plain language. Never use jargon such as pitch sharp, pitch flat, "
     "or onset; explain them as a note sung above the target, a note sung "
@@ -302,8 +304,9 @@ def _build_user_prompt(
         "논문 근거처럼 만들지 마세요.\n"
         "12. 응답에 출처, 저자, 연도, 페이지, 인용 표시를 적지 마세요. "
         "rag_contexts는 연습 방법을 만드는 내부 근거로만 사용하세요.\n"
-        "13. summary, strengths, improvements의 각 줄은 50자 이내로, "
-        "practice_tips의 각 줄은 90자 이내로 쓰세요.\n"
+        "13. 모든 응답 값은 현대 한국어 한글로 작성하세요. 한자, "
+        "중국어 문자, 일본어 한자·히라가나·가타카나 또는 문자가 "
+        "섞인 단어를 사용하지 마세요. 영문 JSON 키만 예외입니다.\n"
         "14. JSON 문자열 안의 줄은 \\n으로 구분하고, 필드 간 "
         "내용을 반복하지 마세요.\n\n"
 
@@ -321,11 +324,8 @@ def _build_user_prompt(
     )
 
 
-def _trim_feedback_line(
-    value: str,
-    max_chars: int = MAX_FEEDBACK_LINE_CHARS,
-) -> str:
-    """피드백 한 줄의 공백과 길이를 정리합니다."""
+def _normalize_feedback_line(value: str) -> str:
+    """피드백 한 줄의 공백과 표현을 정리합니다."""
     compact_value = " ".join(value.split())
     for pattern, replacement in EASY_LANGUAGE_REPLACEMENTS:
         compact_value = re.sub(
@@ -339,9 +339,6 @@ def _trim_feedback_line(
         "",
         compact_value,
     )
-    if len(compact_value) > max_chars:
-        compact_value = compact_value[: max_chars - 1].rstrip()
-        compact_value += "…"
     return compact_value
 
 
@@ -399,7 +396,7 @@ def _parse_feedback_json(
 
     summary = feedback_data.get("summary")
     if isinstance(summary, str):
-        feedback_data["summary"] = _trim_feedback_line(summary)
+        feedback_data["summary"] = _normalize_feedback_line(summary)
 
     for field in (
         "strengths",
@@ -413,13 +410,8 @@ def _parse_feedback_json(
         raw_lines = [line for line in value.splitlines() if line.strip()]
         if len(raw_lines) == 1:
             raw_lines = re.split(r"(?<=[.!?。])\s+", raw_lines[0])
-        max_chars = (
-            MAX_PRACTICE_LINE_CHARS
-            if field == "practice_tips"
-            else MAX_FEEDBACK_LINE_CHARS
-        )
         lines = [
-            _trim_feedback_line(line, max_chars=max_chars)
+            _normalize_feedback_line(line)
             for line in raw_lines
         ]
         lines = [line for line in lines if line]
