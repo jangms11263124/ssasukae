@@ -23,16 +23,55 @@ export interface RemoteMedia {
   videoActive: boolean;
 }
 
+/**
+ * 무대 동기화용 경량 브로드캐스트 페이로드. OpenVidu 시그널로 중계되므로
+ * 우리 백엔드를 거치지 않는다. 지금은 청자 가사 시계 재앵커용 MR 위치뿐이다.
+ */
+export interface StageSignal {
+  kind: 'MR_POSITION';
+  /** 가창자 오디오 엔진의 현재 MR 재생 위치 */
+  positionMs: number;
+}
+
 export interface OpenViduSessionApi {
   isConnected: boolean;
   localStream: MediaStream | null;
   remoteStreams: ReadonlyMap<number, RemoteMedia>;
   replaceAudioTrack: (track: MediaStreamTrack | null) => Promise<void>;
+  /** 방의 다른 참가자 전원에게 무대 신호를 보낸다. 연결 전이면 조용히 버린다 */
+  sendStageSignal: (signal: StageSignal) => void;
+  /** 다른 참가자의 무대 신호를 구독한다. 반환 함수로 해지한다 */
+  subscribeStageSignal: (handler: (signal: StageSignal) => void) => () => void;
 }
 
 const MUSIC_AUDIO_MAX_BITRATE = 128_000;
 /** Strict Mode mount→cleanup→remount 사이클이 끝난 뒤 연결한다 */
 const CONNECT_DELAY_MS = 200;
+/** 무대 신호의 OpenVidu 시그널 타입. 수신은 `signal:{타입}` 이벤트로 온다 */
+const STAGE_SIGNAL_TYPE = 'stage';
+
+function parseStageSignal(data: string | undefined): StageSignal | null {
+  if (!data) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(data);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'kind' in parsed &&
+      parsed.kind === 'MR_POSITION' &&
+      'positionMs' in parsed &&
+      typeof parsed.positionMs === 'number' &&
+      Number.isFinite(parsed.positionMs)
+    ) {
+      return { kind: parsed.kind, positionMs: parsed.positionMs };
+    }
+  } catch {
+    // 형식이 깨진 신호는 무시
+  }
+
+  return null;
+}
 
 let connectGeneration = 0;
 
@@ -240,6 +279,9 @@ export function useOpenViduSession(): OpenViduSessionApi {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<ReadonlyMap<number, RemoteMedia>>(new Map());
   const publisherRef = useRef<Publisher | null>(null);
+  const sessionRef = useRef<Session | null>(null);
+  // 세션 수명과 무관하게 구독을 유지한다 — 재접속해도 구독자는 다시 등록할 필요가 없다
+  const signalHandlersRef = useRef(new Set<(signal: StageSignal) => void>());
   const isBroadcastingMixRef = useRef(false);
   const originalAudioTrackRef = useRef<MediaStreamTrack | null>(null);
   // 재입장 시 오디오 엔진이 publisher보다 먼저 준비되면 믹스 트랙을 여기 보관했다가 publish 직후 적용한다
@@ -420,6 +462,20 @@ export function useOpenViduSession(): OpenViduSessionApi {
         setRemoteStreams(new Map());
       });
 
+      session.on(`signal:${STAGE_SIGNAL_TYPE}`, (event) => {
+        // 시그널은 보낸 사람에게도 되돌아오므로 자기 신호는 거른다
+        if (isStale() || event.from?.connectionId === session.connection?.connectionId) {
+          return;
+        }
+
+        const signal = parseStageSignal(event.data);
+        if (signal === null) {
+          return;
+        }
+
+        signalHandlersRef.current.forEach((handler) => handler(signal));
+      });
+
       await session.connect(openviduToken);
       if (isStale()) {
         await disconnectSessionAsync(session, null);
@@ -427,6 +483,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
       }
 
       activeSession = session;
+      sessionRef.current = session;
       setIsConnected(true);
 
       try {
@@ -506,6 +563,7 @@ export function useOpenViduSession(): OpenViduSessionApi {
         window.clearTimeout(connectTimer);
       }
       publisherRef.current = null;
+      sessionRef.current = null;
       isBroadcastingMixRef.current = false;
       // 적용 못 한 보관 트랙은 엔진 소유라 stop하지 않는다 — 참조만 비워 stale 적용을 막는다
       pendingMixTrackRef.current = null;
@@ -580,5 +638,29 @@ export function useOpenViduSession(): OpenViduSessionApi {
     publisher.publishAudio(useStageStore.getState().micOn && !readMicBlocked());
   }, [applyMixTrack]);
 
-  return { isConnected, localStream, remoteStreams, replaceAudioTrack };
+  const sendStageSignal = useCallback((signal: StageSignal) => {
+    const session = sessionRef.current;
+    if (session === null || !session.connection) return;
+
+    session
+      .signal({ type: STAGE_SIGNAL_TYPE, data: JSON.stringify(signal) })
+      .catch(() => undefined);
+  }, []);
+
+  const subscribeStageSignal = useCallback((handler: (signal: StageSignal) => void) => {
+    signalHandlersRef.current.add(handler);
+
+    return () => {
+      signalHandlersRef.current.delete(handler);
+    };
+  }, []);
+
+  return {
+    isConnected,
+    localStream,
+    remoteStreams,
+    replaceAudioTrack,
+    sendStageSignal,
+    subscribeStageSignal,
+  };
 }
