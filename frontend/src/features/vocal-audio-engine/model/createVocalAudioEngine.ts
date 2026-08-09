@@ -413,6 +413,27 @@ class ToneVocalAudioEngine implements VocalAudioEngine {
     return this.lastDsp.keyOffset;
   }
 
+  /**
+   * 분석기에 지금 도착한 목소리가 실제로 대응하는 MR 위치까지의 거리(ms, MR 시간축).
+   * 채점 타임스탬프에서 이 값을 뺀다.
+   */
+  getVoiceLatencyInMrMs(): number {
+    const wallSeconds =
+      this.context.baseLatency +
+      (this.context.outputLatency || 0) +
+      MIC_INPUT_LATENCY_ESTIMATE_SECONDS +
+      (this.rnnoise !== null ? RNNOISE_LATENCY_SECONDS : 0) +
+      // 템포 변경 시 가창자가 듣는 MR은 SoundTouch 지연만큼 더 뒤처져 있다.
+      // updateSyncDelays()의 빼기와 부호가 반대인 게 맞다 — 송출은 믹스 안 정렬,
+      // 여기는 "이 목소리가 어느 MR 지점에 대응하는가"라서 문제가 다르다.
+      (shouldUseSoundTouchStretch(this.lastDsp.tempoPercent) ? SOUNDTOUCH_MR_LATENCY_SECONDS : 0) +
+      // AnalyserNode는 최근 fftSize 샘플을 주므로 검출 음정은 창 중심에 대응한다
+      VOCAL_ANALYSER_FFT_SIZE / 2 / this.context.sampleRate;
+
+    // 벽시계 지연을 MR 시간축으로 환산 — 150% 배속이면 100ms가 MR 150ms에 해당한다
+    return wallSeconds * 1000 * this.mrPlaybackRate();
+  }
+
   async openMic(deviceId: string): Promise<void> {
     if (this.disposed) return;
     this.closeMic();
