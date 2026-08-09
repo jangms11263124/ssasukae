@@ -9,6 +9,9 @@ import { useOpenViduSessionContext } from './OpenViduSessionContext';
 import { useRoomSocketContext } from './RoomSocketContext';
 import { useStageStore } from './stageStore';
 
+/** 가창자 MR 위치 브로드캐스트 주기. 청자 가사 시계(useLyricsClock)가 이 신호에 재앵커한다 */
+const MR_POSITION_SIGNAL_INTERVAL_MS = 1_000;
+
 /**
  * 무대 상태를 도메인 무지인 오디오 엔진 훅에 연결한다 (useGestureDspControl과 같은 역할).
  * 가창자만, READY(MR 선로딩)~PERFORMING(재생) 동안만 엔진이 산다 — 청자는 비용 0.
@@ -71,9 +74,26 @@ export function useStageAudioEngine(isPerformer: boolean): VocalAudioEngineState
     onMrEnded: handleMrEnded,
   });
 
-  const { replaceAudioTrack } = useOpenViduSessionContext();
+  const { replaceAudioTrack, sendStageSignal } = useOpenViduSessionContext();
   const { getBroadcastStream } = engine;
   const isBroadcastingMix = isPerformer && phase === 'PERFORMING';
+
+  // 청자 가사 시계의 재앵커용으로 실제 MR 재생 위치를 주기적으로 알린다.
+  // OpenVidu 시그널이라 백엔드를 거치지 않고, 일시 중지 동안에는 보내지 않는다.
+  const vocalEngine = engine.engine;
+  const isBroadcastingPosition = isPerformer && phase === 'PERFORMING' && !isSuspended;
+
+  useEffect(() => {
+    if (!isBroadcastingPosition || vocalEngine === null) return;
+
+    const send = () =>
+      sendStageSignal({ kind: 'MR_POSITION', positionMs: vocalEngine.getMrPositionMs() });
+
+    send();
+    const intervalId = setInterval(send, MR_POSITION_SIGNAL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [isBroadcastingPosition, vocalEngine, sendStageSignal]);
 
   // 공연 중 송출 오디오를 원본 마이크 대신 엔진 믹스(목소리+에코+MR)로 교체한다.
   // 원본 마이크는 AEC가 모니터링되는 자기 목소리를 에코로 오인해 상쇄한다 (MR 볼륨↓ 시 목소리 소실).
