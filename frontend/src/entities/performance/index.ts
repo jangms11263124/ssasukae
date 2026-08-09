@@ -1,4 +1,4 @@
-export { reportAnalysisFailure } from './api/performanceApi';
+export { reportAnalysisFailure, submitDemoScore } from './api/performanceApi';
 export type { LeaderboardEntry } from './types';
 export {
   DEFAULT_PERFORMANCE_SETTINGS,

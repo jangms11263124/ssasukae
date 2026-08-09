@@ -1,8 +1,12 @@
 import { useEffect, useRef } from 'react';
 
-import { reportAnalysisFailure } from '@/entities/performance';
+import { reportAnalysisFailure, submitDemoScore } from '@/entities/performance';
 import { useAuth } from '@/entities/user';
 import type { ScoringSession } from '@/features/performance-scoring';
+import {
+  DEMO_MOCK_SCORING,
+  DEMO_MOCK_SCORING_DELAY_MS,
+} from '@/features/performance-scoring/config/scoringConfig';
 import type { VocalAudioEngine } from '@/features/vocal-audio-engine';
 import { getApiErrorMessage } from '@/shared/api/getApiErrorMessage';
 import { showToast } from '@/shared/model/toastStore';
@@ -20,17 +24,6 @@ function toDifficultyScore(difficultyLevel: number | null | undefined): number {
   return Math.min(100, Math.max(0, difficultyLevel));
 }
 
-/**
- * 가창자 브라우저에서 채점 입력을 모아 공연이 끝나면 AI로 보낸다.
- * useStageAudioEngine과 같은 자리의 도메인 접착 훅이다 — 무대 상태를 도메인 무지인
- * 수집 세션에 연결하기만 한다.
- *
- * 점수 표시는 여기서 하지 않는다. AI가 Spring에 콜백하고 Spring이 LEADERBOARD_UPDATED를
- * 브로드캐스트하면 stageStore.applyScore가 받는다.
- *
- * 구독은 phase와 isSuspended 둘뿐이다. 전송에 필요한 나머지 값은 그 순간의 스냅샷이면
- * 충분해서 getState()로 읽는다 — 구독하면 곡이 바뀔 때마다 효과가 헛돈다.
- */
 export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine | null): void {
   const phase = useStageStore((state) => state.phase);
   const isSuspended = useStageStore((state) => state.isSuspended);
@@ -39,17 +32,47 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
 
   const sessionRef = useRef<ScoringSession | null>(null);
 
+  // 시연용 데모 채점 — 가창자만 공연 종료 후 서버에 mock 점수를 보낸다.
+  useEffect(() => {
+    if (!DEMO_MOCK_SCORING || !isPerformer || phase !== 'SCORE') return;
+
+    const { performanceId, applyScoringFailed } = useStageStore.getState();
+
+    if (performanceId === null) {
+      applyScoringFailed();
+      showToast('공연 정보가 없어 채점할 수 없어요.', 'error');
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+
+      submitDemoScore(performanceId).catch((error) => {
+        if (cancelled) return;
+        applyScoringFailed();
+        showToast(getApiErrorMessage(error, '채점 요청에 실패했어요.'), 'error');
+        reportAnalysisFailure(performanceId).catch(() => {});
+      });
+    }, DEMO_MOCK_SCORING_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isPerformer, phase]);
+
   // 공연이 시작된 뒤에 내려받으면 그동안 부른 첫 소절이 통째로 빠진다.
   // MR을 선로딩하는 READY 단계에서 미리 받아 둔다 (엔진의 MR 선로딩과 같은 타이밍).
   useEffect(() => {
-    if (!isPerformer || phase !== 'READY') return;
+    if (DEMO_MOCK_SCORING || !isPerformer || phase !== 'READY') return;
 
     void import('@/features/performance-scoring');
   }, [isPerformer, phase]);
 
   // 수집 — 가창자 본인이 공연을 재생하는 동안만 돈다.
   useEffect(() => {
-    if (!isPerformer || engine === null || phase !== 'PERFORMING') return;
+    if (DEMO_MOCK_SCORING || !isPerformer || engine === null || phase !== 'PERFORMING') return;
 
     let cancelled = false;
     let created: ScoringSession | null = null;
@@ -98,6 +121,8 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
 
   // 일시 중지 동안에는 MR 시간축이 멈춰 있어 수집해도 쓸 수 없는 데이터가 된다.
   useEffect(() => {
+    if (DEMO_MOCK_SCORING) return;
+
     const session = sessionRef.current;
     if (session === null || phase !== 'PERFORMING') return;
 
@@ -110,6 +135,8 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
 
   // 전송 — 무대가 PERFORMING을 벗어난 순간 한 번.
   useEffect(() => {
+    if (DEMO_MOCK_SCORING) return;
+
     const session = sessionRef.current;
     if (session === null || phase === 'PERFORMING') return;
 

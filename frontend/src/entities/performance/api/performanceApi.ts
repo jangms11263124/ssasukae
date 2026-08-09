@@ -11,3 +11,11 @@ export function reportAnalysisFailure(performanceId: number): Promise<void> {
     auth: true,
   });
 }
+
+/** 시연용: AI 대신 88~100점을 서버에 반영한다. LEADERBOARD_UPDATED로 방 전체에 전파된다. */
+export function submitDemoScore(performanceId: number): Promise<void> {
+  return apiClient<void>(`/api/performances/${performanceId}/demo-score`, {
+    method: 'POST',
+    auth: true,
+  });
+}
