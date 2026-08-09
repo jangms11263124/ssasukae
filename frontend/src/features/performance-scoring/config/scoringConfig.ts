@@ -2,6 +2,16 @@
 export const STT_CHUNK_DURATION_MS = 30_000;
 
 /**
+ * 시연용 데모 채점. 기본 ON — AI·STT·음정 수집을 건너뛰고 공연 종료 후
+ * DEMO_MOCK_SCORING_DELAY_MS 뒤 88~100점을 서버에 반영한다.
+ * 시연 후 NEXT_PUBLIC_DEMO_MOCK_SCORING=false 로 되돌리거나 이 값을 false 로 고정할 것.
+ */
+export const DEMO_MOCK_SCORING = process.env.NEXT_PUBLIC_DEMO_MOCK_SCORING !== 'false';
+
+/** 데모 채점 결과를 보여주기 전 대기 시간 */
+export const DEMO_MOCK_SCORING_DELAY_MS = 3_000;
+
+/**
  * 이보다 작은 조각은 전송하지 않는다. 청크 경계에서 잘린 수백 바이트짜리 무음을 보내면
  * Whisper가 없는 말을 지어내 transcript를 오염시킨다.
  */
