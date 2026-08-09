@@ -3,6 +3,7 @@ package com.ssafy.ssasukae.domain.card.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -12,6 +13,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +28,7 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ssafy.ssasukae.domain.card.entity.Card;
 import com.ssafy.ssasukae.domain.card.redis.CardAssignmentSnapshot;
 import com.ssafy.ssasukae.domain.card.redis.CardAssignmentStatus;
 import com.ssafy.ssasukae.domain.card.redis.CardStateStore;
@@ -42,8 +45,10 @@ import com.ssafy.ssasukae.domain.room.entity.Room;
 import com.ssafy.ssasukae.domain.room.entity.RoomParticipant;
 import com.ssafy.ssasukae.domain.room.repository.RoomParticipantRepository;
 import com.ssafy.ssasukae.domain.room.repository.RoomRepository;
+import com.ssafy.ssasukae.domain.room.type.ConnectionStatus;
 import com.ssafy.ssasukae.domain.room.type.RoomMode;
 import com.ssafy.ssasukae.domain.room.type.RoomStatus;
+import com.ssafy.ssasukae.domain.user.entity.User;
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketBusinessException;
 import com.ssafy.ssasukae.global.exception.websocket.WebSocketErrorCode;
 
@@ -155,6 +160,45 @@ class CardServiceTest {
   }
 
   @Test
+  void assignsEachDrawableCardOnlyOnceDuringPlayback() {
+    RoomParticipant participant2 = mock(RoomParticipant.class);
+    RoomParticipant participant3 = mock(RoomParticipant.class);
+    User user1 = mock(User.class);
+    User user2 = mock(User.class);
+    User user3 = mock(User.class);
+
+    when(room.getId()).thenReturn(ROOM_ID);
+    when(participant.getId()).thenReturn(21L);
+    when(participant.getUser()).thenReturn(user1);
+    when(user1.getId()).thenReturn(201L);
+    when(participant2.getId()).thenReturn(22L);
+    when(participant2.getUser()).thenReturn(user2);
+    when(user2.getId()).thenReturn(202L);
+    when(participant3.getId()).thenReturn(23L);
+    when(participant3.getUser()).thenReturn(user3);
+    when(user3.getId()).thenReturn(203L);
+    when(participantRepository.findAllByRoomIdAndConnectionStatusIn(
+            ROOM_ID, List.of(ConnectionStatus.CONNECTED)))
+        .thenReturn(List.of(participant, participant2, participant3));
+    Card card1 = drawableCard(1L, "CARD_1");
+    Card card2 = drawableCard(2L, "CARD_2");
+    Card card3 = drawableCard(3L, "CARD_3");
+    when(cardRepository.findAll()).thenReturn(List.of(card1, card2, card3));
+
+    cardService.assignForPlayback(performance);
+
+    ArgumentCaptor<CardAssignmentSnapshot> captor =
+        ArgumentCaptor.forClass(CardAssignmentSnapshot.class);
+    verify(cardStateStore, times(3)).saveAssignment(captor.capture());
+    assertThat(captor.getAllValues())
+        .extracting(CardAssignmentSnapshot::participantId)
+        .containsExactlyInAnyOrder(21L, 22L, 23L);
+    assertThat(captor.getAllValues())
+        .extracting(CardAssignmentSnapshot::cardId)
+        .containsExactlyInAnyOrder(1L, 2L, 3L);
+  }
+
+  @Test
   void activationIsRejectedWhenAnotherCardEffectIsActive() {
     RoomCardSnapshot activeRoomCard =
         new RoomCardSnapshot(
@@ -187,5 +231,20 @@ class CardServiceTest {
 
     verify(performanceStore, never()).save(any());
     verify(taskScheduler, never()).schedule(any(Runnable.class), any(Instant.class));
+  }
+
+  private Card drawableCard(Long id, String code) {
+    Card card = mock(Card.class);
+    when(card.isDrawable()).thenReturn(true);
+    when(card.getId()).thenReturn(id);
+    when(card.getCode()).thenReturn(code);
+    when(card.getName()).thenReturn(code);
+    when(card.getDescription()).thenReturn(code);
+    when(card.getEffectType()).thenReturn(CardEffectType.MR_KEY_CHANGE);
+    when(card.getTargetType()).thenReturn(CardEffectTargetType.PERFORMER);
+    when(card.getEffectValue()).thenReturn(-1);
+    when(card.getDurationSeconds()).thenReturn(15);
+    when(card.getTier()).thenReturn(CardTier.G);
+    return card;
   }
 }

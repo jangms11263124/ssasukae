@@ -1,13 +1,10 @@
 package com.ssafy.ssasukae.domain.card.service;
 
-import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +25,6 @@ import com.ssafy.ssasukae.domain.card.redis.CardStateStore;
 import com.ssafy.ssasukae.domain.card.redis.RoomCardSnapshot;
 import com.ssafy.ssasukae.domain.card.redis.RoomCardStatus;
 import com.ssafy.ssasukae.domain.card.repository.CardRepository;
-import com.ssafy.ssasukae.domain.card.type.CardTier;
 import com.ssafy.ssasukae.domain.card.websocket.CardWebSocketEventPublisher;
 import com.ssafy.ssasukae.domain.card.websocket.CardWebSocketEventType;
 import com.ssafy.ssasukae.domain.card.websocket.payload.CardActivationCancelledPayload;
@@ -68,7 +64,6 @@ public class CardService {
   private final TaskScheduler taskScheduler;
   private final Clock clock;
   private final TransactionTemplate transactionTemplate;
-  private final SecureRandom random = new SecureRandom();
 
   @Autowired
   public CardService(
@@ -144,10 +139,21 @@ public class CardService {
         return;
       }
 
+      if (drawableCards.size() < recipients.size()) {
+        log.warn(
+                "뽑을 카드 없음 (roomId={}, performanceId={}, cardCount={}, recipientCount={})",
+                room.getId(),
+                performance.performanceId(),
+                drawableCards.size(),
+                recipients.size());
+        return;
+      }
+
       OffsetDateTime assignedAt = now();
       List<CardAssignmentSnapshot> assignments = new ArrayList<>();
-      for (RoomParticipant recipient : recipients) {
-        Card card = draw(drawableCards);
+      for (int i = 0; i < recipients.size(); i++) {
+        RoomParticipant recipient = recipients.get(i);
+        Card card = drawableCards.get(i);
         CardAssignmentSnapshot cardAssignmentSnapshot =
                 toAssignment(room.getId(), performance, recipient, card, assignedAt);
         cardStateStore.saveAssignment(cardAssignmentSnapshot);
@@ -425,31 +431,6 @@ public class CardService {
     }
     cardStateStore.deleteRoomCard(roomCard.roomId());
     publishCancelled(roomCard, reason);
-  }
-
-  private Card draw(List<Card> cards) {
-    Map<CardTier, List<Card>> cardsByTier = new EnumMap<>(CardTier.class);
-    for (Card card : cards) {
-      cardsByTier.computeIfAbsent(card.getTier(), ignored -> new ArrayList<>()).add(card);
-    }
-
-    long totalWeight = cardsByTier.keySet().stream().mapToLong(CardTier::drawWeight).sum();
-    long selected = random.nextLong(totalWeight);
-    long cumulative = 0;
-    CardTier selectedTier = null;
-    for (CardTier tier : CardTier.values()) {
-      if (!cardsByTier.containsKey(tier)) {
-        continue;
-      }
-      cumulative += tier.drawWeight();
-      if (selected < cumulative) {
-        selectedTier = tier;
-        break;
-      }
-    }
-
-    List<Card> selectedTierCards = cardsByTier.get(selectedTier);
-    return selectedTierCards.get(random.nextInt(selectedTierCards.size()));
   }
 
   private CardAssignmentSnapshot toAssignment(
