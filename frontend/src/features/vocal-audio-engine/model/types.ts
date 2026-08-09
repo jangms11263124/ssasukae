@@ -50,6 +50,11 @@ export interface VocalAudioEngine {
    * 가창 음정을 원곡 키 기준으로 되돌릴 때 이 값을 빼면 정답 MIDI와 축이 맞는다.
    */
   getAppliedKeyOffset(): number;
+  /**
+   * 분석기에 지금 도착한 목소리가 실제로 대응하는 MR 위치까지의 거리(ms, MR 시간축).
+   * 출력·마이크 입력·RNNoise·분석 창 지연의 합 — 채점 타임스탬프에서 이 값을 뺀다.
+   */
+  getVoiceLatencyInMrMs(): number;
   /** 모니터링 지연(ms) = baseLatency + outputLatency. 측정 불가면 null */
   getLatencyMs(): number | null;
   dispose(): void;
