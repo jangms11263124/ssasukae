@@ -69,9 +69,9 @@ export function PerformingStage({ isPerformer }: PerformingStageProps) {
   const performerProfileImageUrl = performer?.profileImageUrl ?? null;
   const { localStream, remoteStreams } = useOpenViduSessionContext();
 
-  // 수성전 가사 가리기: 가창자의 시선에서만 가려지고 다른 참가자에게는 그대로 보인다.
+  // 수성전 가사 가리기: 가창자뿐 아니라 모든 참가자의 화면에서 가려진다.
   const activeEffect = useCardStore((state) => state.activeEffect);
-  const lyricsHidden = isPerformer && activeEffect?.effectType === 'LYRICS_HIDE';
+  const lyricsHidden = activeEffect?.effectType === 'LYRICS_HIDE';
 
   // MR 재생 위치에 맞춰 소절이 넘어간다. 타이밍은 midi.json 음절 데이터가 1순위,
   // 없으면 LRCLIB 폴백이다.
