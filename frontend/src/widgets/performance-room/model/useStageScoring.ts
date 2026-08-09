@@ -63,7 +63,11 @@ export function useStageScoring(isPerformer: boolean, engine: VocalAudioEngine |
         const session = new ScoringSession({
           captureStream: engine.getVocalCaptureStream(),
           analyser: engine.getVocalAnalyser(),
-          getTimeMs: () => engine.getMrPositionMs(),
+          // 지금 분석기에 도착한 목소리는 왕복 지연만큼 앞선 MR을 듣고 부른 소리다.
+          // 곡 도입부에선 음수가 나올 수 있고, 음수 시각은 길이 0 note가 되어 AI가 400으로
+          // 거절하므로 0으로 막는다 (SingerPitchCollector의 기존 함정과 동일).
+          getTimeMs: () =>
+            Math.max(0, engine.getMrPositionMs() - engine.getVoiceLatencyInMrMs()),
           getKeyOffset: () => engine.getAppliedKeyOffset(),
         });
 
