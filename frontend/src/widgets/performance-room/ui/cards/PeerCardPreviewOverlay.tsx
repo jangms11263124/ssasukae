@@ -1,25 +1,33 @@
 'use client';
 
-import type { ParticipantCardState } from '../../model/cardStore';
+import { AttackCardFront } from '@/entities/card';
+
+import type { ParticipantCardState, RevealedUsedCard } from '../../model/cardStore';
 import { CardPreviewOverlay } from './CardPreviewOverlay';
 import { UnknownCardFace } from './UnknownCardFace';
+import { UsedStamp } from './UsedStamp';
 
 interface PeerCardPreviewOverlayProps {
   nickname: string;
   cardState: ParticipantCardState;
+  /** 발동으로 공개된 카드. 있으면 물음표 대신 실제 앞면(흑백+USED)을 크게 보여준다 */
+  revealedCard?: RevealedUsedCard | null;
   onClose: () => void;
 }
 
 /**
- * 다른 참가자의 카드 확인 오버레이. 카드 내용은 개인 큐로만 오므로 우리는 보유 여부만 안다 —
- * 뒷면 위에 물음표를 얹어 '무엇이 올지 모른다'를 그대로 보여준다.
+ * 다른 참가자의 카드 확인 오버레이. 카드 내용은 개인 큐로만 오므로 발동 전에는
+ * 보유 여부만 안다 — 물음표 면으로 '무엇이 올지 모른다'를 보여주고,
+ * 사용된 뒤에는 CARD_EFFECT_STARTED로 공개된 앞면을 흑백+USED로 보여준다.
  */
 export function PeerCardPreviewOverlay({
   nickname,
   cardState,
+  revealedCard,
   onClose,
 }: PeerCardPreviewOverlayProps) {
   const isUsed = cardState === 'USED';
+  const revealed = isUsed ? (revealedCard ?? null) : null;
 
   return (
     <CardPreviewOverlay
@@ -27,7 +35,11 @@ export function PeerCardPreviewOverlay({
       onClose={onClose}
       caption={
         isUsed ? (
-          `${nickname}님은 카드를 이미 사용했어요.`
+          revealed !== null ? (
+            `${nickname}님이 사용한 카드예요.`
+          ) : (
+            `${nickname}님은 카드를 이미 사용했어요.`
+          )
         ) : (
           <>
             {nickname}님이 카드를 들고 있어요.
@@ -46,7 +58,27 @@ export function PeerCardPreviewOverlay({
         </button>
       }
     >
-      <UnknownCardFace className="w-[min(82vw,18rem)]" used={isUsed} />
+      {revealed !== null ? (
+        // 도장의 cqw가 카드 폭을 참조하도록 래퍼가 컨테이너가 된다 (MyCardPreviewOverlay와 동일).
+        <div
+          className="relative w-[min(82vw,18rem)]"
+          style={{ containerType: 'inline-size' }}
+        >
+          <AttackCardFront
+            className="w-full opacity-70 grayscale"
+            cardCode={revealed.cardCode}
+            description={revealed.description}
+            durationSeconds={revealed.durationSeconds}
+            effectType={revealed.effectType}
+            effectValue={revealed.effectValue}
+            targetType={revealed.targetType}
+            tier={revealed.tier ?? 'S'}
+          />
+          <UsedStamp />
+        </div>
+      ) : (
+        <UnknownCardFace className="w-[min(82vw,18rem)]" used={isUsed} />
+      )}
     </CardPreviewOverlay>
   );
 }

@@ -4,6 +4,7 @@ import { CARD_ASPECT, CARD_RADIUS } from '@/entities/card';
 import { cn } from '@/shared/lib/cn';
 
 import { CardSheen } from './CardSheen';
+import { UsedStamp } from './UsedStamp';
 
 interface UnknownCardFaceProps {
   className?: string;
@@ -50,28 +51,21 @@ export function UnknownCardFace({
       {used ? null : <CardSheen color="rgb(165 243 252 / 35%)" />}
 
       <div className="relative grid size-full place-items-center">
-        {used ? (
-          // 다 쓴 카드는 물음표 대신 도장을 찍는다 — 아직 올 카드와 한눈에 구분된다.
-          <span
-            className="border-2 border-zinc-500/70 font-mono font-black tracking-[0.12em] text-zinc-500/80"
-            style={{
-              fontSize: '13cqw',
-              lineHeight: 1,
-              padding: '3cqw 5cqw',
-              transform: 'rotate(-14deg)',
-            }}
-          >
-            USED
-          </span>
-        ) : (
-          <span
-            className="font-mono font-black text-cyan-200/90 drop-shadow-[0_0_24px_rgba(34,211,238,0.55)]"
-            style={{ fontSize: `${markSizeCqw}cqw`, lineHeight: 1 }}
-          >
-            {mark ?? '?'}
-          </span>
-        )}
+        <span
+          className={cn(
+            'font-mono font-black',
+            // 다 쓴 카드도 물음표 면은 그대로 두고 색만 뺀다 — 도장은 그 위에 얹는다.
+            used
+              ? 'text-zinc-600/70'
+              : 'text-cyan-200/90 drop-shadow-[0_0_24px_rgba(34,211,238,0.55)]',
+          )}
+          style={{ fontSize: `${markSizeCqw}cqw`, lineHeight: 1 }}
+        >
+          {mark ?? '?'}
+        </span>
       </div>
+
+      {used ? <UsedStamp /> : null}
     </div>
   );
 }

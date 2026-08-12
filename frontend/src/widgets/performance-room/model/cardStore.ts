@@ -10,6 +10,7 @@ import {
   type CardEffectStartedPayload,
   type CardEffectTargetType,
   type CardEffectType,
+  type CardTier,
 } from '@/entities/card';
 import {
   useRoomStore,
@@ -54,12 +55,30 @@ export function cardEffectKey(effect: ActiveCardEffect): string {
   return `${effect.performanceId}:${effect.sourceParticipantId}:${effect.startedAt ?? ''}`;
 }
 
+/**
+ * CARD_EFFECT_STARTED 시점에 방 전체에 공개된 카드. 발동 연출로 정체가 드러난 뒤라
+ * 사용 완료 카드는 누구나(가창자 포함) 앞면으로 볼 수 있다. 공연 단위로 초기화되며,
+ * 스냅샷에는 지난 카드 정보가 없어 재접속 시 이전 공개 내역은 복원되지 않는다(물음표 폴백).
+ */
+export interface RevealedUsedCard {
+  cardCode: string;
+  cardName: string;
+  description: string;
+  durationSeconds: number;
+  effectType: CardEffectType;
+  effectValue: number | null;
+  targetType: CardEffectTargetType;
+  tier: CardTier | null;
+}
+
 interface CardStore {
   /** 내가 배정받은 카드. 가창자이거나 아직 배정 전이면 null */
   myCard: AssignedCard | null;
   myCardStatus: CardAssignmentStatus | null;
   /** participantId → 카드 보유 상태. PLAYBACK_STARTED 시점의 공격자 전원을 ASSIGNED로 시드한다 */
   cardHolders: Record<number, ParticipantCardState>;
+  /** participantId → 발동으로 공개된 카드. 사용 완료 카드를 앞면으로 보여줄 때 쓴다 */
+  revealedCards: Record<number, RevealedUsedCard>;
   /** 카드 배분 연출 오버레이 노출 여부 */
   dealOverlayOpen: boolean;
   /** 서버 시각 - 로컬 시각(ms). 카운트다운·남은 시간 계산에 사용한다 */
@@ -99,12 +118,19 @@ const INITIAL_CARD_STATE = {
   myCard: null,
   myCardStatus: null,
   cardHolders: {},
+  revealedCards: {},
   dealOverlayOpen: false,
   pendingActivation: null,
   activeEffect: null,
 } satisfies Pick<
   CardStore,
-  'myCard' | 'myCardStatus' | 'cardHolders' | 'dealOverlayOpen' | 'pendingActivation' | 'activeEffect'
+  | 'myCard'
+  | 'myCardStatus'
+  | 'cardHolders'
+  | 'revealedCards'
+  | 'dealOverlayOpen'
+  | 'pendingActivation'
+  | 'activeEffect'
 >;
 
 export const useCardStore = create<CardStore>((set) => ({
@@ -114,6 +140,8 @@ export const useCardStore = create<CardStore>((set) => ({
   seedCardHolders: (participantIds) =>
     set({
       cardHolders: Object.fromEntries(participantIds.map((id) => [id, 'ASSIGNED' as const])),
+      // 새 공연의 배분이므로 지난 공연에서 공개된 카드는 여기서 지운다.
+      revealedCards: {},
     }),
 
   applyCardAssigned: (card) =>
@@ -168,6 +196,20 @@ export const useCardStore = create<CardStore>((set) => ({
         targetType: payload.targetType,
       },
       cardHolders: { ...state.cardHolders, [payload.sourceParticipantId]: 'USED' },
+      // 발동으로 카드가 방 전체에 공개됐다 — 이후에는 누구나 이 카드의 앞면을 본다.
+      revealedCards: {
+        ...state.revealedCards,
+        [payload.sourceParticipantId]: {
+          cardCode: payload.cardCode,
+          cardName: payload.cardName,
+          description: payload.description,
+          durationSeconds: payload.durationSeconds,
+          effectType: payload.effectType,
+          effectValue: payload.effectValue,
+          targetType: payload.targetType,
+          tier: cardTierFromDuration(payload.durationSeconds),
+        },
+      },
       myCardStatus:
         state.myCard !== null && state.myCard.participantId === payload.sourceParticipantId
           ? 'USED'

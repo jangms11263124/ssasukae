@@ -141,6 +141,7 @@ function ParticipantVideoTile({
         <div className="flex w-[28%] shrink-0 items-center justify-center">
           <TileCardButton
             nickname={participant.nickname}
+            participantId={participant.id}
             cardState={cardState}
             isSelf={isSelf}
           />
