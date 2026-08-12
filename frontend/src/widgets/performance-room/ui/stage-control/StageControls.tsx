@@ -4,7 +4,6 @@ import { useRoomStore } from '@/entities/room';
 
 import { useStageAudioContext } from '../../model/StageAudioContext';
 import { useStageStore, type StagePhase } from '../../model/stageStore';
-import { RoomPanel } from '../RoomPanel';
 import { ControlMessage } from './ControlMessage';
 import { ReadyControls } from './ReadyControls';
 import { SingerSelectControls } from './SingerSelectControls';
@@ -12,10 +11,11 @@ import { SongSelectControls } from './SongSelectControls';
 import { WaitingControls } from './WaitingControls';
 
 /**
- * 무대 진행(시작하기 → 가창자 선택 → 선곡 → 준비) 안내와 버튼을 담는 우측 패널.
+ * 무대 진행(시작하기 → 가창자 선택 → 선곡 → 준비) 안내와 버튼.
+ * 무대 상단 현재 곡 바(NowPlayingBar)의 오른쪽 슬롯에 들어간다 —
  * 중앙 무대는 캠 화면 전용이라 진행 조작은 전부 여기서 한다.
  */
-export function StageControlPanel() {
+export function StageControls() {
   const phase = useStageStore((state) => state.phase);
   const performerParticipantId = useStageStore((state) => state.performerParticipantId);
   const selectedSong = useStageStore((state) => state.selectedSong);
@@ -66,26 +66,19 @@ export function StageControlPanel() {
   };
 
   // 일시 중지 중에는 진행 조작을 막는다. 무대 위 SuspendedOverlay가 재개를 안내하지만,
-  // 패널은 무대 밖이라 여기서 직접 잠그지 않으면 중지 상태에서도 시작·선곡이 눌린다.
-  const content = isSuspended ? (
-    <ControlMessage
-      title="공연이 일시 중지되었습니다..."
-      subtitle={
-        isPerformer
-          ? '무대의 공연 재개하기 버튼으로 재개할 수 있습니다'
-          : '가창자가 돌아오면 자동으로 재개됩니다'
-      }
-    />
-  ) : (
-    CONTROL_VIEWS[phase]
-  );
+  // 이 컨트롤은 무대 밖이라 여기서 직접 잠그지 않으면 중지 상태에서도 시작·선곡이 눌린다.
+  if (isSuspended) {
+    return (
+      <ControlMessage
+        title="공연이 일시 중지되었습니다..."
+        subtitle={
+          isPerformer
+            ? '무대의 공연 재개하기 버튼으로 재개할 수 있습니다'
+            : '가창자가 돌아오면 자동으로 재개됩니다'
+        }
+      />
+    );
+  }
 
-  return (
-    <RoomPanel className="px-4 py-4">
-      <h2 className="border-b border-white/15 pb-2 text-sm font-bold tracking-[0.08em] text-cyan-300">
-        STAGE CONTROL
-      </h2>
-      <div className="mt-4">{content}</div>
-    </RoomPanel>
-  );
+  return <>{CONTROL_VIEWS[phase]}</>;
 }

@@ -8,12 +8,7 @@ import { useRoomStore } from '@/entities/room';
 import { participantsPanelDefaultOpen } from '../../model/roomPanelDefaults';
 import { usePhaseSyncedPanelOpen } from '../../model/usePhaseSyncedPanelOpen';
 import { useStageStore, type StagePhase } from '../../model/stageStore';
-import { AudioEnginePanel } from '../audio-engine/AudioEnginePanel';
-import { ActiveEffectPanel } from '../cards/ActiveEffectPanel';
-import { NowPlayingCard } from '../now-playing/NowPlayingCard';
 import { ParticipantList } from '../ParticipantList';
-import { StageControlPanel } from '../stage-control/StageControlPanel';
-import { TalkPanel } from '../talk/TalkPanel';
 
 interface RoomPanelProps {
   canManageParticipants: boolean;
@@ -92,32 +87,5 @@ export function RoomParticipantsMobile(props: RoomPanelProps) {
     <MobileCollapsibleSection open={open} onToggle={toggle} title="참가자">
       <ParticipantList compact {...props} />
     </MobileCollapsibleSection>
-  );
-}
-
-export function RoomRightSidebar() {
-  return (
-    <section
-      aria-label="채팅 및 무대 진행"
-      className="flex h-full min-h-[40dvh] w-full flex-col gap-2 overflow-hidden lg:w-[300px] lg:shrink-0"
-    >
-      <div
-        className={
-          'flex shrink-0 flex-col gap-2 overflow-y-auto ' +
-          '[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden'
-        }
-      >
-        <NowPlayingCard />
-        <ActiveEffectPanel />
-        <StageControlPanel />
-        <div className="lg:hidden">
-          <AudioEnginePanel variant="inline" />
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-hidden">
-        <TalkPanel />
-      </div>
-    </section>
   );
 }

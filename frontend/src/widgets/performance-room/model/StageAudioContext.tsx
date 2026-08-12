@@ -24,8 +24,8 @@ interface StageAudioProviderProps {
 }
 
 /**
- * 오디오 엔진·채점 수집을 무대(CenterStage)와 우측 무대 진행 패널이 함께 쓰도록
- * 화면 레벨에서 공급한다 — READY의 MR 다운로드 상태(isMrLoaded)를 패널이 읽어야 한다.
+ * 오디오 엔진·채점 수집을 무대(CenterStage)와 현재 곡 바의 진행 컨트롤이 함께 쓰도록
+ * 화면 레벨에서 공급한다 — READY의 MR 다운로드 상태(isMrLoaded)를 컨트롤이 읽어야 한다.
  * 소켓·OpenVidu 컨텍스트에 의존하므로 두 Provider보다 안쪽에 있어야 한다.
  */
 export function StageAudioProvider({ isPerformer, children }: StageAudioProviderProps) {

@@ -86,7 +86,7 @@ export function ReadyControls({
   const isDownloading = mrLoadRequested && !isMrLoaded && !hasPrepareError;
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
       <ControlMessage
         title={title}
         subtitle={
@@ -97,18 +97,18 @@ export function ReadyControls({
               : undefined
         }
       />
-      <div className="grid grid-cols-2 gap-2">
-        <StageButton size="sm" className="w-full min-w-0" onClick={handleChangeSong}>
+      <div className="flex shrink-0 gap-2">
+        <StageButton size="sm" className="min-w-0" onClick={handleChangeSong}>
           노래 바꾸기
         </StageButton>
         {hasPrepareError ? (
-          <StageButton size="sm" className="w-full min-w-0" onClick={onRetryPrepare}>
+          <StageButton size="sm" className="min-w-0" onClick={onRetryPrepare}>
             다시 시도
           </StageButton>
         ) : (
           <StageButton
             size="sm"
-            className="w-full min-w-0"
+            className="min-w-0"
             onClick={handleStart}
             disabled={!canRequestStart || mrLoadRequested}
           >
