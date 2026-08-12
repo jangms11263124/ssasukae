@@ -2,11 +2,14 @@ import { useEffect, useRef } from 'react';
 
 import type { RoomParticipant } from '@/entities/participant';
 import { useRoomStore } from '@/entities/room';
+import { cn } from '@/shared/lib/cn';
 
+import { useCardStore, type ParticipantCardState } from '../../model/cardStore';
 import { useOpenViduSessionContext } from '../../model/OpenViduSessionContext';
 import { useStageStore } from '../../model/stageStore';
 import type { RemoteMedia } from '../../model/useOpenViduSession';
 import { MyCardDock } from '../cards/MyCardDock';
+import { TileCardButton } from '../cards/TileCardButton';
 import { StageIdentityBadge } from '../center-stage/StageIdentityBadge';
 
 function toProfileSrc(url: string | null | undefined): string | null {
@@ -105,6 +108,7 @@ function ParticipantVideoTile({
   localStream,
   media,
   camOn,
+  cardState,
 }: {
   participant: RoomParticipant;
   isSelf: boolean;
@@ -112,6 +116,8 @@ function ParticipantVideoTile({
   localStream: MediaStream | null;
   media: RemoteMedia | undefined;
   camOn: boolean;
+  /** 이 참가자의 카드 보유 상태. 없으면 표시 열을 비워 둔다 */
+  cardState: ParticipantCardState | undefined;
 }) {
   const showLocalVideo = isSelf && camOn && localStream !== null;
   const showRemoteVideo = !isSelf && media !== undefined && media.videoActive;
@@ -119,13 +125,29 @@ function ParticipantVideoTile({
 
   return (
     <div
-      className={
-        isSelf
-          ? 'relative z-20 flex w-[calc((100%-2rem)/3)] min-w-0 flex-col border border-white/10 bg-[#1c1c1f] p-2'
-          : 'flex w-[calc((100%-2rem)/3)] min-w-0 flex-col border border-white/10 bg-[#1c1c1f] p-2'
-      }
+      className={cn(
+        'flex w-[calc((100%-2rem)/3)] min-w-0 items-center gap-2 border border-white/10 bg-[#1c1c1f] p-2',
+        // 데스크톱 왼쪽 레일에서는 세로로 쌓이므로 레일 폭을 꽉 채운다.
+        'lg:w-full lg:shrink-0',
+        isSelf && 'relative z-20',
+      )}
     >
-      <div className="relative grid aspect-video place-items-center overflow-visible border border-white/5 bg-[#242428]">
+      {/*
+        캠 왼편 카드 보유 표시. 카드가 없으면 칸을 만들지 않아 캠이 타일을 꽉 채운다.
+        열 폭은 타일의 28% — 카드(비율 0.718)의 높이가 옆 캠(16:9) 높이와 거의 같아지는
+        비율이라, 레일·타일이 커지면 카드도 같이 커진다.
+      */}
+      {cardState !== undefined ? (
+        <div className="flex w-[28%] shrink-0 items-center justify-center">
+          <TileCardButton
+            nickname={participant.nickname}
+            cardState={cardState}
+            isSelf={isSelf}
+          />
+        </div>
+      ) : null}
+
+      <div className="relative grid aspect-video min-w-0 flex-1 place-items-center overflow-visible border border-white/5 bg-[#242428]">
         {showLocalVideo ? <LocalVideo stream={localStream} nickname={participant.nickname} /> : null}
         {showRemoteVideo ? <RemoteVideo media={media} nickname={participant.nickname} /> : null}
         {showPlaceholder ? (
@@ -134,7 +156,12 @@ function ParticipantVideoTile({
             profileImageUrl={participant.profileImageUrl}
           />
         ) : null}
-        {isSelf ? <MyCardDock placement="tile" /> : null}
+        {/* 데스크톱은 레일 하단의 MyCardCorner가 카드를 맡는다 — 타일 독은 모바일 전용 */}
+        {isSelf ? (
+          <div className="lg:hidden">
+            <MyCardDock placement="tile" />
+          </div>
+        ) : null}
         <div className="absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)]">
           <StageIdentityBadge
             size="sm"
@@ -157,14 +184,16 @@ interface ParticipantVideoStripProps {
 }
 
 /**
- * 무대 아래 참가자 캠 스트립. 메인 무대에 나온 사람만 뺀다 —
- * 공연 중에는 가창자(무대=가창자 캠), 그 외에는 나(무대=내 캠).
+ * 참가자 캠 스트립. 모바일은 무대 아래 가로 줄, 데스크톱(lg)은 무대 왼쪽 세로 레일이다.
+ * 메인 무대에 나온 사람만 뺀다 — 공연 중에는 가창자(무대=가창자 캠), 그 외에는 나(무대=내 캠).
  */
 export function ParticipantVideoStrip({ currentUserId, participants }: ParticipantVideoStripProps) {
   const { localStream, remoteStreams } = useOpenViduSessionContext();
   const camOn = useStageStore((state) => state.camOn);
   const phase = useStageStore((state) => state.phase);
   const hostParticipantId = useRoomStore((state) => state.hostParticipantId);
+  // 수성전 카드 보유 현황 — 노래 시작 때 시드되고 공연이 끝나면 비워진다.
+  const cardHolders = useCardStore((state) => state.cardHolders);
 
   const visibleParticipants = participants.filter((participant) => {
     if (participant.connectionStatus === 'LEFT' || participant.connectionStatus === 'KICKED') {
@@ -181,7 +210,17 @@ export function ParticipantVideoStrip({ currentUserId, participants }: Participa
   }
 
   return (
-    <div className="flex justify-center gap-3 overflow-visible py-1" aria-label="참가자 캠 화면">
+    <div
+      className={cn(
+        'flex justify-center gap-3 overflow-visible py-1',
+        // 세로 레일. 내용만큼만 차지하고(위의 내 카드가 남는 공간을 쓴다) 넘치면 스크롤.
+        // 아래쪽 여백은 왼쪽 하단 플로팅 채팅 버튼이 마지막 타일을 가리지 않기 위한
+        // 자리다 — 버튼 상단 5.75rem − 레일 하단 3rem = 2.75rem(pb-12로 여유 있게).
+        'lg:min-h-0 lg:flex-initial lg:flex-col lg:justify-start lg:overflow-y-auto lg:py-0 lg:pb-12',
+        'lg:[scrollbar-width:none] lg:[-ms-overflow-style:none] lg:[&::-webkit-scrollbar]:hidden',
+      )}
+      aria-label="참가자 캠 화면"
+    >
       {visibleParticipants.map((participant) => {
         const isSelf = participant.userId === currentUserId;
 
@@ -194,6 +233,7 @@ export function ParticipantVideoStrip({ currentUserId, participants }: Participa
             localStream={localStream}
             media={remoteStreams.get(participant.id)}
             camOn={camOn}
+            cardState={cardHolders[participant.id]}
           />
         );
       })}

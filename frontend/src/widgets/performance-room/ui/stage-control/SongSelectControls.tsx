@@ -29,10 +29,10 @@ export function SongSelectControls({ isPerformer }: SongSelectControlsProps) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex items-center gap-3">
       <ControlMessage title="부를 노래를 선택하세요..." />
       {isModalOpen ? null : (
-        <StageButton size="sm" className="w-full min-w-0" onClick={() => setIsModalOpen(true)}>
+        <StageButton size="sm" className="min-w-0 shrink-0" onClick={() => setIsModalOpen(true)}>
           곡 목록 열기
         </StageButton>
       )}

@@ -25,14 +25,14 @@ export function WaitingControls({ isHost, participantCount }: WaitingControlsPro
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex items-center gap-3">
       <ControlMessage
         title="노래를 시작하시겠습니까?"
         subtitle={canStart ? undefined : '2명 이상 모여야 시작할 수 있습니다'}
       />
       <StageButton
         size="sm"
-        className="w-full min-w-0"
+        className="min-w-0 shrink-0"
         disabled={!canStart}
         onClick={startSingerSelect}
       >
