@@ -8,7 +8,6 @@ import { cn } from '@/shared/lib/cn';
 import { useChatStore, type ChatMessage } from '../../model/chatStore';
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { ParticipantAvatar } from '../ParticipantAvatar';
-import { RoomPanel } from '../RoomPanel';
 
 /** 백엔드 ParticipantChatRequest의 message 최대 길이 */
 const MAX_MESSAGE_LENGTH = 300;
@@ -78,25 +77,24 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
   };
 
   return (
-    <RoomPanel className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-4">
+    // 무대를 가리지 않도록 패널 자체는 투명하다 — 타이틀 칩과 말풍선만 떠 있는 오버레이 채팅.
+    <section className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* 드래그 핸들. touch-none이 없으면 터치 드래그가 스크롤로 새어 나간다 */}
       <div
         {...dragHandleProps}
         className={cn(
-          'flex shrink-0 items-center justify-between border-b border-white/15 pb-2',
+          'flex shrink-0 items-center justify-between',
           dragHandleProps && 'cursor-grab touch-none select-none active:cursor-grabbing',
         )}
       >
-        <h2 className="font-mono text-sm tracking-[0.18em]">
-          <span className="text-cyan-200 underline decoration-cyan-300/70 underline-offset-4">
-            TALK
-          </span>
+        <h2 className="rounded-full border border-white/10 bg-black/55 px-3 py-1 font-mono text-xs tracking-[0.18em] backdrop-blur-sm">
+          <span className="text-cyan-200">TALK</span>
         </h2>
         <button
           type="button"
           aria-label="채팅 닫기"
           onClick={onClose}
-          className="grid size-6 place-items-center text-xs text-zinc-500 transition-colors hover:text-zinc-200"
+          className="grid size-6 place-items-center rounded-full bg-black/45 text-xs text-zinc-400 backdrop-blur-sm transition-colors hover:text-zinc-100"
         >
           ✕
         </button>
@@ -105,7 +103,9 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
       <ul
         ref={listRef}
         className={cn(
-          'mt-3 min-h-0 flex-1 overflow-y-auto',
+          'mt-2 min-h-0 flex-1 overflow-y-auto',
+          // 위쪽 메시지는 서서히 사라져 무대와 자연스럽게 섞인다.
+          '[mask-image:linear-gradient(to_bottom,transparent_0,black_2.5rem)]',
           // 스크롤은 가능하되 스크롤바는 숨긴다.
           '[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
         )}
@@ -138,16 +138,16 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
 
               <div className={cn('flex min-w-0 max-w-[80%] flex-col', mine && 'items-end')}>
                 {mine || grouped ? null : (
-                  <span className="mb-1 truncate text-[11px] text-zinc-400">
+                  <span className="mb-1 truncate text-[11px] text-zinc-300 [text-shadow:0_1px_2px_rgb(0_0_0/0.8)]">
                     {message.nickname}
                   </span>
                 )}
                 <p
                   className={cn(
-                    'break-words border px-2.5 py-1.5 text-xs',
+                    'break-words rounded-xl px-3 py-1.5 text-xs backdrop-blur-sm',
                     mine
-                      ? 'border-white/10 border-r-2 border-r-cyan-300 bg-white/10 text-zinc-100'
-                      : 'border-white/10 bg-white/5 text-zinc-300',
+                      ? 'rounded-br-sm bg-cyan-400/20 text-cyan-50'
+                      : 'rounded-bl-sm bg-black/45 text-zinc-200',
                   )}
                 >
                   {message.message}
@@ -160,7 +160,7 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
 
       <form
         onSubmit={handleSubmit}
-        className="mt-3 flex shrink-0 items-center gap-2 border-t border-white/10 pt-3"
+        className="mt-2 flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-black/55 py-1 pl-3 pr-1 backdrop-blur-sm"
       >
         <input
           type="text"
@@ -171,16 +171,16 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
           onChange={(event) => setDraft(event.target.value)}
           placeholder="대화 입력"
           aria-label="채팅 입력"
-          className="h-9 min-w-0 flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+          className="h-8 min-w-0 flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
         />
         <button
           type="submit"
           aria-label="메시지 전송"
-          className="shrink-0 text-cyan-300 transition-colors hover:text-cyan-100"
+          className="grid size-8 shrink-0 place-items-center rounded-full text-cyan-300 transition-colors hover:bg-cyan-400/10 hover:text-cyan-100"
         >
           <SendIcon />
         </button>
       </form>
-    </RoomPanel>
+    </section>
   );
 }

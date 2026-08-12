@@ -32,6 +32,16 @@
   --animate-card-cut-in: card-cut-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-card-cut-in-flash: card-cut-in-flash 0.9s ease-out both;
   --animate-card-effect-pulse: card-effect-pulse 2s ease-in-out infinite;
+  --animate-impact-flash: impact-flash 0.25s ease-out both;
+  --animate-impact-ripple: impact-ripple 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-impact-slam: impact-slam 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-impact-ghost-a: impact-ghost-a 0.5s ease-out 0.26s both;
+  --animate-impact-ghost-b: impact-ghost-b 0.42s ease-out 0.3s both;
+  --animate-impact-shake: impact-shake 0.5s linear both;
+  --animate-effect-ring-in: effect-ring-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
+  --animate-ring-tick-pop: ring-tick-pop 0.35s ease-out both;
+  --animate-ring-tick-pop-urgent: ring-tick-pop-urgent 0.45s ease-out both;
+  --animate-countdown-ping: countdown-ping 0.9s ease-out both;
 }
 
 /*
@@ -68,6 +78,184 @@
   }
   50% {
     opacity: 1;
+  }
+}
+
+/* 히트 프레임 — 타격 순간 화면 전체가 하얗게 번쩍인다 */
+@keyframes impact-flash {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 발동 순간 음파처럼 퍼져 나가는 흐린 동심원 */
+@keyframes impact-ripple {
+  0% {
+    opacity: 0;
+    transform: scale(0.15);
+  }
+  12% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+/* 카운트다운 틱마다 숫자 뒤에서 음파처럼 퍼지는 흐린 원 */
+@keyframes countdown-ping {
+  0% {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+  15% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+/* 카드명이 화면 앞에서 내리꽂히는 슬램 */
+@keyframes impact-slam {
+  0% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(0.92);
+  }
+  75% {
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 슬램 직후 좌우로 찢어졌다 사라지는 RGB 잔상 (가사 글리치와 같은 핑크/시안 분리) */
+@keyframes impact-ghost-a {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  20% {
+    opacity: 0.8;
+    transform: translate(-11px, 3px);
+  }
+  55% {
+    opacity: 0.45;
+    transform: translate(6px, -2px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-3px, 1px);
+  }
+}
+
+@keyframes impact-ghost-b {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  20% {
+    opacity: 0.8;
+    transform: translate(10px, -3px);
+  }
+  55% {
+    opacity: 0.4;
+    transform: translate(-7px, 2px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(3px, -1px);
+  }
+}
+
+/* 타격 반동 — 무대가 크게 흔들리다 잦아든다. 끝 프레임은 반드시 원위치 */
+@keyframes impact-shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  8% {
+    transform: translate(-10px, 6px);
+  }
+  20% {
+    transform: translate(9px, -7px);
+  }
+  34% {
+    transform: translate(-7px, 4px);
+  }
+  48% {
+    transform: translate(6px, 5px);
+  }
+  62% {
+    transform: translate(-4px, -3px);
+  }
+  76% {
+    transform: translate(3px, 2px);
+  }
+  90% {
+    transform: translate(-1px, 1px);
+  }
+}
+
+/* 원형 잔여 시간 게이지 등장 팝 — 컷인 슬램이 먼저 꽂히도록 살짝 늦게 뜬다 */
+@keyframes effect-ring-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(-10px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.07) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 잔여 초가 줄어들 때마다 숫자가 한 번 튄다 */
+@keyframes ring-tick-pop {
+  0% {
+    opacity: 0.35;
+    transform: scale(1.28);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 막판 3초 — 더 크게 튀며 긴박감을 준다 */
+@keyframes ring-tick-pop-urgent {
+  0% {
+    opacity: 0.3;
+    transform: scale(1.55);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 원형 게이지의 장식 링·불확정 링 회전 (arbitrary animate-[ring-spin_…]로 사용) */
+@keyframes ring-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

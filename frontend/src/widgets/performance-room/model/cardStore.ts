@@ -49,6 +49,11 @@ export interface ActiveCardEffect {
   targetType: CardEffectTargetType;
 }
 
+/** 카드 효과 1건을 식별하는 키. 컷인·무대 셰이크가 "새로 시작된 효과"를 같은 기준으로 판별한다 */
+export function cardEffectKey(effect: ActiveCardEffect): string {
+  return `${effect.performanceId}:${effect.sourceParticipantId}:${effect.startedAt ?? ''}`;
+}
+
 interface CardStore {
   /** 내가 배정받은 카드. 가창자이거나 아직 배정 전이면 null */
   myCard: AssignedCard | null;
