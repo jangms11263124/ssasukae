@@ -8,6 +8,7 @@ import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { useStageStore } from '../../model/stageStore';
 import { resolveCardActionLabel } from './cardActionLabels';
 import { CardPreviewOverlay } from './CardPreviewOverlay';
+import { UsedStamp } from './UsedStamp';
 
 /**
  * 내 공격 카드 확인 오버레이. 앞면을 크게 띄우고 그 자리에서 사용까지 확정한다 —
@@ -26,6 +27,7 @@ export function MyCardPreviewOverlay({ onClose }: { onClose: () => void }) {
   }
 
   const roomCardBusy = pendingActivation !== null || activeEffect !== null;
+  const isUsed = myCardStatus === 'USED';
   const canUse = myCardStatus === 'ASSIGNED' && phase === 'PERFORMING' && !roomCardBusy;
   const tier = myCard.tier ?? cardTierFromDuration(myCard.durationSeconds) ?? 'S';
   const cardTitle = myCard.cardName ?? CARD_EFFECT_VISUALS[myCard.effectType].title;
@@ -67,16 +69,23 @@ export function MyCardPreviewOverlay({ onClose }: { onClose: () => void }) {
         </>
       }
     >
-      <AttackCardFront
-        className="w-[min(82vw,18rem)]"
-        cardCode={myCard.cardCode}
-        description={myCard.description ?? undefined}
-        durationSeconds={myCard.durationSeconds}
-        effectType={myCard.effectType}
-        effectValue={myCard.effectValue}
-        targetType={myCard.targetType}
-        tier={tier}
-      />
+      {/* 도장의 cqw가 카드 폭을 참조하도록 래퍼가 컨테이너가 된다 */}
+      <div
+        className="relative w-[min(82vw,18rem)]"
+        style={{ containerType: 'inline-size' }}
+      >
+        <AttackCardFront
+          className={cn('w-full', isUsed && 'opacity-70 grayscale')}
+          cardCode={myCard.cardCode}
+          description={myCard.description ?? undefined}
+          durationSeconds={myCard.durationSeconds}
+          effectType={myCard.effectType}
+          effectValue={myCard.effectValue}
+          targetType={myCard.targetType}
+          tier={tier}
+        />
+        {isUsed ? <UsedStamp /> : null}
+      </div>
     </CardPreviewOverlay>
   );
 }
