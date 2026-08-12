@@ -77,8 +77,9 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
   };
 
   return (
-    // 무대를 가리지 않도록 패널 자체는 투명하다 — 타이틀 칩과 말풍선만 떠 있는 오버레이 채팅.
-    <section className="flex h-full min-h-0 flex-col overflow-hidden">
+    // 반투명 유리 패널 — 완전 투명이면 밝은 무대에서 채팅 영역 자체가 사라져서,
+    // 어두운 바탕 + 블러로 뒤 무대가 비치는 선에서 한 덩어리로 보이게 한다.
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/50 p-3 shadow-[0_12px_40px_rgb(0_0_0/0.45)] backdrop-blur-md">
       {/* 드래그 핸들. touch-none이 없으면 터치 드래그가 스크롤로 새어 나간다 */}
       <div
         {...dragHandleProps}
@@ -87,14 +88,15 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
           dragHandleProps && 'cursor-grab touch-none select-none active:cursor-grabbing',
         )}
       >
-        <h2 className="rounded-full border border-white/10 bg-black/55 px-3 py-1 font-mono text-xs tracking-[0.18em] backdrop-blur-sm">
+        <h2 className="rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono text-xs tracking-[0.18em]">
           <span className="text-cyan-200">TALK</span>
         </h2>
         <button
           type="button"
           aria-label="채팅 닫기"
           onClick={onClose}
-          className="grid size-6 place-items-center rounded-full bg-black/45 text-xs text-zinc-400 backdrop-blur-sm transition-colors hover:text-zinc-100"
+          // 오른쪽 위 모서리는 크기 조절 손잡이 자리라 살짝 안쪽으로 비켜 둔다.
+          className="mr-5 grid size-6 place-items-center rounded-full text-xs text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-100"
         >
           ✕
         </button>
@@ -138,16 +140,17 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
 
               <div className={cn('flex min-w-0 max-w-[80%] flex-col', mine && 'items-end')}>
                 {mine || grouped ? null : (
-                  <span className="mb-1 truncate text-[11px] text-zinc-300 [text-shadow:0_1px_2px_rgb(0_0_0/0.8)]">
+                  <span className="mb-1 truncate text-[11px] text-zinc-300">
                     {message.nickname}
                   </span>
                 )}
                 <p
                   className={cn(
-                    'break-words rounded-xl px-3 py-1.5 text-xs backdrop-blur-sm',
+                    // 어두운 패널이 바탕을 깔아 주므로 말풍선은 옅은 층으로만 올린다.
+                    'break-words rounded-xl px-3 py-1.5 text-xs',
                     mine
                       ? 'rounded-br-sm bg-cyan-400/20 text-cyan-50'
-                      : 'rounded-bl-sm bg-black/45 text-zinc-200',
+                      : 'rounded-bl-sm bg-white/10 text-zinc-100',
                   )}
                 >
                   {message.message}
@@ -160,7 +163,7 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
 
       <form
         onSubmit={handleSubmit}
-        className="mt-2 flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-black/55 py-1 pl-3 pr-1 backdrop-blur-sm"
+        className="mt-2 flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-white/5 py-1 pl-3 pr-1"
       >
         <input
           type="text"
@@ -171,7 +174,7 @@ export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
           onChange={(event) => setDraft(event.target.value)}
           placeholder="대화 입력"
           aria-label="채팅 입력"
-          className="h-8 min-w-0 flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+          className="h-8 min-w-0 flex-1 bg-transparent text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none"
         />
         <button
           type="submit"
