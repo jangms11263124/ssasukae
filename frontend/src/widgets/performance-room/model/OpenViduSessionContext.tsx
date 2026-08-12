@@ -10,6 +10,8 @@ const FALLBACK_SESSION: OpenViduSessionApi = {
   localStream: null,
   remoteStreams: new Map(),
   replaceAudioTrack: async () => undefined,
+  sendStageSignal: () => undefined,
+  subscribeStageSignal: () => () => undefined,
 };
 
 const OpenViduSessionContext = createContext<OpenViduSessionApi>(FALLBACK_SESSION);

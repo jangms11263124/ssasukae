@@ -2,6 +2,7 @@ export { fetchLyricsCandidates, fetchMidiJson, fetchPlainLyrics } from './api/ly
 export type { LyricsLookupParams } from './api/lyricsApi';
 export {
   DURATION_TOLERANCE_SEC,
+  LISTENER_AUDIO_BASE_DELAY_MS,
   LISTENER_LYRICS_DELAY_MS,
   LRCLIB_BASE_URL,
   LRCLIB_CLIENT,

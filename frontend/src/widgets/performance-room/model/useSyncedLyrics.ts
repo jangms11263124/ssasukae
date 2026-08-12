@@ -10,7 +10,6 @@ import {
   findNextTextIndex,
   parseSyllableHighlights,
   selectLyrics,
-  LISTENER_LYRICS_DELAY_MS,
   LYRICS_COUNTDOWN_LEAD_MS,
   LYRICS_COUNTDOWN_MIN_GAP_MS,
   LYRICS_LEAD_MS,
@@ -24,8 +23,10 @@ import type { VocalAudioEngine } from '@/features/vocal-audio-engine';
 
 import { useCardStore } from './cardStore';
 import { resolveEffectiveSettings } from './effectiveSettings';
+import { useOpenViduSessionContext } from './OpenViduSessionContext';
 import { useStageAudioContext } from './StageAudioContext';
 import { useStageStore } from './stageStore';
+import { useListenerAudioDelay } from './useListenerAudioDelay';
 
 /** 조회 실패 사유. 서버가 준 사유에 클라이언트 쪽 사유를 더한다 */
 type MissReason = LyricsMissReason | 'DURATION_UNKNOWN' | 'MISMATCH' | 'ERROR';
@@ -121,12 +122,18 @@ function usePlaybackRate(): number {
  * 그래서 호출될 때마다 "지난 시간 × 지금 배속"을 더하는 적분식으로 센다. 템포가 바뀌어도
  * 그 시점까지 쌓인 위치는 그대로 두고 이후 속도만 갈린다.
  *
+ * 적분은 어디까지나 추정이라, 가창자가 1초마다 보내는 실제 MR 위치 시그널이 오면
+ * 시계를 그 값으로 다시 앵커한다 — 시작 이벤트 도착 시점의 스큐, 엔진의 재생 시작
+ * 지연, 누적 드리프트가 여기서 흡수된다. 시그널이 안 오면(가창자 재접속 등) 적분이
+ * 그대로 폴백이 된다.
+ *
  * 반환 함수는 호출할 때마다 시계를 감으므로, 한 틱에서 한 번만 읽는다.
  */
 function useLyricsClock(isPerformer: boolean, engine: VocalAudioEngine | null): () => number {
   const phase = useStageStore((state) => state.phase);
   const isSuspended = useStageStore((state) => state.isSuspended);
   const resumeOffsetMs = useStageStore((state) => state.resumeOffsetMs);
+  const { subscribeStageSignal } = useOpenViduSessionContext();
   const rate = usePlaybackRate();
 
   const isRunning = phase === 'PERFORMING' && !isSuspended;
@@ -146,6 +153,18 @@ function useLyricsClock(isPerformer: boolean, engine: VocalAudioEngine | null): 
       ? { positionMs: resumeOffsetMs, readAt: performance.now() }
       : null;
   }, [isPerformer, isRunning, resumeOffsetMs]);
+
+  // 가창자의 실제 MR 위치로 재앵커. clockRef가 비어 있으면(정지·일시 중지 중) 낡은
+  // 시그널이므로 버린다 — 재개 전에 도착한 신호가 멈춘 시계를 되살리는 것을 막는다.
+  useEffect(() => {
+    if (isPerformer) return;
+
+    return subscribeStageSignal((signal) => {
+      if (signal.kind !== 'MR_POSITION' || clockRef.current === null) return;
+
+      clockRef.current = { positionMs: signal.positionMs, readAt: performance.now() };
+    });
+  }, [isPerformer, subscribeStageSignal]);
 
   return useCallback(() => {
     if (isPerformer) return engine?.getMrPositionMs() ?? 0;
@@ -294,12 +313,14 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
   const activeIndex = current?.index ?? -1;
 
   const getPositionMs = useLyricsClock(isPerformer, engine);
+  // 청자가 소리를 실제로 듣기까지의 지연. getStats 실측이 있으면 그 값, 없으면 폴백 상수다.
+  const getListenerDelayMs = useListenerAudioDelay(isPerformer);
 
   // 음절 하이라이트용 시계. 소절 틱과 같은 보정을 쓰되 선행 표시(LYRICS_LEAD_MS)는 뺀다 —
   // 소절은 미리 떠야 준비가 되지만, 음절이 발성보다 먼저 차오르면 오히려 어긋나 보인다.
   const getHighlightTimeMs = useCallback(
-    () => getPositionMs() + LYRICS_SYNC_OFFSET_MS - (isPerformer ? 0 : LISTENER_LYRICS_DELAY_MS),
-    [getPositionMs, isPerformer],
+    () => getPositionMs() + LYRICS_SYNC_OFFSET_MS - (isPerformer ? 0 : getListenerDelayMs()),
+    [getPositionMs, isPerformer, getListenerDelayMs],
   );
 
   /**
@@ -320,7 +341,7 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
         getPositionMs() +
         LYRICS_LEAD_MS +
         LYRICS_SYNC_OFFSET_MS -
-        (isPerformer ? 0 : LISTENER_LYRICS_DELAY_MS);
+        (isPerformer ? 0 : getListenerDelayMs());
       const index = findLineIndexAt(lines, timeMs);
       const countdown = resolveCountdown(lines, index, findNextTextIndex(lines, index), timeMs);
 
@@ -335,7 +356,7 @@ export function useSyncedLyrics(isPerformer: boolean): SyncedLyricsState {
     const intervalId = setInterval(tick, LINE_TICK_INTERVAL_MS);
 
     return () => clearInterval(intervalId);
-  }, [phase, requestKey, lines, getPositionMs, isPerformer]);
+  }, [phase, requestKey, lines, getPositionMs, getListenerDelayMs, isPerformer]);
 
   if (load.status === 'IDLE' || load.status === 'LOADING') {
     return {
