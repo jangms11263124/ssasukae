@@ -23,13 +23,14 @@ export function HoloMiniCard({
   return (
     <div
       className={cn(
-        'relative w-10 select-none overflow-hidden border transition-[transform,border-color,box-shadow] duration-200 ease-out',
+        'relative select-none overflow-hidden border transition-[transform,border-color,box-shadow] duration-200 ease-out',
         used
           ? 'border-zinc-600 bg-zinc-800'
           : 'border-cyan-300/50 bg-[#1a1a1e]',
         interactive && !used && 'animate-mini-card-pulse group-hover:scale-110 group-hover:border-cyan-200 group-active:scale-95',
         interactive && used && 'group-hover:scale-105 group-active:scale-95',
-        className,
+        // cn은 클래스 충돌을 해소하지 못하므로(clsx뿐) 기본 폭은 className이 없을 때만 준다.
+        className ?? 'w-10',
       )}
       style={{
         aspectRatio: CARD_ASPECT,

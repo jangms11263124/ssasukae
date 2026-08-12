@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type PointerEventHandler } from 'react';
 
 import { useRoomStore } from '@/entities/room';
 import { cn } from '@/shared/lib/cn';
@@ -40,7 +40,19 @@ function SendIcon() {
   );
 }
 
-export function TalkPanel() {
+interface TalkPanelProps {
+  /** 플로팅 채팅 독의 닫기. 헤더 ✕ 버튼이 호출한다 */
+  onClose: () => void;
+  /** 헤더를 드래그 핸들로 쓰는 포인터 핸들러 묶음. 플로팅 독(ChatPanelWindow)이 주입한다 */
+  dragHandleProps?: {
+    onPointerDown: PointerEventHandler<HTMLDivElement>;
+    onPointerMove: PointerEventHandler<HTMLDivElement>;
+    onPointerUp: PointerEventHandler<HTMLDivElement>;
+    onPointerCancel: PointerEventHandler<HTMLDivElement>;
+  };
+}
+
+export function TalkPanel({ onClose, dragHandleProps }: TalkPanelProps) {
   const messages = useChatStore((state) => state.messages);
   const myParticipantId = useRoomStore((state) => state.session?.myParticipantId ?? null);
   const socket = useRoomSocketContext();
@@ -67,11 +79,28 @@ export function TalkPanel() {
 
   return (
     <RoomPanel className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-4">
-      <h2 className="shrink-0 border-b border-white/15 pb-2 font-mono text-sm tracking-[0.18em]">
-        <span className="text-cyan-200 underline decoration-cyan-300/70 underline-offset-4">
-          TALK
-        </span>
-      </h2>
+      {/* 드래그 핸들. touch-none이 없으면 터치 드래그가 스크롤로 새어 나간다 */}
+      <div
+        {...dragHandleProps}
+        className={cn(
+          'flex shrink-0 items-center justify-between border-b border-white/15 pb-2',
+          dragHandleProps && 'cursor-grab touch-none select-none active:cursor-grabbing',
+        )}
+      >
+        <h2 className="font-mono text-sm tracking-[0.18em]">
+          <span className="text-cyan-200 underline decoration-cyan-300/70 underline-offset-4">
+            TALK
+          </span>
+        </h2>
+        <button
+          type="button"
+          aria-label="채팅 닫기"
+          onClick={onClose}
+          className="grid size-6 place-items-center text-xs text-zinc-500 transition-colors hover:text-zinc-200"
+        >
+          ✕
+        </button>
+      </div>
 
       <ul
         ref={listRef}
@@ -136,6 +165,8 @@ export function TalkPanel() {
         <input
           type="text"
           value={draft}
+          // 플로팅 패널은 채팅하려고 연 것이므로 바로 입력할 수 있어야 한다.
+          autoFocus
           maxLength={MAX_MESSAGE_LENGTH}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="대화 입력"
