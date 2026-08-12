@@ -3,10 +3,11 @@
 import { useCardStore } from '../../model/cardStore';
 import { StageLyricsProvider } from '../../model/StageLyricsContext';
 import { useStageStore, type StagePhase } from '../../model/stageStore';
-import { ActiveEffectBanner } from '../cards/ActiveEffectBanner';
+import { ActiveEffectRing } from '../cards/ActiveEffectRing';
 import { CardCountdownOverlay } from '../cards/CardCountdownOverlay';
 import { CardEffectStageGlow } from '../cards/CardEffectStageGlow';
 import { CardImpactCutIn } from '../cards/CardImpactCutIn';
+import { CardImpactStageShake } from '../cards/CardImpactStageShake';
 import { MyCardDock } from '../cards/MyCardDock';
 import { PerformingStage } from './PerformingStage';
 import { ScoreStage } from './ScoreStage';
@@ -45,11 +46,11 @@ export function CenterStage({ currentParticipantId }: CenterStageProps) {
   return (
     <StageLyricsProvider isPerformer={isPerformer}>
       <div className="relative h-full min-h-0 w-full overflow-hidden border border-white/10 bg-[#2c2c2f]">
-        {STAGE_VIEWS[phase]}
+        <CardImpactStageShake>{STAGE_VIEWS[phase]}</CardImpactStageShake>
         <CardEffectStageGlow />
         {isSuspended ? <SuspendedOverlay isPerformer={isPerformer} /> : null}
         <CardCountdownOverlay />
-        <ActiveEffectBanner />
+        <ActiveEffectRing />
         <CardImpactCutIn />
         {showStageCardDock ? <MyCardDock placement="stage" /> : null}
       </div>
