@@ -11,13 +11,14 @@ import {
 import { cn } from '@/shared/lib/cn';
 
 import { CardSheen } from './CardSheen';
+import { UsedStamp } from './UsedStamp';
 
 interface CompactCardFaceProps {
   className?: string;
   effectType: CardEffectType;
   effectValue?: number | null;
   tier: CardTier;
-  /** true면 사용 완료 — 색을 빼서 남은 카드와 구분한다 */
+  /** true면 사용 완료 — 색을 빼고 앞면 위에 USED 도장을 찍는다 */
   used?: boolean;
 }
 
@@ -107,7 +108,7 @@ export function CompactCardFace({
         카드 위를 훑고 지나가는 광택. 프레임과 같은 등급 색이라 실버·골드·플래티넘이
         각자의 금속으로 일렁인다. 면 위에 얹어야 카드 전체에 빛이 지나간다.
       */}
-      {used ? null : <CardSheen color={TIER_SHEEN[tier]} />}
+      {used ? <UsedStamp /> : <CardSheen color={TIER_SHEEN[tier]} />}
     </div>
   );
 }

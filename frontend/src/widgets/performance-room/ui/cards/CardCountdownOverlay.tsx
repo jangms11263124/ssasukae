@@ -57,49 +57,39 @@ function CountdownBand({ pendingActivation }: { pendingActivation: PendingCardAc
             style={{ background: THREAT_COLOR }}
           />
 
-          <div className="flex items-center gap-6 py-3 pl-6 pr-5">
-            <div>
-              <p
-                className="flex items-center gap-2 font-mono text-[10px] tracking-[0.28em]"
-                style={{ color: THREAT_COLOR }}
-              >
-                <span
-                  aria-hidden="true"
-                  className="size-1.5 animate-pulse rounded-full"
-                  style={{ background: THREAT_COLOR, boxShadow: `0 0 8px ${THREAT_COLOR}` }}
-                />
-                ATTACK INCOMING
-              </p>
-
-              <p className="mt-1.5 text-sm font-bold text-white">
-                <span style={{ color: THREAT_COLOR }}>{sourceNickname}</span>
-                님이 카드를 사용했습니다
-              </p>
-
-              {/* 가사 카운트다운(LyricsCountdown)과 같은 3·2·1 도트 — 앱 안에서 카운트다운 문법을 통일한다 */}
-              <div className="mt-2.5 flex gap-1.5" aria-hidden="true">
-                {COUNTDOWN_STEPS.map((step) => (
-                  <span
-                    key={step}
-                    className="size-1.5 rounded-full"
-                    style={
-                      step <= remainingSeconds
-                        ? { background: THREAT_COLOR, boxShadow: `0 0 8px ${THREAT_COLOR}` }
-                        : { background: 'rgb(255 255 255 / 20%)' }
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* 밴드 쪽 숫자 — 중앙 대형 카운트와 같은 박자로 튄다 */}
+          {/* 숫자는 중앙 대형 카운트가 전담한다 — 밴드는 누가 썼는지와 진행 도트만 알린다 */}
+          <div className="py-3 pl-6 pr-6">
             <p
-              key={remainingSeconds}
-              className="min-w-[3rem] text-center text-6xl font-black italic leading-none [animation:countdown-pop_1s_ease-out_both]"
-              style={{ color: THREAT_COLOR, textShadow: `0 0 26px ${THREAT_COLOR}8c` }}
+              className="flex items-center gap-2 font-mono text-[10px] tracking-[0.28em]"
+              style={{ color: THREAT_COLOR }}
             >
-              {remainingSeconds}
+              <span
+                aria-hidden="true"
+                className="size-1.5 animate-pulse rounded-full"
+                style={{ background: THREAT_COLOR, boxShadow: `0 0 8px ${THREAT_COLOR}` }}
+              />
+              ATTACK INCOMING
             </p>
+
+            <p className="mt-1.5 text-sm font-bold text-white">
+              <span style={{ color: THREAT_COLOR }}>{sourceNickname}</span>
+              님이 카드를 사용했습니다
+            </p>
+
+            {/* 가사 카운트다운(LyricsCountdown)과 같은 3·2·1 도트 — 앱 안에서 카운트다운 문법을 통일한다 */}
+            <div className="mt-2.5 flex gap-1.5" aria-hidden="true">
+              {COUNTDOWN_STEPS.map((step) => (
+                <span
+                  key={step}
+                  className="size-1.5 rounded-full"
+                  style={
+                    step <= remainingSeconds
+                      ? { background: THREAT_COLOR, boxShadow: `0 0 8px ${THREAT_COLOR}` }
+                      : { background: 'rgb(255 255 255 / 20%)' }
+                  }
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>
