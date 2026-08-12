@@ -14,6 +14,7 @@ import { cn } from '@/shared/lib/cn';
 import { useCardStore } from '../../model/cardStore';
 import { useRoomSocketContext } from '../../model/RoomSocketContext';
 import { useStageStore } from '../../model/stageStore';
+import { resolveCardActionLabel, resolveCardStatusLabel } from './cardActionLabels';
 
 interface MyCardDockProps {
   /**
@@ -105,24 +106,8 @@ export function MyCardDock({ placement = 'tile' }: MyCardDockProps) {
   const cardTitle = myCard.cardName ?? CARD_EFFECT_VISUALS[myCard.effectType].title;
   const isUsed = myCardStatus === 'USED';
 
-  const statusLabel = isUsed
-    ? 'USED'
-    : myCardStatus === 'PENDING'
-      ? 'ACTIVATING...'
-      : roomCardBusy
-        ? 'WAIT'
-        : 'READY';
-
-  // 사용할 수 없을 때는 버튼 라벨로 이유를 알려준다 — 눌러도 안 되는 이유가 보여야 한다.
-  const actionLabel = isUsed
-    ? '사용 완료'
-    : myCardStatus === 'PENDING'
-      ? '발동 중...'
-      : phase !== 'PERFORMING'
-        ? '공연 중에만 사용'
-        : roomCardBusy
-          ? '다른 카드 진행 중'
-          : '사용하기';
+  const statusLabel = resolveCardStatusLabel(myCardStatus, roomCardBusy);
+  const actionLabel = resolveCardActionLabel(myCardStatus, phase, roomCardBusy);
 
   const handleActivate = () => {
     if (!canUse) return;
@@ -192,7 +177,7 @@ export function MyCardDock({ placement = 'tile' }: MyCardDockProps) {
         onClick={() => setIsOpen(!isOpen)}
         className="group rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
       >
-        <HoloMiniCard used={isUsed} interactive />
+        <HoloMiniCard className="w-12" used={isUsed} interactive />
       </button>
     </div>
   );

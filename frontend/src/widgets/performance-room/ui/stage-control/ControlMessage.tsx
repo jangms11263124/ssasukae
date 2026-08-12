@@ -3,12 +3,14 @@ interface ControlMessageProps {
   subtitle?: string;
 }
 
-/** 무대 진행 패널의 단계 안내 문구. 중앙 무대의 StageMessage를 패널 크기에 맞춘 버전 */
+/** 현재 곡 바의 단계 안내 문구. 한 줄 제목 + 작은 부연으로 바 높이에 맞춘다 */
 export function ControlMessage({ title, subtitle }: ControlMessageProps) {
   return (
-    <div>
-      <p className="text-sm leading-relaxed text-cyan-200">{title}</p>
-      {subtitle ? <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">{subtitle}</p> : null}
+    <div className="min-w-0">
+      <p className="break-keep text-xs leading-relaxed text-cyan-200">{title}</p>
+      {subtitle ? (
+        <p className="mt-0.5 break-keep text-[11px] leading-relaxed text-zinc-500">{subtitle}</p>
+      ) : null}
     </div>
   );
 }

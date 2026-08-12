@@ -25,20 +25,19 @@ import { useRoomBootstrap } from '../model/useRoomBootstrap';
 import { useRoomSocket } from '../model/useRoomSocket';
 import { useStageStore } from '../model/stageStore';
 import { CardDealOverlay } from './cards/CardDealOverlay';
+import { MyCardCorner } from './cards/MyCardCorner';
 import { CenterStage } from './center-stage/CenterStage';
-import { RoomHelpFloatingButton } from './help/RoomHelpFloatingButton';
 import { LeaderboardPanel } from './LeaderboardPanel';
-import {
-  RoomParticipantsMobile,
-  RoomRightSidebar,
-  useRoomAuxPanels,
-} from './layout/RoomSidePanels';
+import { ResizableCamRail } from './layout/ResizableCamRail';
+import { RoomParticipantsMobile, useRoomAuxPanels } from './layout/RoomSidePanels';
 import { AudioEnginePanel } from './audio-engine/AudioEnginePanel';
+import { NowPlayingBar } from './now-playing/NowPlayingBar';
 import { ParticipantList } from './ParticipantList';
 import { ParticipantVideoStrip } from './participant-video/ParticipantVideoStrip';
 import { RemoteAudioSink } from './participant-video/RemoteAudioSink';
 import { RoomTopBar } from './RoomTopBar';
 import { SingerSelectModalHost } from './stage-control/SingerSelectModalHost';
+import { FloatingChatDock } from './talk/FloatingChatDock';
 
 interface PerformanceRoomScreenProps {
   roomIdFromUrl: number | null;
@@ -195,9 +194,19 @@ function PerformanceRoomContent() {
               leaderboardPanel={<LeaderboardPanel entries={leaderboard} compact />}
             />
 
-            <main className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-3 px-4 py-3 lg:flex-row lg:overflow-y-hidden">
+            {/* 모바일 하단 패딩(pb-20)은 스크롤 끝 콘텐츠가 플로팅 채팅 버튼(상단 5.75rem)에 안 가리게 한다 */}
+            <main className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-3 px-4 pb-20 pt-3 lg:flex-row lg:overflow-y-hidden lg:pb-3">
+              {/* 내 카드가 위, 참가자 캠이 아래. 스트립·카드가 모두 비면 레일 폭도 사라진다 */}
+              <ResizableCamRail>
+                <MyCardCorner />
+                <ParticipantVideoStrip
+                  currentUserId={currentUserId}
+                  participants={stagedParticipants}
+                />
+              </ResizableCamRail>
+
               <section
-                className="flex min-h-[50dvh] min-w-0 flex-1 flex-col gap-2 lg:min-h-0"
+                className="order-1 flex min-h-[50dvh] min-w-0 flex-1 flex-col gap-2 lg:order-2 lg:min-h-0"
                 aria-label="중앙 공연 영역"
               >
                 <RoomParticipantsMobile
@@ -210,19 +219,17 @@ function PerformanceRoomContent() {
                   onKickParticipant={handleKickParticipant}
                 />
 
+                <NowPlayingBar />
+
                 <div className="relative min-h-0 flex-1 overflow-hidden">
                   <CenterStage currentParticipantId={session.myParticipantId} />
                 </div>
-
-                <div className="shrink-0">
-                  <ParticipantVideoStrip
-                    currentUserId={currentUserId}
-                    participants={stagedParticipants}
-                  />
-                </div>
               </section>
 
-              <RoomRightSidebar />
+              {/* 데스크톱은 상단 바 팝오버로 열지만 모바일은 인라인로 둔다 (기존 사이드바 위치 대체) */}
+              <div className="order-3 lg:hidden">
+                <AudioEnginePanel variant="inline" />
+              </div>
             </main>
 
             <RemoteAudioSink />
@@ -235,7 +242,7 @@ function PerformanceRoomContent() {
               <PingReadout />
             </footer>
 
-            <RoomHelpFloatingButton />
+            <FloatingChatDock />
 
             {phase === 'SINGER_SELECT' && session.isHost ? (
               <SingerSelectModalHost
