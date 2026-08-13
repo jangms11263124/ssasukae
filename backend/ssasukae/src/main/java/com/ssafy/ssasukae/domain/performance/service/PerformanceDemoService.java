@@ -58,7 +58,7 @@ public class PerformanceDemoService {
       throw new CustomException(PerformanceAnalysisErrorCode.INVALID_ROOM_STATE);
     }
 
-    int finalScore = ThreadLocalRandom.current().nextInt(88, 101);
+    int finalScore = 84;
 
     PerformanceResultRequestDTO.ScoreDTO request =
         PerformanceResultRequestDTO.ScoreDTO.builder()
