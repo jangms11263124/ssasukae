@@ -2,11 +2,11 @@
 export const STT_CHUNK_DURATION_MS = 30_000;
 
 /**
- * 시연용 데모 채점. 기본 ON — AI·STT·음정 수집을 건너뛰고 공연 종료 후
- * DEMO_MOCK_SCORING_DELAY_MS 뒤 88~100점을 서버에 반영한다.
- * 시연 후 NEXT_PUBLIC_DEMO_MOCK_SCORING=false 로 되돌리거나 이 값을 false 로 고정할 것.
+ * 시연용 데모 채점. 기본 OFF — 실제 채점(음정 수집 · STT · AI)이 동작한다.
+ * 켜면 채점을 건너뛰고 공연 종료 후 DEMO_MOCK_SCORING_DELAY_MS 뒤 88~100점을 반영한다.
+ * AI 서버 없이 방 플로우만 시연할 때 NEXT_PUBLIC_DEMO_MOCK_SCORING=true 로 켠다.
  */
-export const DEMO_MOCK_SCORING = process.env.NEXT_PUBLIC_DEMO_MOCK_SCORING !== 'false';
+export const DEMO_MOCK_SCORING = process.env.NEXT_PUBLIC_DEMO_MOCK_SCORING === 'true';
 
 /** 데모 채점 결과를 보여주기 전 대기 시간 */
 export const DEMO_MOCK_SCORING_DELAY_MS = 3_000;

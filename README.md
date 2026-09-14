@@ -8,6 +8,7 @@
 - **프로젝트 기간**: 2026.07.15 ~ 2026.08.13 (SSAFY 15기 공통 프로젝트)
 - **개발 인원**: 6명 (FE · BE · AI · Native 교차 분담)
 - **수상**: SSAFY 15기 공통 프로젝트 **우수상** 🏆
+- **담당 파트 상세**: [📌 포트폴리오 문서 (트러블슈팅 · 코드 · 발표 자료)](PORTFOLIO_README.md)
 
 ![랜딩 페이지](docs/images/landing.png)
 
@@ -312,6 +313,7 @@ cd backend/ssasukae
 
 # 문서
 
+- [📌 담당 파트 상세 포트폴리오](PORTFOLIO_README.md)
 - [전체 시연 영상 (MP4, 20MB)](docs/demo.mp4)
 - [Git·코드 컨벤션](docs/convention/)
 - [AI 곡 분석 연동 스펙](docs/integration/ai-song-analysis-spec.md)
