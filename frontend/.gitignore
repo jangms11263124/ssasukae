@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# 로컬 데모 실험 (커밋하지 않음)
+/tempo-demo/
 
 # vercel
 .vercel
